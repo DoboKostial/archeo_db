@@ -45,3 +45,17 @@ CREATE TABLE public.tab_terrain_action (
 	"type" varchar(150) NULL,
 	"location" point NULL
 );
+
+
+-- public.tab_fotogram definition
+
+-- Drop table
+
+-- DROP TABLE public.tab_fotogram;
+
+CREATE TABLE public.tab_fotogram (
+	id_fotogram int4 NOT NULL,
+	fotogram_method varchar NOT NULL,
+	ref_sketch int4 NULL,
+	notes varchar NULL
+);
