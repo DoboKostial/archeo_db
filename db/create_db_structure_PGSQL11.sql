@@ -1,3 +1,62 @@
+----
+-- SEQUENCES AND DEFINITIONS FIRST
+----
+
+
+
+-- public.gloss_personalia_id_seq definition
+
+-- DROP SEQUENCE public.gloss_personalia_id_seq;
+
+CREATE SEQUENCE public.gloss_personalia_id_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 2147483647
+	START 1
+	CACHE 1
+	NO CYCLE;
+
+
+-- public.tabaid_photo_su_id_aut_seq definition
+
+-- DROP SEQUENCE public.tabaid_photo_su_id_aut_seq;
+
+CREATE SEQUENCE public.tabaid_photo_su_id_aut_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 2147483647
+	START 1
+	CACHE 1
+	NO CYCLE;
+
+
+-- public.tabaid_su_cut_id_aut_seq definition
+
+-- DROP SEQUENCE public.tabaid_su_cut_id_aut_seq;
+
+CREATE SEQUENCE public.tabaid_su_cut_id_aut_seq
+	INCREMENT BY 1
+	MINVALUE 1
+	MAXVALUE 2147483647
+	START 1
+	CACHE 1
+	NO CYCLE;
+	
+
+-- DROP TYPE strat_relation;
+
+CREATE TYPE strat_relation AS ENUM (
+	'earlier than',
+	'later than');
+
+
+
+----
+NOW TABLES
+----
+
+
+
 -- public.gloss_personalia definition
 
 -- Drop table
@@ -234,49 +293,3 @@ CREATE TABLE public.tabaid_su_cut (
 	CONSTRAINT tabaid_su_cut_fk FOREIGN KEY (ref_su) REFERENCES tab_su(su_id) ON UPDATE CASCADE ON DELETE CASCADE,
 	CONSTRAINT tabaid_su_cut_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
-
-
--- public.gloss_personalia_id_seq definition
-
--- DROP SEQUENCE public.gloss_personalia_id_seq;
-
-CREATE SEQUENCE public.gloss_personalia_id_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
-
-
--- public.tabaid_photo_su_id_aut_seq definition
-
--- DROP SEQUENCE public.tabaid_photo_su_id_aut_seq;
-
-CREATE SEQUENCE public.tabaid_photo_su_id_aut_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
-
-
--- public.tabaid_su_cut_id_aut_seq definition
-
--- DROP SEQUENCE public.tabaid_su_cut_id_aut_seq;
-
-CREATE SEQUENCE public.tabaid_su_cut_id_aut_seq
-	INCREMENT BY 1
-	MINVALUE 1
-	MAXVALUE 2147483647
-	START 1
-	CACHE 1
-	NO CYCLE;
-	
-
--- DROP TYPE strat_relation;
-
-CREATE TYPE strat_relation AS ENUM (
-	'earlier than',
-	'later than');
