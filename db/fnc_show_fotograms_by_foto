@@ -1,0 +1,15 @@
+CREATE OR REPLACE FUNCTION public.show_fotograms_by_photo(fotopattern character varying)
+ RETURNS TABLE(id_fotogram character varying, fotogram_typ character varying, ref_sketch character varying)
+ LANGUAGE plpgsql
+AS $function$
+	BEGIN
+		RETURN QUERY
+		SELECT fg.id_fotogram, fg.fotogram_typ, fg.ref_sketch 
+		FROM tab_fotogram fg
+		INNER JOIN tabaid_fotogram_foto tff ON fg.id_fotogram = tff.ref_fotogram 
+		INNER JOIN tab_foto fo ON tff.ref_foto = fo.id_foto 
+		WHERE fo.id_foto ILIKE fotopattern;	
+		
+	END;
+   $function$
+;
