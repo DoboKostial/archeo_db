@@ -256,3 +256,47 @@ CREATE TABLE tab_foto (
 	notes varchar(300) NULL,
 	CONSTRAINT tab_foto_pk PRIMARY KEY (id_foto)
 );
+
+
+
+
+
+
+
+
+
+
+-- #### FUNCTIONS ###
+
+
+CREATE OR REPLACE FUNCTION public.show_fotograms_by_photo(fotopattern character varying)
+ RETURNS TABLE(id_fotogram character varying, fotogram_typ character varying, ref_sketch character varying)
+ LANGUAGE plpgsql
+AS $function$
+        BEGIN
+                RETURN QUERY
+                SELECT fg.id_fotogram, fg.fotogram_typ, fg.ref_sketch
+                FROM tab_fotogram fg
+                INNER JOIN tabaid_fotogram_foto tff ON fg.id_fotogram = tff.ref_fotogram
+                INNER JOIN tab_foto fo ON tff.ref_foto = fo.id_foto
+                WHERE fo.id_foto ILIKE fotopattern;
+
+        END;
+   $function$
+;
+
+CREATE OR REPLACE FUNCTION public.show_fotos_by_fotogram(fotogramm character varying)
+ RETURNS TABLE(id_foto character varying, foto_typ character varying, notes character varying)
+ LANGUAGE plpgsql
+AS $function$
+        BEGIN
+                RETURN QUERY
+                SELECT fo.id_foto, fo.typ, fo.notes
+                FROM tab_foto fo
+                INNER JOIN tabaid_fotogram_foto tff ON fo.id_foto = tff.ref_foto
+                INNER JOIN tab_fotogram tf ON tff.ref_fotogram = tf.id_fotogram
+                WHERE tf.id_fotogram ILIKE fotogramm;
+
+        END;
+   $function$
+;
