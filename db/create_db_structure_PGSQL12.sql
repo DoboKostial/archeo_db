@@ -232,6 +232,22 @@ CREATE TABLE tab_sketch (
 );
 
 
+-- public.tabaid_foto_sj definition
+
+-- Drop table
+
+-- DROP TABLE tabaid_foto_sj;
+
+CREATE TABLE tabaid_foto_sj (
+	id_aut serial4 NOT NULL,
+	ref_foto varchar(100) NULL,
+	ref_sj int4 NULL,
+	CONSTRAINT tabaid_foto_sj_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_foto_sj_fk FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto) ON DELETE CASCADE,
+	CONSTRAINT tabaid_foto_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE
+);
+
+
 -- public.tab_fotogram definition
 
 -- Drop table
@@ -276,7 +292,9 @@ CREATE TABLE tabaid_cut_fotogram (
 	id_aut serial4 NOT NULL,
 	ref_cut int4 NULL,
 	ref_fotogram varchar(100) NULL,
-	CONSTRAINT tabaid_cut_fotogram_pk PRIMARY KEY (id_aut)
+	CONSTRAINT tabaid_cut_fotogram_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_cut_fotogram_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_cut_fotogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON UPDATE CASCADE
 );
 
 
@@ -290,7 +308,9 @@ CREATE TABLE tabaid_fotogram_foto (
 	id_aut serial4 NOT NULL,
 	ref_fotogram varchar(100) NULL,
 	ref_foto varchar(100) NULL,
-	CONSTRAINT tabaid_fotogram_foto_pk PRIMARY KEY (id_aut)
+	CONSTRAINT tabaid_fotogram_foto_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_fotogram_foto_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_fotogram_foto_fk_1 FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto) ON UPDATE CASCADE
 );
 
 
@@ -304,27 +324,10 @@ CREATE TABLE tabaid_fotogram_sj (
 	id_aut serial4 NOT NULL,
 	ref_fotogram varchar(100) NULL,
 	ref_sj int4 NULL,
-	CONSTRAINT tabaid_fotogram_sj_pk PRIMARY KEY (id_aut)
+	CONSTRAINT tabaid_fotogram_sj_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_fotogram_sj_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_fotogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON UPDATE CASCADE
 );
-
-
--- public.tabaid_cut_fotogram foreign keys
-
-ALTER TABLE public.tabaid_cut_fotogram ADD CONSTRAINT tabaid_cut_fotogram_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
-ALTER TABLE public.tabaid_cut_fotogram ADD CONSTRAINT tabaid_cut_fotogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut);
-
-
--- public.tabaid_fotogram_foto foreign keys
-
-ALTER TABLE public.tabaid_fotogram_foto ADD CONSTRAINT tabaid_fotogram_foto_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
-ALTER TABLE public.tabaid_fotogram_foto ADD CONSTRAINT tabaid_fotogram_foto_fk_1 FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto);
-
-
--- public.tabaid_fotogram_sj foreign keys
-
-ALTER TABLE public.tabaid_fotogram_sj ADD CONSTRAINT tabaid_fotogram_sj_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
-ALTER TABLE public.tabaid_fotogram_sj ADD CONSTRAINT tabaid_fotogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj);
-
 
 
 -- #### FUNCTIONS ###
