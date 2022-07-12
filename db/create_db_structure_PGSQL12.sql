@@ -266,6 +266,65 @@ CREATE TABLE tab_sack (
 );
 
 
+-- public.tabaid_cut_fotogram definition
+
+-- Drop table
+
+-- DROP TABLE tabaid_cut_fotogram;
+
+CREATE TABLE tabaid_cut_fotogram (
+	id_aut serial4 NOT NULL,
+	ref_cut int4 NULL,
+	ref_fotogram varchar(100) NULL,
+	CONSTRAINT tabaid_cut_fotogram_pk PRIMARY KEY (id_aut)
+);
+
+
+-- public.tabaid_fotogram_foto definition
+
+-- Drop table
+
+-- DROP TABLE tabaid_fotogram_foto;
+
+CREATE TABLE tabaid_fotogram_foto (
+	id_aut serial4 NOT NULL,
+	ref_fotogram varchar(100) NULL,
+	ref_foto varchar(100) NULL,
+	CONSTRAINT tabaid_fotogram_foto_pk PRIMARY KEY (id_aut)
+);
+
+
+-- public.tabaid_fotogram_sj definition
+
+-- Drop table
+
+-- DROP TABLE tabaid_fotogram_sj;
+
+CREATE TABLE tabaid_fotogram_sj (
+	id_aut serial4 NOT NULL,
+	ref_fotogram varchar(100) NULL,
+	ref_sj int4 NULL,
+	CONSTRAINT tabaid_fotogram_sj_pk PRIMARY KEY (id_aut)
+);
+
+
+-- public.tabaid_cut_fotogram foreign keys
+
+ALTER TABLE public.tabaid_cut_fotogram ADD CONSTRAINT tabaid_cut_fotogram_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
+ALTER TABLE public.tabaid_cut_fotogram ADD CONSTRAINT tabaid_cut_fotogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut);
+
+
+-- public.tabaid_fotogram_foto foreign keys
+
+ALTER TABLE public.tabaid_fotogram_foto ADD CONSTRAINT tabaid_fotogram_foto_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
+ALTER TABLE public.tabaid_fotogram_foto ADD CONSTRAINT tabaid_fotogram_foto_fk_1 FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto);
+
+
+-- public.tabaid_fotogram_sj foreign keys
+
+ALTER TABLE public.tabaid_fotogram_sj ADD CONSTRAINT tabaid_fotogram_sj_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram);
+ALTER TABLE public.tabaid_fotogram_sj ADD CONSTRAINT tabaid_fotogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj);
+
 
 
 -- #### FUNCTIONS ###
