@@ -1,3 +1,11 @@
+-- basix role and privileges
+
+CREATE ROLE grp_dbas WITH LOGIN CREATEDB CREATEROLE INHERIT;
+CREATE ROLE grp_analysts WITH LOGIN INHERIT;
+CREATE ROLE dobo WITH LOGIN CREATEDB;
+GRANT grp_admins TO dobo;
+SET ROLE dobo;
+
 -- Database structure
 -- This database is intended to be a template while assuming
 -- cluster would server for more terrain DBs.
