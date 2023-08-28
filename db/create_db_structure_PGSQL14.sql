@@ -1,3 +1,10 @@
+-- Database structure
+-- This database is intended to be a template while assuming
+-- cluster would server for more terrain DBs.
+
+CREATE DATABASE terrain_db_template ENCODING 'UTF8' IS_TEMPLATE true;
+
+
 -- #### TABLES #####
 -- public.gloss_docu_typ definition
 
