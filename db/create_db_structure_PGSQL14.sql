@@ -1,10 +1,11 @@
 -- basix role and privileges
+-- 
 
-CREATE ROLE grp_dbas WITH LOGIN CREATEDB CREATEROLE INHERIT;
-CREATE ROLE grp_analysts WITH LOGIN INHERIT;
-CREATE ROLE dobo WITH LOGIN CREATEDB;
-GRANT grp_admins TO dobo;
-SET ROLE dobo;
+CREATE ROLE grp_dbas WITH CREATEDB CREATEROLE INHERIT;
+GRANT pg_write_all_data TO grp_dbas;
+CREATE ROLE grp_analysts WITH INHERIT;
+GRANT pg_read_all_data TO grp_analysts;
+SET ROLE grp_dbas;
 
 -- Database structure
 -- This database is intended to be a template while assuming
