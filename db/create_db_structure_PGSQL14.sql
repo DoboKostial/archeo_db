@@ -1,11 +1,16 @@
 -- basix role and privileges
--- 
+-- making database with owner grp_dbas creating all tables under this account
 
 CREATE ROLE grp_dbas WITH CREATEDB CREATEROLE INHERIT;
 GRANT pg_write_all_data TO grp_dbas;
 CREATE ROLE grp_analysts WITH INHERIT;
 GRANT pg_read_all_data TO grp_analysts;
 
+-- This database is intended to be a template while assuming
+-- cluster would server for more terrain DBs.
+CREATE DATABASE terrain_db_template OWNER grp_dbas ENCODING 'UTF8' IS_TEMPLATE true;
+
+-- default privileges for users
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO grp_dbas;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO grp_dbas;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON FUNCTIONS TO grp_dbas;
@@ -14,11 +19,6 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO grp_dbas;
 
 SET ROLE grp_dbas;
 
--- Database structure
--- This database is intended to be a template while assuming
--- cluster would server for more terrain DBs.
-
-CREATE DATABASE terrain_db_template ENCODING 'UTF8' IS_TEMPLATE true;
 
 
 -- #### TABLES #####
