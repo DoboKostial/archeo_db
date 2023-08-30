@@ -160,9 +160,9 @@ CREATE TABLE tab_foto (
 
 -- Drop table
 
--- DROP TABLE tab_sj;
+-- DROP TABLE public.tab_sj;
 
-CREATE TABLE tab_sj (
+CREATE TABLE public.tab_sj (
 	id_sj int4 NOT NULL,
 	sj_typ varchar(20) NULL,
 	description varchar(800) NULL,
@@ -171,10 +171,15 @@ CREATE TABLE tab_sj (
 	recorded date NULL,
 	docu_plan bool NULL,
 	docu_vertical bool NULL,
-	CONSTRAINT tab_sj_pk PRIMARY KEY (id_sj),
-	CONSTRAINT tab_sj_fk FOREIGN KEY (author) REFERENCES gloss_personalia(mail)
+	ref_object int4 NULL,
+	CONSTRAINT tab_sj_pk PRIMARY KEY (id_sj)
 );
 CREATE UNIQUE INDEX tab_sj_id_sj_idx ON public.tab_sj USING btree (id_sj);
+
+-- public.tab_sj foreign keys
+ALTER TABLE public.tab_sj ADD CONSTRAINT tab_sj_fk FOREIGN KEY (author) REFERENCES public.gloss_personalia(mail);
+
+
 
 
 -- public.tab_sj_deposit definition
@@ -372,6 +377,8 @@ AS $function$
    $function$
 ;
 
+-- agregating fotos according photogram
+
 CREATE OR REPLACE FUNCTION public.show_fotos_by_fotogram(fotogramm character varying)
  RETURNS TABLE(id_foto character varying, foto_typ character varying, notes character varying)
  LANGUAGE plpgsql
@@ -386,4 +393,21 @@ AS $function$
 
         END;
    $function$
+;
+
+-- agregating SJs according object ID
+
+CREATE OR REPLACE FUNCTION public.show_sj_by_object(objekt integer)
+ RETURNS TABLE(strat_j_id integer, interpretace character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+        RETURN QUERY SELECT
+                id_sj,
+                interpretation
+        FROM tab_object
+        INNER JOIN tab_sj on id_object = ref_object
+        WHERE id_object = objekt;
+END;
+$function$
 ;
