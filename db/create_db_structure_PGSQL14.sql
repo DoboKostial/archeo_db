@@ -411,3 +411,18 @@ BEGIN
 END;
 $function$
 ;
+
+-- all objects and their respective SJs
+
+CREATE OR REPLACE FUNCTION public.show_all_objects_sjs()
+ RETURNS TABLE(objekt integer, typ_objektu character varying, strat_j integer, interpretace character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+        RETURN QUERY SELECT
+        id_object, object_typ, id_sj, interpretation
+        FROM tab_object INNER JOIN tab_sj ON id_object = ref_object
+        ORDER BY id_object ASC;
+END;
+$function$
+;
