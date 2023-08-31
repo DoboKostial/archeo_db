@@ -366,6 +366,16 @@ CREATE TABLE public.tabaid_sj_cut (
 	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut)
 );
 
+-- public.tabaid_sj_sketch definition
+-- this tabaid clues SJs and Sketches (m:n)
+-- DROP TABLE public.tabaid_sj_sketch;
+
+CREATE TABLE public.tabaid_sj_sketch (
+	id_aut serial4 NOT NULL,
+	ref_sj int4 NOT NULL,
+	ref_sketch int4 NOT NULL,
+	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut)
+);
 
 
 -- #################################
