@@ -343,9 +343,7 @@ CREATE TABLE tabaid_fotogram_foto (
 
 
 -- public.tabaid_fotogram_sj definition
-
--- Drop table
-
+-- this table is clue between SJs and fotogramss (m:n)
 -- DROP TABLE tabaid_fotogram_sj;
 
 CREATE TABLE tabaid_fotogram_sj (
@@ -357,8 +355,22 @@ CREATE TABLE tabaid_fotogram_sj (
 	CONSTRAINT tabaid_fotogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON UPDATE CASCADE
 );
 
+-- public.tabaid_sj_cut definition
+-- this table is clue between SJs and CUTs (m:n)
+-- DROP TABLE public.tabaid_sj_cut;
 
+CREATE TABLE public.tabaid_sj_cut (
+	id_aut serial4 NOT NULL,
+	ref_sj int4 NOT NULL,
+	ref_cut int4 NOT NULL,
+	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut)
+);
+
+
+
+-- #################################
 -- #### FUNCTIONS ###
+-- #################################
 
 
 CREATE OR REPLACE FUNCTION public.show_fotograms_by_photo(fotopattern character varying)
