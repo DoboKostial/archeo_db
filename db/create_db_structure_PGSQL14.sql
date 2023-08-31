@@ -377,6 +377,17 @@ CREATE TABLE public.tabaid_sj_sketch (
 	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut)
 );
 
+-- public.tabaid_sj_polygon definition
+-- this clues SJs and polygons (m:n)
+-- DROP TABLE public.tabaid_sj_polygon;
+
+CREATE TABLE public.tabaid_sj_polygon (
+	id_aut serial4 NOT NULL,
+	ref_sj int4 NOT NULL,
+	ref_polygon int4 NOT NULL,
+	CONSTRAINT tabaid_sj_polygon_pk PRIMARY KEY (id_aut)
+);
+
 
 -- #################################
 -- #### FUNCTIONS ###
