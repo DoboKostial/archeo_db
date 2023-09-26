@@ -334,7 +334,7 @@ DECLARE
     record_row record;
 BEGIN
     -- Initialize the output text for the specified sj_id
-    output_text := 'For sj_id=' || target_sj_id || ' we have following items:';
+    output_text := 'For SJ ID=' || target_sj_id || ' we have following items:';
 
     loop_sj_id := target_sj_id; -- Assign the specified sj_id to a separate variable
 
