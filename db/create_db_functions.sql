@@ -162,3 +162,28 @@ BEGIN
 END;
 $function$
 ;
+
+-- this function use SJ is as an argument and prints all sketches associated with
+CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_sketch(strat_j integer)
+ RETURNS TABLE(sj_id integer, id_sketch character varying, sketch_typ character varying, datum date)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY (
+        SELECT
+            sj.id_sj,
+            ts.id_sketch,
+            ts.sketch_typ,
+            ts.datum AS sketch_datum
+        FROM
+            public.tab_sj sj
+        INNER JOIN
+            public.tabaid_sj_sketch tass ON sj.id_sj = tass.ref_sj
+        INNER JOIN
+            public.tab_sketch ts ON tass.ref_sketch = ts.id_sketch
+	WHERE sj.id_sj = strat_j
+    );
+END;
+$function$
+;
+
