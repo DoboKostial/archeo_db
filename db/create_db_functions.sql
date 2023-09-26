@@ -214,3 +214,67 @@ END;
 $function$
 ;
 
+-- this function lists all objects/features and prints associated sjs
+CREATE OR REPLACE FUNCTION public.fnc_show_all_objects_sjs()
+ RETURNS TABLE(objekt integer, typ_objektu character varying, strat_j integer, interpretace character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+        RETURN QUERY SELECT
+        id_object, object_typ, id_sj, interpretation
+        FROM tab_object INNER JOIN tab_sj ON id_object = ref_object
+        ORDER BY id_object ASC;
+END;
+$function$
+;
+
+-- this function takes foto ID and prints all fotograms associated
+CREATE OR REPLACE FUNCTION public.fnc_show_fotograms_by_photo(fotopattern character varying)
+ RETURNS TABLE(id_fotogram character varying, fotogram_typ character varying, ref_sketch character varying)
+ LANGUAGE plpgsql
+AS $function$
+	BEGIN
+		RETURN QUERY
+		SELECT fg.id_fotogram, fg.fotogram_typ, fg.ref_sketch
+		FROM tab_fotogram fg
+		INNER JOIN tabaid_fotogram_foto tff ON fg.id_fotogram = tff.ref_fotogram
+		INNER JOIN tab_foto fo ON tff.ref_foto = fo.id_foto
+		WHERE fo.id_foto ILIKE fotopattern;
+
+	END;
+   $function$
+;
+
+-- this func takes fotogram ID and lists all fotos associated
+CREATE OR REPLACE FUNCTION public.fnc_show_fotos_by_fotogram(fotogramm character varying)
+ RETURNS TABLE(id_foto character varying, foto_typ character varying, notes character varying)
+ LANGUAGE plpgsql
+AS $function$
+	BEGIN
+		RETURN QUERY
+		SELECT fo.id_foto, fo.typ, fo.notes
+		FROM tab_foto fo
+		INNER JOIN tabaid_fotogram_foto tff ON fo.id_foto = tff.ref_foto
+		INNER JOIN tab_fotogram tf ON tff.ref_fotogram = tf.id_fotogram
+		WHERE tf.id_fotogram ILIKE fotogramm;
+
+	END;
+   $function$
+;
+
+-- this function takes object/feature as argument and prints all SJs it consists of
+CREATE OR REPLACE FUNCTION public.fnc_show_sj_by_object(objekt integer)
+ RETURNS TABLE(strat_j_id integer, interpretace character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+        RETURN QUERY SELECT
+                id_sj,
+                interpretation
+        FROM tab_object
+        INNER JOIN tab_sj on id_object = ref_object
+        WHERE id_object = objekt;
+END;
+$function$
+;
+
