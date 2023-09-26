@@ -278,3 +278,47 @@ END;
 $function$
 ;
 
+-- ATTENTION!!! SUPERFUNCTION
+-- this function loops over all SJs and prints all
+-- graphical documentation related to it. It uses
+-- 3 functions defined above
+CREATE OR REPLACE FUNCTION public.superfnc_get_all_sjs_and_related_docu_entities()
+ RETURNS TABLE(output_text text)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sj_id integer;
+    record_row record;
+    loop_sj_id integer; -- Separate variable for sj_id
+BEGIN
+    FOR sj_id IN (SELECT DISTINCT id_sj FROM public.tab_sj) LOOP
+        loop_sj_id := sj_id; -- Assign sj_id to a separate variable
+
+        -- Initialize the output text for this sj_id
+        output_text := 'For sj_id=' || loop_sj_id || ' we have following items:';
+
+        -- Call the function to retrieve fotos
+        FOR record_row IN
+            SELECT * FROM public.fnc_get_all_sjs_and_related_foto() AS f WHERE f.sj_id = loop_sj_id LOOP
+            output_text := output_text || CHR(10) || '- Fotos: ' || record_row.foto_id || ', ' || record_row.foto_typ || ', ' || record_row.foto_datum;
+        END LOOP;
+
+        -- Call the function to retrieve fotograms
+        FOR record_row IN
+            SELECT * FROM public.fnc_get_all_sjs_and_related_fotogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
+            output_text := output_text || CHR(10) || '- Fotograms: ' || record_row.id_fotogram || ', ' || record_row.fotogram_typ;
+        END LOOP;
+
+        -- Call the function to retrieve sketches
+        FOR record_row IN
+            SELECT * FROM public.fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
+            output_text := output_text || CHR(10) || '- Sketches: ' || record_row.id_sketch || ', ' || record_row.sketch_typ || ', ' || record_row.datum;
+        END LOOP;
+
+        -- Return the output for this sj_id
+        RETURN QUERY SELECT output_text;
+    END LOOP;
+END;
+$function$
+;
+
