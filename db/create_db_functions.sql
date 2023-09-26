@@ -116,3 +116,49 @@ END;
 $function$
 ;
 
+-- this function takes SJ id and returns list of all related fotos
+CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_foto(choose_sj integer)
+ RETURNS TABLE(sj_id integer, foto_id character varying, foto_typ character varying, foto_datum date)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY (
+        SELECT
+            sj.id_sj,
+            tf.id_foto,
+            tf.foto_typ,
+            tf.datum AS foto_datum
+        FROM
+            public.tab_sj sj
+        INNER JOIN
+            public.tabaid_foto_sj tafs ON sj.id_sj = tafs.ref_sj
+        INNER JOIN
+            public.tab_foto tf ON tafs.ref_foto = tf.id_foto
+	WHERE sj.id_sj = choose_sj
+    );
+END;
+$function$
+;
+
+-- this function requires SJ id and returns list of referenced fotograms
+CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_fotogram(strat_j integer)
+ RETURNS TABLE(sj_id integer, id_fotogram character varying, fotogram_typ character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY (
+        SELECT
+            sj.id_sj,
+            tf.id_fotogram,
+            tf.fotogram_typ
+        FROM
+            public.tab_sj sj
+        INNER JOIN
+            public.tabaid_fotogram_sj tafs ON sj.id_sj = tafs.ref_sj
+        INNER JOIN
+            public.tab_fotogram tf ON tafs.ref_fotogram = tf.id_fotogram
+	WHERE sj.id_sj = strat_j
+    );
+END;
+$function$
+;
