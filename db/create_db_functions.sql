@@ -69,3 +69,50 @@ END;
 $function$
 ;
 
+-- this function requires the ID of cut and lists all SJs cut by this cut
+CREATE OR REPLACE FUNCTION public.fnc_get_cut_and_related_sjs(choose_cut integer)
+ RETURNS TABLE(id_cut integer, id_sj integer, docu_plan boolean, docu_vertical boolean)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY (
+        SELECT
+            tc.id_cut,
+            tsj.id_sj,
+            tsj.docu_plan,
+	    tsj.docu_vertical
+        FROM
+            public.tab_cut tc
+        INNER JOIN
+            public.tabaid_sj_cut tasc ON tc.id_cut = tasc.ref_cut
+        INNER JOIN
+            public.tab_sj tsj ON tasc.ref_sj = tsj.id_sj
+	WHERE tc.id_cut = choose_cut
+    );
+END;
+$function$
+;
+
+-- this function takes ID of SJ and list all cuts cutting this SJ 
+CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_cuts(choose_sj integer)
+ RETURNS TABLE(sj_id integer, id_cut integer, description character varying)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+    RETURN QUERY (
+        SELECT
+            sj.id_sj,
+            tc.id_cut,
+            tc.description
+        FROM
+            public.tab_sj sj
+        INNER JOIN
+            public.tabaid_sj_cut tasc ON sj.id_sj = tasc.ref_sj
+        INNER JOIN
+            public.tab_cut tc ON tasc.ref_cut = tc.id_cut
+	WHERE sj.id_sj = choose_sj
+    );
+END;
+$function$
+;
+
