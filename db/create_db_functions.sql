@@ -187,3 +187,30 @@ END;
 $function$
 ;
 
+
+-- similar as 1st function but this uses loop
+CREATE OR REPLACE FUNCTION public.fnc_print_all_sjs_and_associated_photos()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sj_record record;
+    photo_info text;
+BEGIN
+    FOR sj_record IN (
+        SELECT id_sj
+        FROM tab_sj
+    ) LOOP
+        FOR photo_info IN (
+            SELECT tf.id_foto || ' (' || tf.foto_typ || ')' AS photo_description
+            FROM tabaid_foto_sj tafs
+            JOIN tab_foto tf ON tafs.ref_foto = tf.id_foto
+            WHERE tafs.ref_sj = sj_record.id_sj
+        ) LOOP
+            RAISE NOTICE 'For SJ %, Associated Photo: %', sj_record.id_sj, photo_info;
+        END LOOP;
+    END LOOP;
+END;
+$function$
+;
+
