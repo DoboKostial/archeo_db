@@ -295,7 +295,7 @@ BEGIN
         loop_sj_id := sj_id; -- Assign sj_id to a separate variable
 
         -- Initialize the output text for this sj_id
-        output_text := 'For sj_id=' || loop_sj_id || ' we have following items:';
+        output_text := 'For SJ ID=' || loop_sj_id || ' we have following items:';
 
         -- Call the function to retrieve fotos
         FOR record_row IN
@@ -322,3 +322,42 @@ END;
 $function$
 ;
 
+-- another SUPERFUNCTION
+-- this superfunction works same as previous but not for all SJs
+-- but only for one particular (as an argument)
+CREATE OR REPLACE FUNCTION public.superfnc_get_sj_and_related_docu_entities(target_sj_id integer)
+ RETURNS TABLE(output_text text)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    loop_sj_id integer; -- Separate variable for sj_id
+    record_row record;
+BEGIN
+    -- Initialize the output text for the specified sj_id
+    output_text := 'For sj_id=' || target_sj_id || ' we have following items:';
+
+    loop_sj_id := target_sj_id; -- Assign the specified sj_id to a separate variable
+
+    -- Call the function to retrieve fotos
+    FOR record_row IN
+        SELECT * FROM public.fnc_get_all_sjs_and_related_foto() AS f WHERE f.sj_id = loop_sj_id LOOP
+        output_text := output_text || CHR(10) || '- Fotos: ' || record_row.foto_id || ', ' || record_row.foto_typ || ', ' || record_row.foto_datum;
+    END LOOP;
+
+    -- Call the function to retrieve fotograms
+    FOR record_row IN
+        SELECT * FROM public.fnc_get_all_sjs_and_related_fotogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
+        output_text := output_text || CHR(10) || '- Fotograms: ' || record_row.id_fotogram || ', ' || record_row.fotogram_typ;
+    END LOOP;
+
+    -- Call the function to retrieve sketches
+    FOR record_row IN
+        SELECT * FROM public.fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
+        output_text := output_text || CHR(10) || '- Sketches: ' || record_row.id_sketch || ', ' || record_row.sketch_typ || ', ' || record_row.datum;
+    END LOOP;
+
+    -- Return the output for the specified sj_id
+    RETURN QUERY SELECT output_text;
+END;
+$function$
+;
