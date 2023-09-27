@@ -432,3 +432,36 @@ BEGIN
 END;
 $function$
 ;
+
+-- this function checks if SJs have or not sketches
+CREATE OR REPLACE FUNCTION public.fnc_check_all_sjs_has_sketch()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sj_id INT;
+BEGIN
+    -- Check if there are SJ records without corresponding sketch records
+    IF EXISTS (
+        SELECT 1
+        FROM tab_sj
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM tabaid_sj_sketch
+            WHERE tabaid_sj_sketch.ref_sj = tab_sj.id_sj
+        )
+    ) THEN
+        -- Print SJ records without sketch records
+        RAISE NOTICE 'Following SJs have no sketch entry:';
+        FOR sj_id IN (SELECT id_sj FROM tab_sj WHERE NOT EXISTS (
+            SELECT 1 FROM tabaid_sj_sketch WHERE tabaid_sj_sketch.ref_sj = tab_sj.id_sj
+        )) LOOP
+            RAISE NOTICE '%', sj_id;
+        END LOOP;
+    ELSE
+        -- All SJ records have corresponding foto records
+        RAISE NOTICE 'Check OK, all SJs have appropriate sketch:';
+    END IF;
+END;
+$function$
+;
