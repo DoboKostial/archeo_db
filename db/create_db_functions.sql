@@ -361,3 +361,38 @@ BEGIN
 END;
 $function$
 ;
+
+
+
+--------------
+--------------
+-- CHECK FUNCTIONS - REVIEWING DATA IF ACCORDING  DATA MODEL
+--------------
+--------------
+
+CREATE OR REPLACE FUNCTION public.fnc_check_objects_have_sj()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    object_count INTEGER;
+    missing_objects TEXT;  -- String to store the IDs of missing objects
+BEGIN
+    -- Get the total count of objects
+    SELECT COUNT(*) INTO object_count FROM public.tab_object;
+
+    -- Collect the IDs of objects without corresponding sj_id in tab_sj
+    SELECT string_agg(obj.id_object::TEXT, E'\n') INTO missing_objects
+    FROM public.tab_object obj
+    LEFT JOIN public.tab_sj sj ON obj.id_object = sj.ref_object
+    WHERE sj.id_sj IS NULL;
+
+    -- Check if all objects have corresponding sj_id values
+    IF missing_objects IS NULL THEN
+        RAISE NOTICE 'All objects are fine, having SJs';
+    ELSE
+        RAISE NOTICE 'Objects with missing SJs:%', E'\n' || missing_objects;
+    END IF;
+END;
+$function$
+;
