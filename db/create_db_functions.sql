@@ -370,6 +370,8 @@ $function$
 --------------
 --------------
 
+
+-- this function checks if all objects are created by SJs (has reference)
 CREATE OR REPLACE FUNCTION public.fnc_check_objects_have_sj()
  RETURNS void
  LANGUAGE plpgsql
@@ -382,10 +384,10 @@ BEGIN
     SELECT COUNT(*) INTO object_count FROM public.tab_object;
 
     -- Collect the IDs of objects without corresponding sj_id in tab_sj
-    SELECT string_agg(obj.id_object::TEXT, E'\n') INTO missing_objects
-    FROM public.tab_object obj
-    LEFT JOIN public.tab_sj sj ON obj.id_object = sj.ref_object
-    WHERE sj.id_sj IS NULL;
+    SELECT string_agg(tab_object.id_object::TEXT, E'\n') INTO missing_objects
+    FROM public.tab_object
+    LEFT JOIN public.tab_sj ON tab_object.id_object = tab_sj.ref_object
+    WHERE tab_sj.id_sj IS NULL;
 
     -- Check if all objects have corresponding sj_id values
     IF missing_objects IS NULL THEN
