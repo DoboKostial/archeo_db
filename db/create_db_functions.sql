@@ -398,3 +398,37 @@ BEGIN
 END;
 $function$
 ;
+
+
+-- this function checks if all SJs have at least one foto
+CREATE OR REPLACE FUNCTION public.fnc_check_all_sjs_has_foto()
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    sj_id INT;
+BEGIN
+    -- Check if there are SJ records without corresponding foto records
+    IF EXISTS (
+        SELECT 1
+        FROM tab_sj sj
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM tabaid_foto_sj foto
+            WHERE foto.ref_sj = sj.id_sj
+        )
+    ) THEN
+        -- Print SJ records without foto records
+        RAISE NOTICE 'Following SJs have no foto entry:';
+        FOR sj_id IN (SELECT id_sj FROM tab_sj sj WHERE NOT EXISTS (
+            SELECT 1 FROM tabaid_foto_sj foto WHERE foto.ref_sj = sj.id_sj
+        )) LOOP
+            RAISE NOTICE '%', sj_id;
+        END LOOP;
+    ELSE
+        -- All SJ records have corresponding foto records
+        RAISE NOTICE 'Check OK, all fotos have appropriate fotorecord';
+    END IF;
+END;
+$function$
+;
