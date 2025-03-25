@@ -11,6 +11,9 @@ GRANT pg_read_all_data TO grp_analysts;
 -- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template_1_0;''
 CREATE DATABASE terrain_db_template_1_0 OWNER grp_dbas ENCODING 'UTF8' IS_TEMPLATE true;
 
+-- Connect to the template database to configure it
+\c terrain_db_template_1_0;
+
 -- default privileges for users
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO grp_dbas;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO grp_dbas;
@@ -144,7 +147,7 @@ CREATE TABLE tab_foto (
 	foto_typ varchar(60) NULL,
 	datum date NULL,
 	author varchar(100) NULL,
- th	notes varchar(500) NULL,
+	notes varchar(500) NULL,
 	CONSTRAINT tab_foto_pk PRIMARY KEY (id_foto),
 	CONSTRAINT tab_foto_fk FOREIGN KEY (author) REFERENCES gloss_personalia(mail)
 );
@@ -376,7 +379,7 @@ CREATE TABLE public.tabaid_sj_sketch (
 -- DROP TABLE public.tabaid_sj_polygon;
 
 CREATE TABLE public.tabaid_sj_polygon (
- th	id_aut serial4 NOT NULL,
+ 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_polygon int4 NOT NULL,
 	CONSTRAINT tabaid_sj_polygon_pk PRIMARY KEY (id_aut)
