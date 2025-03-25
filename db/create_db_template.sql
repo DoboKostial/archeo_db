@@ -23,10 +23,12 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO grp_dbas;
 
 SET ROLE grp_dbas;
 
-
+--###### TABLES definitions here #######
 -- #### Glossaries as tables #####
--- public.gloss_docu_typ definition
+--######################################
 
+
+-- public.gloss_docu_typ definition
 
 CREATE TABLE gloss_docu_typ (
 	docu_typ varchar(60) NOT NULL,
@@ -36,10 +38,7 @@ CREATE TABLE gloss_docu_typ (
 
 
 -- public.gloss_object_type definition
-
--- Drop table
-
--- DROP TABLE gloss_object_type;
+-- glossary for archaeological objects
 
 CREATE TABLE gloss_object_type (
 	object_typ varchar(100) NOT NULL,
@@ -49,10 +48,6 @@ CREATE TABLE gloss_object_type (
 
 
 -- public.gloss_personalia definition
-
--- Drop table
-
--- DROP TABLE gloss_personalia;
 
 CREATE TABLE gloss_personalia (
 	mail varchar(80) NOT NULL,
@@ -66,7 +61,6 @@ CREATE UNIQUE INDEX gloss_personalia_mail_idx ON public.gloss_personalia USING b
 -- ### Here tables - terrain entities
 ------
 -- public.tab_cut definition
--- DROP TABLE tab_cut;
 
 CREATE TABLE tab_cut (
 	id_cut int4 NOT NULL,
@@ -76,8 +70,6 @@ CREATE TABLE tab_cut (
 
 
 -- public.tab_geopts definition
-
--- DROP TABLE tab_geopts;
 
 CREATE TABLE tab_geopts (
 	id_pts int4 NOT NULL,
@@ -93,10 +85,6 @@ CREATE UNIQUE INDEX tab_geomeasuring_id_pts_idx ON public.tab_geopts USING btree
 
 -- public.tab_object definition
 
--- Drop table
-
--- DROP TABLE tab_object;
-
 CREATE TABLE tab_object (
 	id_object int4 NOT NULL,
 	object_typ varchar(100) NULL,
@@ -107,10 +95,6 @@ CREATE TABLE tab_object (
 
 
 -- public.tab_polygon definition
-
--- Drop table
-
--- DROP TABLE tab_polygon;
 
 CREATE TABLE tab_polygon (
 	id_polygon int4 NOT NULL,
@@ -123,10 +107,6 @@ CREATE TABLE tab_polygon (
 
 -- public.tab_sj_stratigraphy definition
 
--- Drop table
-
--- DROP TABLE tab_sj_stratigraphy;
-
 CREATE TABLE tab_sj_stratigraphy (
 	id_aut serial4 NOT NULL,
 	ref_sj1 int4 NULL,
@@ -137,10 +117,6 @@ CREATE TABLE tab_sj_stratigraphy (
 
 
 -- public.tab_foto definition
-
--- Drop table
-
--- DROP TABLE tab_foto;
 
 CREATE TABLE tab_foto (
 	id_foto varchar(100) NOT NULL,
@@ -154,10 +130,6 @@ CREATE TABLE tab_foto (
 
 
 -- public.tab_sj definition
-
--- Drop table
-
--- DROP TABLE public.tab_sj;
 
 CREATE TABLE public.tab_sj (
 	id_sj int4 NOT NULL,
@@ -181,10 +153,6 @@ ALTER TABLE public.tab_sj ADD CONSTRAINT tab_sj_fk FOREIGN KEY (author) REFERENC
 
 -- public.tab_sj_deposit definition
 
--- Drop table
-
--- DROP TABLE tab_sj_deposit;
-
 CREATE TABLE tab_sj_deposit (
 	id_deposit int4 NOT NULL,
 	deposit_typ varchar(20) NULL,
@@ -201,10 +169,6 @@ CREATE UNIQUE INDEX tab_sj_deposit_id_deposit_idx ON public.tab_sj_deposit USING
 
 -- public.tab_sj_negativ definition
 
--- Drop table
-
--- DROP TABLE tab_sj_negativ;
-
 CREATE TABLE tab_sj_negativ (
 	id_negativ int4 NOT NULL,
 	negativ_typ varchar(40) NULL,
@@ -220,10 +184,6 @@ CREATE UNIQUE INDEX tab_sj_negativ_id_negativ_idx ON public.tab_sj_negativ USING
 
 
 -- public.tab_sj_structure definition
-
--- Drop table
-
--- DROP TABLE tab_sj_structure;
 
 CREATE TABLE tab_sj_structure (
 	id_structure int4 NOT NULL,
@@ -242,10 +202,6 @@ CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON public.tab_sj_structure
 
 -- public.tab_sketch definition
 
--- Drop table
-
--- DROP TABLE tab_sketch;
-
 CREATE TABLE tab_sketch (
 	id_sketch varchar(100) NOT NULL,
 	sketch_typ varchar(80) NULL,
@@ -258,10 +214,7 @@ CREATE TABLE tab_sketch (
 
 
 -- public.tabaid_foto_sj definition
-
--- Drop table
-
--- DROP TABLE tabaid_foto_sj;
+-- this table connects fotos and SJ (stratigraphic units)
 
 CREATE TABLE tabaid_foto_sj (
 	id_aut serial4 NOT NULL,
@@ -275,10 +228,6 @@ CREATE TABLE tabaid_foto_sj (
 
 -- public.tab_fotogram definition
 
--- Drop table
-
--- DROP TABLE tab_fotogram;
-
 CREATE TABLE tab_fotogram (
 	id_fotogram varchar(80) NOT NULL,
 	fotogram_typ varchar(60) NULL,
@@ -291,10 +240,7 @@ CREATE INDEX tab_fotogram_id_fotogram_idx ON public.tab_fotogram USING btree (id
 
 
 -- public.tab_sack definition
-
--- Drop table
-
--- DROP TABLE tab_sack;
+-- sacks are containers for finds
 
 CREATE TABLE tab_sack (
 	id_sack int4 NOT NULL,
@@ -308,10 +254,8 @@ CREATE TABLE tab_sack (
 
 
 -- public.tabaid_cut_fotogram definition
+-- this table connects cuts and fotograms (m:n)
 
--- Drop table
-
--- DROP TABLE tabaid_cut_fotogram;
 
 CREATE TABLE tabaid_cut_fotogram (
 	id_aut serial4 NOT NULL,
@@ -324,10 +268,8 @@ CREATE TABLE tabaid_cut_fotogram (
 
 
 -- public.tabaid_fotogram_foto definition
+-- this table connects fotograms and fotos (m:n)
 
--- Drop table
-
--- DROP TABLE tabaid_fotogram_foto;
 
 CREATE TABLE tabaid_fotogram_foto (
 	id_aut serial4 NOT NULL,
@@ -341,7 +283,6 @@ CREATE TABLE tabaid_fotogram_foto (
 
 -- public.tabaid_fotogram_sj definition
 -- this table is clue between SJs and fotogramss (m:n)
--- DROP TABLE tabaid_fotogram_sj;
 
 CREATE TABLE tabaid_fotogram_sj (
 	id_aut serial4 NOT NULL,
@@ -354,7 +295,6 @@ CREATE TABLE tabaid_fotogram_sj (
 
 -- public.tabaid_sj_cut definition
 -- this table is clue between SJs and CUTs (m:n)
--- DROP TABLE public.tabaid_sj_cut;
 
 CREATE TABLE public.tabaid_sj_cut (
 	id_aut serial4 NOT NULL,
@@ -365,7 +305,6 @@ CREATE TABLE public.tabaid_sj_cut (
 
 -- public.tabaid_sj_sketch definition
 -- this tabaid clues SJs and Sketches (m:n)
--- DROP TABLE public.tabaid_sj_sketch;
 
 CREATE TABLE public.tabaid_sj_sketch (
 	id_aut serial4 NOT NULL,
@@ -376,7 +315,6 @@ CREATE TABLE public.tabaid_sj_sketch (
 
 -- public.tabaid_sj_polygon definition
 -- this clues SJs and polygons (m:n)
--- DROP TABLE public.tabaid_sj_polygon;
 
 CREATE TABLE public.tabaid_sj_polygon (
  	id_aut serial4 NOT NULL,
@@ -761,7 +699,6 @@ BEGIN
 END;
 $function$
 ;
-
 
 
 --------------
