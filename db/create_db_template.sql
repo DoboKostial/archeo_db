@@ -6,10 +6,11 @@ CREATE ROLE grp_dbas WITH CREATEDB CREATEROLE INHERIT;
 GRANT pg_write_all_data TO grp_dbas;
 CREATE ROLE grp_analysts WITH INHERIT;
 GRANT pg_read_all_data TO grp_analysts;
+CREATE ROLE app_terrain_db WITH LOGIN;
 
 -- This database is intended to be a template while assuming
 -- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template;''
-CREATE DATABASE terrain_db_template OWNER grp_dbas ENCODING 'UTF8' IS_TEMPLATE true;
+CREATE DATABASE terrain_db_template OWNER app_terrain_db ENCODING 'UTF8' IS_TEMPLATE true;
 
 -- Connect to the template database to configure it
 \c terrain_db_template;
@@ -21,7 +22,7 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON FUNCTIONS TO grp_dbas;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TYPES TO grp_dbas;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO grp_dbas;
 
-SET ROLE grp_dbas;
+SET ROLE app_terrain_db;
 
 --###### TABLES definitions here #######
 -- #### Glossaries as tables #####

@@ -1,15 +1,16 @@
 #!/bin/bash
 
 #this script use tempalte and create brand new database from template
-#use parameter as name of new DB
+#use parameter1 as name of new DB and parameter2 as DB owner (app role)
 
 DB_NAME=$1
+DB_OWNER=$2
 DB_TEMPLATE="terrain_db_template"
 
 # conninfo
-PGUSER="postgres"     # Uživatelské jméno
-PGHOST="localhost"    # Hostitel
-PGPORT="5432"         # Port (výchozí je 5432)
+PGUSER="postgres"     # superuser
+PGHOST="localhost"    # host
+PGPORT="5432"         # port
 #using .pgpass
 
 # new DB from template
