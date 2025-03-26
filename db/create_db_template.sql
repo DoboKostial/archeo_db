@@ -8,11 +8,11 @@ CREATE ROLE grp_analysts WITH INHERIT;
 GRANT pg_read_all_data TO grp_analysts;
 
 -- This database is intended to be a template while assuming
--- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template_1_0;''
-CREATE DATABASE terrain_db_template_1_0 OWNER grp_dbas ENCODING 'UTF8' IS_TEMPLATE true;
+-- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template;''
+CREATE DATABASE terrain_db_template OWNER grp_dbas ENCODING 'UTF8' IS_TEMPLATE true;
 
 -- Connect to the template database to configure it
-\c terrain_db_template_1_0;
+\c terrain_db_template;
 
 -- default privileges for users
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO grp_dbas;
