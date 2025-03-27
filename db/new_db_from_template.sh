@@ -15,10 +15,11 @@ PGPORT="5432"         # port
 
 # new DB from template
 psql -U $PGUSER -h $PGHOST -p $PGPORT -d postgres -c "CREATE DATABASE $DB_NAME TEMPLATE $DB_TEMPLATE;"
+psql -U $PGUSER -h $PGHOST -p $PGPORT -d postgres -c "ALTER DATABASE $DB_NAME OWNER TO $DB_OWNER;"
 
 # result - OK, or not
 if [ $? -eq 0 ]; then
-    echo "Database $DB_NAME was sucessfully created."
+    echo "Database $DB_NAME was sucessfully created and reowned."
 else
     echo "Error while creating DB $DB_NAME."
     exit 1
