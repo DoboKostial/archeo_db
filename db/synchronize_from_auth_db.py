@@ -73,7 +73,7 @@ def sync_to_database(db_name, users):
         conn.close()
         print(f"Synchro finished for DB {db_name}.")
     except Exception as e:
-        print(f"Error while suncing DB {db_name}: {e}")
+        print(f"Error while syncing DB {db_name}: {e}")
 
 # Main logic of synchronization
 def main():
