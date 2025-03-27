@@ -1,3 +1,13 @@
+##
+# This python script synchronizes auth_db (table 'app_users')
+# with all DBs in cluster and corresponding table 'gloss_personalia'
+# except of password hash (no needed)
+#
+# Do not forget to instal dotenv and psycopg2!!!
+# do not forget to stuck this script into cron!!!
+# author: dobo@dobo.sk
+##
+
 import os
 import psycopg2
 from psycopg2 import sql
