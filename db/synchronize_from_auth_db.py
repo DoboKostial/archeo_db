@@ -14,16 +14,16 @@ from dotenv import load_dotenv
 import os
 import sys
 
-# Přidání 'web_app' do Python path pro import logger
+# adding 'web_app' to Python path for import logger
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../web_app')))
 from app.logger import setup_logger
 
-# Načtení loggeru
+# logger load
 logger = setup_logger("synchronization")
 
 load_dotenv()
 
-# Připojení k auth_db
+# onnect to auth_db
 AUTH_DB_CONFIG = {
     "dbname": "auth_db",
     "user": os.getenv("DB_USER"),
@@ -32,31 +32,31 @@ AUTH_DB_CONFIG = {
     "port": os.getenv("DB_PORT"),
 }
 
-# Funkce pro získání dat z auth_db
+# function for retrieve data from auth_db
 def get_users_from_auth_db():
     try:
-        logger.info("🔄 Getting users from auth_db...")
+        logger.info("Getting users from auth_db...")
         with psycopg2.connect(**AUTH_DB_CONFIG) as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT mail, name, group_role FROM app_users")
                 users = cursor.fetchall()
-        logger.info(f"✅ Successfully fetched {len(users)} users from auth_db")
+        logger.info(f"Successfully fetched {len(users)} users from auth_db")
         return users
     except Exception as e:
-        logger.error(f"❌ Error while getting users from auth_db: {e}")
+        logger.error(f"Error while getting users from auth_db: {e}")
         return []
 
-# Funkce pro synchronizaci jedné databáze
+# function for synchro of one database
 def sync_database(db_name, users):
     DB_CONFIG = AUTH_DB_CONFIG.copy()
     DB_CONFIG["dbname"] = db_name
 
     try:
-        logger.info(f"🔄 Starting sync for database: {db_name}")
+        logger.info(f"Starting sync for database: {db_name}")
         with psycopg2.connect(**DB_CONFIG) as conn:
             with conn.cursor() as cursor:
                 for mail, name, group_role in users:
-                    # Update existujícího uživatele
+                    # Update existing user
                     cursor.execute(
                         sql.SQL("""
                             UPDATE public.gloss_personalia
@@ -65,7 +65,7 @@ def sync_database(db_name, users):
                         """),
                         (name, group_role, mail)
                     )
-                    # Vložení nového uživatele
+                    # Inserting new user
                     cursor.execute(
                         sql.SQL("""
                             INSERT INTO public.gloss_personalia (mail, name, group_role)
@@ -76,7 +76,7 @@ def sync_database(db_name, users):
                         """),
                         (mail, name, group_role, mail)
                     )
-                # Smazání uživatelů, kteří už v auth_db nejsou
+                # Deleting users not being present in auth_db
                 cursor.execute(
                     sql.SQL("""
                         DELETE FROM public.gloss_personalia
@@ -85,29 +85,29 @@ def sync_database(db_name, users):
                     (tuple(user[0] for user in users),)
                 )
             conn.commit()
-        logger.info(f"✅ Successfully synced DB {db_name}")
+        logger.info(f"Successfully synced DB {db_name}")
     except Exception as e:
-        logger.error(f"❌ Error while syncing DB {db_name}: {e}")
+        logger.error(f"Error while syncing DB {db_name}: {e}")
 
-# Získání seznamu databází
+# Retrieving list of databases
 def get_databases():
     try:
-        logger.info("🔄 Getting list of databases...")
+        logger.info("Getting list of databases...")
         with psycopg2.connect(**AUTH_DB_CONFIG) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(
                     "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('postgres', 'auth_db')"
                 )
                 databases = [row[0] for row in cursor.fetchall()]
-        logger.info(f"✅ Found {len(databases)} databases to sync")
+        logger.info(f"Found {len(databases)} databases to sync")
         return databases
     except Exception as e:
-        logger.error(f"❌ Error while getting databases: {e}")
+        logger.error(f"Error while getting databases: {e}")
         return []
 
-# Hlavní logika
+# main logic
 if __name__ == "__main__":
-    logger.info("🔄 Starting synchronization...")
+    logger.info("Starting synchronization...")
     users = get_users_from_auth_db()
     if not users:
         logger.info("No users to sync. Exiting.")
@@ -116,5 +116,5 @@ if __name__ == "__main__":
         for db_name in databases:
             sync_database(db_name, users)
 
-    logger.info("✅ Synchronization completed")
+    logger.info("Synchronization completed")
 
