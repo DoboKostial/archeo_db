@@ -50,13 +50,13 @@ CREATE TABLE gloss_object_type (
 
 -- public.gloss_personalia definition
 
-CREATE TABLE gloss_personalia (
+CREATE TABLE public.gloss_personalia (
 	mail varchar(80) NOT NULL,
-	"name" varchar(60) NULL,
-	surname varchar(100) NULL,
-	CONSTRAINT gloss_personalia_pk PRIMARY KEY (mail)
+	"name" varchar(150) NOT NULL,
+	group_role varchar(40) NOT NULL,
+	CONSTRAINT gloss_personalia_pkey PRIMARY KEY (mail)
 );
-CREATE UNIQUE INDEX gloss_personalia_mail_idx ON public.gloss_personalia USING btree (mail);
+
 
 ------
 -- ### Here tables - terrain entities
