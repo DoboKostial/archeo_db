@@ -20,7 +20,7 @@ SET ROLE app_terrain_db;
 CREATE TABLE app_users (
     mail VARCHAR(80) NOT NULL PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
-    password_hash VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(250) NOT NULL,
     group_role VARCHAR(40) NOT NULL,
     last_login DATE
 );
