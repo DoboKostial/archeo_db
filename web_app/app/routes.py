@@ -69,3 +69,19 @@ def index():
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid token"}), 401
 
+@main.route('/logout', methods=['GET'])
+def logout():
+    token = request.headers.get('Authorization')
+
+    if token:
+        try:
+            decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            email = decoded.get('email', 'neznámý uživatel')
+            logging.info(f"Uživatel odhlášen: {email}")
+        except jwt.InvalidTokenError:
+            logging.warning("Pokus o odhlášení s neplatným tokenem.")
+    else:
+        logging.info("Odhlášení bez tokenu.")
+
+    return render_template("logged_out.html")
+
