@@ -8,6 +8,27 @@ def get_user_by_email():
         WHERE mail = %s
     """
 
+def get_user_password_hash():
+    return """
+        SELECT password_hash 
+        FROM app_users 
+        WHERE mail = %s
+    """
+
+def get_user_name_and_last_login():
+    return """
+        SELECT name, mail, last_login 
+        FROM app_users 
+        WHERE mail = %s
+    """
+
+def get_user_name_by_email():
+    return """
+        SELECT name, mail, last_login 
+        FROM app_users 
+        WHERE mail = %s
+    """
+
 def update_last_login():
     return """
         UPDATE app_users
@@ -15,7 +36,7 @@ def update_last_login():
         WHERE mail = %s
     """
 
-def update_user_password():
+def update_user_password_hash():
     return """
         UPDATE app_users
         SET password_hash = %s
