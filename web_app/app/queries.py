@@ -1,4 +1,5 @@
 # app/queries.py
+# all SQL queries in app in one file
 
 def get_user_password_hash(conn, email):
     with conn.cursor() as cur:
@@ -6,6 +7,15 @@ def get_user_password_hash(conn, email):
             SELECT password_hash 
             FROM app_users 
             WHERE mail = %s
+            AND enabled = true
+        """, (email,))
+        result = cur.fetchone()
+        return result[0] if result else None
+
+def is_user_enabled(conn, email):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT enabled FROM app_users WHERE mail = %s
         """, (email,))
         result = cur.fetchone()
         return result[0] if result else None
@@ -72,4 +82,15 @@ def update_last_login(conn, email):
             WHERE mail = %s
         """, (email,))
         conn.commit()
+
+# For index/dashboard
+def get_pg_version():
+    return "SELECT version()"
+
+def get_terrain_db_sizes():
+    return """
+        SELECT datname, pg_database_size(datname)
+        FROM pg_database
+        WHERE datname ~ '^[0-9]'
+    """
 
