@@ -93,4 +93,26 @@ def get_terrain_db_sizes():
         FROM pg_database
         WHERE datname ~ '^[0-9]'
     """
+# this is getting user role used for session RBAC
+def get_user_role(conn, email):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT group_role
+            FROM app_users
+            WHERE mail = %s
+        """, (email,))
+        result = cur.fetchone()
+        return result[0] if result else None
+
+def get_terrain_db_list(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT datname
+            FROM pg_database
+            WHERE datname ~'^[0-9]'
+              AND datistemplate = false
+              AND datallowconn = true
+            ORDER BY datname
+        """)
+        return [row[0] for row in cur.fetchall()]
 
