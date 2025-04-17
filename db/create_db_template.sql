@@ -2,11 +2,12 @@
 -- basix role and privileges
 -- making database with owner grp_dbas creating all tables under this account
 
-CREATE ROLE grp_dbas WITH CREATEDB CREATEROLE INHERIT;
+CREATE ROLE grp_dbas WITH CREATEDB INHERIT;
 GRANT pg_write_all_data TO grp_dbas;
 CREATE ROLE grp_analysts WITH INHERIT;
 GRANT pg_read_all_data TO grp_analysts;
 CREATE ROLE app_terrain_db WITH LOGIN;
+GRANT grp_dbas TO app_terrain_db;
 
 -- This database is intended to be a template while assuming
 -- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template;''
