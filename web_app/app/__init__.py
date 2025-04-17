@@ -3,7 +3,7 @@ import logging
 import jwt
 from flask import Flask, request
 from app.database import get_db_connection
-from config import Config  # ← nově importujeme konfiguraci
+from config import Config
 
 
 def setup_logging():
@@ -22,9 +22,11 @@ def setup_logging():
 def create_app():
     setup_logging()
 
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='static', template_folder='templates')
+    app.secret_key = Config.SECRET_KEY  # nutné pro Flask sessions
     from app.routes import main
     app.register_blueprint(main)
+    
 
     @app.context_processor
     def inject_user_info():
