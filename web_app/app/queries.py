@@ -120,3 +120,23 @@ def get_all_users():
         FROM app_users
         ORDER BY name
     """
+
+def get_enabled_user_name_by_email(conn, email):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT name 
+            FROM app_users 
+            WHERE mail = %s AND enabled = true
+        """, (email,))
+        result = cur.fetchone()
+        return result[0] if result else None
+
+
+def update_user_password_and_commit(conn, email, password_hash):
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE app_users
+            SET password_hash = %s
+            WHERE mail = %s
+        """, (password_hash, email))
+    conn.commit()

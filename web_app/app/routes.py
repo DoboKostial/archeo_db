@@ -8,7 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import psycopg2
 from psycopg2 import sql
 from app.database import get_db_connection, create_database_backup
-from app.utils import send_password_change_email
+from app.utils import send_password_change_email, send_password_reset_email
 from app.logger import setup_logger
 from app.queries import (
     get_user_password_hash,
@@ -23,7 +23,10 @@ from app.queries import (
     is_user_enabled,
     get_user_role, 
     get_user_name_and_last_login,
-    get_all_users
+    get_all_users,
+    get_enabled_user_name_by_email,
+    update_user_password_and_commit
+
 )
 
 
@@ -99,6 +102,74 @@ def login():
         return jsonify({"error": "Chyba serveru"}), 500
     finally:
         conn.close()
+
+
+# logic for reseting forgotten password
+@main.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'GET':
+        return render_template('forgot_password.html')
+
+    data = request.get_json()
+    email = data.get('email')
+
+    try:
+        conn = get_db_connection()
+        user_name = get_enabled_user_name_by_email(conn, email)
+
+        if not user_name:
+            logger.warning(f"Neplatný požadavek na reset hesla pro e-mail: {email}")
+            return jsonify({"error": "Účet neexistuje nebo je deaktivován."}), 400
+
+        token = jwt.encode({
+            'email': email,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+        }, Config.SECRET_KEY, algorithm='HS256')
+
+        reset_url = url_for('main.reset_password', token=token, _external=True)
+        send_password_reset_email(email, user_name, reset_url)
+
+        logger.info(f"Odeslán e-mail pro reset hesla: {email}")
+        return jsonify({"success": True})
+
+    except Exception as e:
+        logger.error(f"Chyba při generování reset linku: {e}")
+        return jsonify({"error": "Chyba serveru."}), 500
+    finally:
+        conn.close()
+
+
+@main.route('/emergency-login/<token>')
+def emergency_login(token):
+    try:
+        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
+        user_email = payload['email']
+    except jwt.ExpiredSignatureError:
+        logger.warning("Expirace nouzového JWT tokenu – přesměrování na /login")
+        return redirect('/login')
+    except jwt.InvalidTokenError:
+        logger.warning("Neplatný nouzový JWT token – přesměrování na /login")
+        return redirect('/login')
+
+    conn = get_db_connection()
+    is_enabled = is_user_enabled(conn, user_email)
+    if not is_enabled:
+        logger.warning(f"Nouzové přihlášení zablokovaného nebo neexistujícího uživatele: {user_email}")
+        conn.close()
+        return redirect('/login')
+
+    logger.info(f"Nouzové přihlášení úspěšné pro uživatele: {user_email}")
+    conn.close()
+
+    response = redirect('/profile')
+    response.set_cookie(
+        'token',
+        token,
+        httponly=True,
+        samesite='Lax',
+        max_age=60 * 60 * 24  # 24 hodin – volitelné
+    )
+    return response
 
 
 #if logged in, redirected here - basic info about app
