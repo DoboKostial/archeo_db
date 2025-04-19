@@ -35,8 +35,8 @@ if __name__ == "__main__":
     password_hash = generate_password_hash(raw_password)
 
     print("You can copy these strings directly to auth_db.app_users:\n")
-    print(f"Name        : {name}")
-    print(f"E-mail       : {mail}")
-    print(f"Group Role         : {role}")
-    print(f"Temp password: {raw_password}")
-    print(f"Password hash  : {password_hash}")
+    print(f"Name            : {name}")
+    print(f"E-mail          : {mail}")
+    print(f"Group Role      : {role}")
+    print(f"Temp password   : {raw_password}")
+    print(f"Password hash   : {password_hash}")
