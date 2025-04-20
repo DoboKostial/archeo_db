@@ -1,6 +1,12 @@
+#############################
 # app/queries.py
-# all SQL queries in app in one file
+# all SQL queries in app in one file (= called in app by needs)
+# dobo@dobo.sk
+#############################
 
+#
+# here queries for administrative/general purpose section
+#
 def get_user_password_hash(conn, email):
     with conn.cursor() as cur:
         cur.execute("""
@@ -11,6 +17,7 @@ def get_user_password_hash(conn, email):
         """, (email,))
         result = cur.fetchone()
         return result[0] if result else None
+
 
 def is_user_enabled(conn, email):
     with conn.cursor() as cur:
@@ -83,9 +90,11 @@ def update_last_login(conn, email):
         """, (email,))
         conn.commit()
 
+
 # For index/dashboard
 def get_pg_version():
     return "SELECT version()"
+
 
 def get_terrain_db_sizes():
     return """
@@ -113,13 +122,13 @@ def get_terrain_db_list(conn):
         return [row[0] for row in cur.fetchall()]
 
 
-
 def get_all_users():
     return """
         SELECT name, mail, group_role, enabled, last_login 
         FROM app_users
         ORDER BY name
     """
+
 
 def get_enabled_user_name_by_email(conn, email):
     with conn.cursor() as cur:
@@ -140,3 +149,7 @@ def update_user_password_and_commit(conn, email, password_hash):
             WHERE mail = %s
         """, (password_hash, email))
     conn.commit()
+
+
+
+# here queries for data manipulation in terrain DBs
