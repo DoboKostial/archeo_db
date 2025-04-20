@@ -2,7 +2,7 @@ import os
 import logging
 import jwt
 from flask import Flask, request
-from app.database import get_db_connection
+from app.database import get_auth_connection
 from config import Config
 
 
@@ -39,7 +39,7 @@ def create_app():
             try:
                 payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
                 user_email = payload.get("email", "")
-                conn = get_db_connection()
+                conn = get_auth_connection()
                 cur = conn.cursor()
                 cur.execute("SELECT name, last_login FROM app_users WHERE mail = %s", (user_email,))
                 result = cur.fetchone()
