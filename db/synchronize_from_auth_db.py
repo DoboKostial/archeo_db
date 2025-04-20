@@ -23,7 +23,7 @@ logger = setup_logger("synchronization")
 
 load_dotenv()
 
-# onnect to auth_db
+# connect to auth_db
 AUTH_DB_CONFIG = {
     "dbname": "auth_db",
     "user": os.getenv("DB_USER"),
