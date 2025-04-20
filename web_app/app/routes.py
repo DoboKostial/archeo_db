@@ -7,9 +7,11 @@ import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 import psycopg2
 from psycopg2 import sql
-from app.database import get_db_connection, create_database_backup
-from app.utils import send_password_change_email, send_password_reset_email
+from app.database import get_auth_connection, get_terrain_connection, create_database_backup
+from app import utils
+#from app.utils import send_password_change_email, send_password_reset_email, send_new_account_email, sync_users_to_terrain_dbs
 from app.logger import setup_logger
+from app import queries
 from app.queries import (
     get_user_password_hash,
     get_user_name_and_last_login,
@@ -23,11 +25,9 @@ from app.queries import (
     is_user_enabled,
     get_user_role, 
     get_user_name_and_last_login,
-    get_all_users,
     get_enabled_user_name_by_email,
-    update_user_password_and_commit
-
-)
+    get_terrain_db_list
+ )
 
 
 main = Blueprint('main', __name__)
@@ -68,7 +68,7 @@ def login():
     logger.info(f"Pokus o přihlášení: {email}")
 
     try:
-        conn = get_db_connection()
+        conn = get_auth_connection()
 
         # Kontrola, zda je účet aktivní
         enabled = is_user_enabled(conn, email)
@@ -114,7 +114,7 @@ def forgot_password():
     email = data.get('email')
 
     try:
-        conn = get_db_connection()
+        conn = get_auth_connection()
         user_name = get_enabled_user_name_by_email(conn, email)
 
         if not user_name:
@@ -126,7 +126,7 @@ def forgot_password():
             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
         }, Config.SECRET_KEY, algorithm='HS256')
 
-        reset_url = url_for('main.reset_password', token=token, _external=True)
+        reset_url = url_for('main.profile', _external=True)
         send_password_reset_email(email, user_name, reset_url)
 
         logger.info(f"Odeslán e-mail pro reset hesla: {email}")
@@ -151,7 +151,7 @@ def emergency_login(token):
         logger.warning("Neplatný nouzový JWT token – přesměrování na /login")
         return redirect('/login')
 
-    conn = get_db_connection()
+    conn = get_auth_connection()
     is_enabled = is_user_enabled(conn, user_email)
     if not is_enabled:
         logger.warning(f"Nouzové přihlášení zablokovaného nebo neexistujícího uživatele: {user_email}")
@@ -186,7 +186,7 @@ def index():
         return redirect('/login')
 
     try:
-        conn = get_db_connection()
+        conn = get_auth_connection()
         cur = conn.cursor()
 
         # Uživatel
@@ -225,7 +225,7 @@ def index():
     return render_template(
         'index.html',
         user_name=user_name,
-        last_login=last_login.strftime("%Y-%m-%d"),
+        last_login=last_login.strftime("%Y-%m-%d") if last_login else "first login ever",
         pg_version=pg_version,
         db_sizes=db_sizes,
         user_role=user_role,
@@ -249,7 +249,7 @@ def profile():
         logger.warning("Expirace JWT tokenu – přesměrování na /login")
         return redirect('/login')
 
-    conn = get_db_connection()
+    conn = get_auth_connection()
     cur = conn.cursor()
 
     # Zjištění role uživatele
@@ -315,7 +315,7 @@ def logout():
         user_email = payload.get('email')
 
         if user_email:
-            conn = get_db_connection()
+            conn = get_auth_connection()
             update_last_login(conn, user_email)
             conn.close()
 
@@ -366,40 +366,90 @@ def admin():
         logger.warning("Expirace JWT tokenu – přesměrování na /login")
         return redirect('/login')
 
-    conn = get_db_connection()
+    conn = get_auth_connection()
     cur = conn.cursor()
+
+    # kontrola role
     cur.execute(get_user_role(), (user_email,))
     user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
-
     if user_role != 'archeolog':
         logger.warning(f"Uživatel {user_email} s rolí '{user_role}' nemá přístup na /admin – přesměrování na /index")
         conn.close()
         return redirect('/index')
 
-    # získej jméno a last login
-    user_info = get_user_name_and_last_login(conn, user_email)
-    user_name = user_info[0] if user_info else '???'
-    last_login = user_info[1].strftime('%Y-%m-%d') if user_info and user_info[1] else '???'
-
-    # získej seznam uživatelů
-    cur.execute(get_all_users())
+    # načtení všech uživatelů
+    cur.execute("SELECT name, mail, group_role, enabled, last_login FROM app_users ORDER BY name")
     users = cur.fetchall()
 
-    # získej seznam databází
+    # načtení seznamu terénních DB
+    terrain_db_names = get_terrain_db_list(conn)
+
+    # načtení velikostí všech databází
     cur.execute(get_terrain_db_sizes())
-    terrain_dbs = cur.fetchall()
+    all_sizes = cur.fetchall()
+    terrain_dbs = [(name, int(size)) for name, size in all_sizes if name in terrain_db_names]
 
     conn.close()
 
-    return render_template(
-        'admin.html',
-        user_name=user_name,
-        user_email=user_email,
-        last_login=last_login,
-        user_role=user_role,
-        users=users,
-        terrain_dbs=terrain_dbs
-    )
+    return render_template('admin.html', users=users, terrain_dbs=terrain_dbs)
+
+# creating new app user in administration panel
+@main.route('/add_user', methods=['POST'])
+def add_user():
+    token = request.cookies.get('token')
+    if not token:
+        return redirect('/login')
+
+    try:
+        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
+        current_user_email = payload['email']
+    except jwt.ExpiredSignatureError:
+        return redirect('/login')
+
+    # ověření oprávnění
+    conn = get_auth_connection()
+    cur = conn.cursor()
+    cur.execute(get_user_role(), (current_user_email,))
+    user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
+    if user_role != 'archeolog':
+        conn.close()
+        return redirect('/index')
+
+    # načtení dat z formuláře
+    name = request.form.get('name')
+    mail = request.form.get('mail')
+    group_role = request.form.get('group_role')
+
+    if not name or not mail or not group_role:
+        conn.close()
+        return "Neúplná data ve formuláři.", 400
+
+    # kontrola duplicity
+    cur.execute("SELECT 1 FROM app_users WHERE mail = %s", (mail,))
+    if cur.fetchone():
+        conn.close()
+        return f"Uživatel s e-mailem {mail} již existuje.", 400
+
+    # generování hesla
+    raw_password = utils.generate_random_password()
+    password_hash = generate_password_hash(raw_password)
+
+    # vložení do DB
+    cur.execute("""
+        INSERT INTO app_users (name, mail, group_role, password_hash, enabled)
+        VALUES (%s, %s, %s, %s, TRUE)
+    """, (name, mail, group_role, password_hash))
+    conn.commit()
+
+    # odeslání e-mailu
+    try:
+        utils.send_new_account_email(mail, name, raw_password)
+    except Exception as e:
+        logger.error(f"Chyba při odesílání e-mailu novému uživateli {mail}: {str(e)}")
+
+    logger.info(f"Nový uživatel {mail} přidán archeologem {current_user_email}.")
+    conn.close()
+    return redirect('/admin')
 
 
 @main.route('/disable-user', methods=['POST'])
@@ -421,7 +471,7 @@ def disable_user():
         flash("Chybí email uživatele pro deaktivaci", "danger")
         return redirect('/admin')
 
-    conn = get_db_connection()
+    conn = get_auth_connection()
     cur = conn.cursor()
     try:
         cur.execute("UPDATE app_users SET enabled = false WHERE mail = %s", (user_to_disable,))
@@ -448,7 +498,7 @@ def enable_user():
     except jwt.ExpiredSignatureError:
         return redirect('/login')
 
-    conn = get_db_connection()
+    conn = get_auth_connection()
     cur = conn.cursor()
 
     # Zkontroluj, zda je aktuální uživatel archeolog
@@ -504,7 +554,7 @@ def delete_database():
         return redirect('/admin')
 
     try:
-        conn = get_db_connection()
+        conn = get_auth_connection()
         conn.autocommit = True
         cur = conn.cursor()
 
@@ -533,13 +583,12 @@ def create_database():
         flash("Název databáze nebyl zadán.", "danger")
         return redirect('/admin')
 
-    # Validace názvu: musí začínat číslem a může obsahovat jen alfanumerické znaky nebo podtržítka
     if not re.match(r'^[0-9][a-zA-Z0-9_]*$', dbname):
         flash("Název databáze musí začínat číslem a obsahovat pouze písmena, čísla nebo podtržítka.", "danger")
         return redirect('/admin')
 
     try:
-        conn = get_db_connection()
+        conn = get_auth_connection()
         conn.autocommit = True
         cur = conn.cursor()
         cur.execute(
@@ -548,9 +597,19 @@ def create_database():
         )
         cur.close()
         conn.close()
-
         logger.info(f"Databáze '{dbname}' byla vytvořena.")
-        flash(f"Databáze '{dbname}' byla úspěšně vytvořena.", "success")
+
+        # Získat uživatele z auth_db.app_users
+        auth_conn = get_auth_connection()
+        with auth_conn.cursor() as auth_cur:
+            auth_cur.execute("SELECT mail, name, group_role FROM app_users WHERE enabled = TRUE")
+            users = auth_cur.fetchall()
+
+        # Synchronizovat s novou DB
+        from app.utils import sync_single_db
+        sync_single_db(dbname, users)
+
+        flash(f"Databáze '{dbname}' byla úspěšně vytvořena a synchronizována s uživateli.", "success")
     except psycopg2.errors.DuplicateDatabase:
         flash(f"Databáze '{dbname}' již existuje.", "warning")
     except Exception as e:
@@ -558,10 +617,3 @@ def create_database():
         flash("Chyba při vytváření databáze.", "danger")
 
     return redirect('/admin')
-
-
-
-
-
-
-
