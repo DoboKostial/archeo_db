@@ -7,9 +7,14 @@ import datetime
 from werkzeug.security import check_password_hash, generate_password_hash
 import psycopg2
 from psycopg2 import sql
-from app.database import get_auth_connection, get_terrain_connection, create_database_backup
+from app.database import get_auth_connection, create_database_backup
 from app import utils
-#from app.utils import send_password_change_email, send_password_reset_email, send_new_account_email, sync_users_to_terrain_dbs
+from app.utils import (
+    send_password_change_email, 
+    send_password_reset_email, 
+    send_new_account_email, 
+    sync_users_to_terrain_dbs
+)
 from app.logger import setup_logger
 from app import queries
 from app.queries import (
@@ -45,15 +50,16 @@ def archeolog_required(f):
     return decorated_function
 
 
-##############
-#here routes
-##############
+####################
+# here basic routes
+####################
 
 
 #getting to webroot - check, if logged in, if not, redirect
 @main.route('/')
 def root():
     return redirect('/index')
+
 
 #login endpoint for application 
 @main.route('/login', methods=['GET', 'POST'])
@@ -393,6 +399,7 @@ def admin():
 
     return render_template('admin.html', users=users, terrain_dbs=terrain_dbs)
 
+
 # creating new app user in administration panel
 @main.route('/add_user', methods=['POST'])
 def add_user():
@@ -422,13 +429,15 @@ def add_user():
 
     if not name or not mail or not group_role:
         conn.close()
-        return "Neúplná data ve formuláři.", 400
+        flash("Neúplná data ve formuláři.", "danger")
+        return redirect('/admin')
 
     # kontrola duplicity
     cur.execute("SELECT 1 FROM app_users WHERE mail = %s", (mail,))
     if cur.fetchone():
         conn.close()
-        return f"Uživatel s e-mailem {mail} již existuje.", 400
+        flash(f"Uživatel s e-mailem {mail} již existuje.", "warning")
+        return redirect('/admin')
 
     # generování hesla
     raw_password = utils.generate_random_password()
@@ -449,6 +458,13 @@ def add_user():
 
     logger.info(f"Nový uživatel {mail} přidán archeologem {current_user_email}.")
     conn.close()
+
+    # >>> SYNC JEN NOVÉHO UŽIVATELE <<<
+    success = utils.sync_single_user_to_all_terrain_dbs(mail, name, group_role)
+    flash(f"Uživatel {mail} was caeted and synchronized into terrain databases.", "success")
+    if not success:
+        flash("Uživatel byl vytvořen, ale synchronizace do terénních DB selhala.", "warning")
+
     return redirect('/admin')
 
 
@@ -485,6 +501,7 @@ def disable_user():
         conn.close()
 
     return redirect('/admin')
+
 
 @main.route('/enable-user', methods=['POST'])
 def enable_user():
