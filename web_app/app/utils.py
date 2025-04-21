@@ -3,7 +3,7 @@ import psycopg2
 from email.message import EmailMessage
 from config import Config
 from app.database import get_auth_connection, get_terrain_connection
-from app.queries import get_user_password_hash
+from app.queries import get_user_password_hash, get_terrain_db_list
 import secrets
 import string
 from app.logger import setup_logger
@@ -104,10 +104,8 @@ def sync_users_to_terrain_dbs():
                 WHERE enabled = TRUE
             """)
             users = cur.fetchall()
-        conn.close()
 
-        # Seznam terénních DB
-        conn = get_terrain_connection()
+        # Stejné připojení použijeme i pro seznam terénních DB
         terrain_dbs = get_terrain_db_list(conn)
         conn.close()
 
@@ -121,6 +119,36 @@ def sync_users_to_terrain_dbs():
     except Exception as e:
         logger.error(f"Chyba při synchronizaci uživatelů: {e}")
         return False
+
+# after creating a new app user (in auth_db) write him to terrain Dbs as well (to gloss_personalia)
+def sync_single_user_to_all_terrain_dbs(mail, name, group_role):
+    try:
+        # seznam databází
+        conn = get_terrain_connection(Config.AUTH_DB_NAME)
+        terrain_dbs = get_terrain_db_list(conn)
+        conn.close()
+
+        for db_name in terrain_dbs:
+            logger.info(f"Synchronizace uživatele {mail} do DB: {db_name}")
+            try:
+                conn_terrain = get_terrain_connection(db_name)
+                with conn_terrain.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO gloss_personalia (mail, name, group_role)
+                        VALUES (%s, %s, %s)
+                    """, (mail, name, group_role))
+                conn_terrain.commit()
+                conn_terrain.close()
+            except Exception as e:
+                logger.error(f"Chyba při synchronizaci uživatele {mail} do DB '{db_name}': {str(e)}")
+                return False
+
+        logger.info(f"Uživatel {mail} úspěšně synchronizován do všech databází.")
+        return True
+    except Exception as e:
+        logger.error(f"Chyba při synchronizaci uživatele {mail}: {str(e)}")
+        return False
+
 
 
 
