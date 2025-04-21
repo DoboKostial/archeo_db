@@ -112,8 +112,9 @@ CREATE TABLE tab_polygon (
 CREATE TABLE tab_sj_stratigraphy (
 	id_aut serial4 NOT NULL,
 	ref_sj1 int4 NULL,
-	relation varchar(20) NULL,
+	relation char(1) NULL,
 	ref_sj2 int4 NULL,
+	CONSTRAINT relation_type_check CHECK (((relation)::text = ANY ((ARRAY['<'::character, '>'::character, '='::character])::text[]))),
 	CONSTRAINT tab_sj_stratigraphy_pk PRIMARY KEY (id_aut)
 );
 
