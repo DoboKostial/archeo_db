@@ -1,0 +1,34 @@
+<!-- app/templates/header.html -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/index">ArcheoDB</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item"><a class="nav-link" href="/index">Domů</a></li>
+          <li class="nav-item"><a class="nav-link" href="/profile">Můj profil</a></li>
+          {% if user_role == 'archeolog' %}
+          <li class="nav-item"><a class="nav-link text-warning" href="/admin">Administration</a></li>
+          {% endif %}
+        </ul>
+        <span class="navbar-text text-light me-3">
+          Přihlášen jako: {{ user_name }} ({{ user_email }})
+        </span>
+        <a href="/logout" class="btn btn-outline-light btn-sm">Odhlásit se</a>
+      </div>
+    </div>
+  </nav>
+
+<script>
+    function logout() {
+        fetch('/logout')
+            .then(() => {
+                localStorage.removeItem('token');
+                window.location.href = '/login';
+            })
+            .catch(error => {
+                console.error("Chyba při odhlašování:", error);
+                window.location.href = '/login';
+            });
+    }
+</script>
+

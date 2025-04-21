@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Přihlášení{% endblock %}
+
+{% block content %}
+<div class="container mt-5" style="max-width: 400px;">
+    <h2 class="mb-4 text-center">Přihlášení</h2>
+
+    <form id="loginForm">
+        <div class="mb-3">
+            <input type="email" id="email" class="form-control" placeholder="Email" required autofocus>
+        </div>
+        <div class="mb-3">
+            <input type="password" id="password" class="form-control" placeholder="Heslo" required>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="/forgot-password" class="text-muted small">Zapomněli jste heslo?</a>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">Přihlásit</button>
+    </form>
+
+    <p id="errorMessage" class="text-danger mt-3 text-center"></p>
+</div>
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        if (!email || !password) {
+            document.getElementById('errorMessage').innerText = "Vyplňte všechny údaje.";
+            return;
+        }
+
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                window.location.href = '/index';  // token je už v cookie
+            } else {
+                document.getElementById('errorMessage').innerText = data.error;
+            }
+        } catch (error) {
+            console.error("Chyba při přihlašování:", error);
+            document.getElementById('errorMessage').innerText = "Chyba serveru.";
+        }
+    });
+
+    // Zajistíme, že Enter na celé stránce pošle formulář, pokud je aktivní
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            const form = document.getElementById('loginForm');
+            if (form && document.activeElement.tagName !== 'TEXTAREA') {
+                form.dispatchEvent(new Event('submit', { cancelable: true }));
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+<!-- app/templates/base.html -->
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Archeo terrain DB{% endblock %}</title>
+
+    <!-- Bootstrap CSS (lokální, aby 100% fungovalo) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    {% if user_name and last_login %}
+        {% include 'header.html' %}
+    {% endif %}
+
+    <main class="container mt-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Zavřít"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap JS (lokální verze) -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
+
+

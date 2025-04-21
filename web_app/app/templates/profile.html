@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Můj profil{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Můj profil</h2>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <p><strong>Jméno:</strong> {{ user_name }}</p>
+            <p><strong>Email:</strong> {{ user_email }}</p>
+            <p><strong>Poslední přihlášení:</strong> {{ last_login }}</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Změna hesla</h5>
+        </div>
+        <div class="card-body">
+            <form id="passwordForm">
+                <div class="mb-3">
+                    <label for="newPassword" class="form-label">Nové heslo</label>
+                    <input type="password" class="form-control" id="newPassword" placeholder="Zadejte nové heslo" required>
+                </div>
+                <div class="mb-3">
+                    <label for="confirmPassword" class="form-label">Potvrzení hesla</label>
+                    <input type="password" class="form-control" id="confirmPassword" placeholder="Zadejte znovu" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Změnit heslo</button>
+            </form>
+            <div class="mt-3">
+                <p id="formMessage" class="text-success"></p>
+                <p id="formError" class="text-danger"></p>
+            </div>
+        </div>
+    </div>
+
+    <blockquote class="blockquote text-muted">
+        <p class="mb-0"><em>{{ citation }}</em></p>
+    </blockquote>
+</div>
+
+<script>
+document.getElementById('passwordForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const new_password = document.getElementById('newPassword').value;
+    const confirm_password = document.getElementById('confirmPassword').value;
+
+    try {
+        const response = await fetch('/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_password, confirm_password })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('formMessage').innerText = data.message;
+            document.getElementById('formError').innerText = '';
+        } else {
+            document.getElementById('formError').innerText = data.error;
+            document.getElementById('formMessage').innerText = '';
+        }
+    } catch (err) {
+        document.getElementById('formError').innerText = 'Chyba při změně hesla.';
+    }
+});
+</script>
+{% endblock %}

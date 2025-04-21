@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h2>Vítejte, {{ user_name }}!</h2>
+    <p>Poslední přihlášení: {{ last_login }}</p>
+
+    <hr>
+
+    <h4>PostgreSQL verze:</h4>
+    <p>{{ pg_version }}</p>
+
+    <hr>
+
+    <h4>Velikosti terénních databází</h4>
+    <div class="mb-4" style="max-height: 400px; overflow-y: auto;">
+        <canvas id="dbSizeChart"></canvas>
+    </div>
+
+    {% if db_selected_message %}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        {{ db_selected_message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Zavřít"></button>
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">Výběr pracovní databáze</h5>
+            <form action="/select-db" method="POST" class="row g-3 align-items-center">
+                <div class="col-auto">
+                    <label for="selected_db" class="col-form-label">Databáze:</label>
+                </div>
+                <div class="col-auto">
+                    <select name="selected_db" id="selected_db" class="form-select">
+                        {% for db in db_sizes %}
+                            <option value="{{ db.name }}">{{ db.name }} ({{ db.size_mb }} MB)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">Použít</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        window.dbSizes = {{ db_sizes | tojson }};
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/graphs.js') }}"></script>
+{% endblock %}
+

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Administrace aplikace</h2>
+
+<h3>Správa uživatelů</h3>
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Jméno</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Stav</th>
+            <th>Poslední přihlášení</th>
+            <th>Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for name, mail, role, enabled, last_login in users %}
+      <tr>
+        <td>{{ name }}</td>
+        <td>{{ mail }}</td>
+        <td>{{ role }}</td>
+        <td>{{ "Aktivní" if enabled else "Neaktivní" }}</td>
+        <td>{{ last_login.strftime('%Y-%m-%d') if last_login else "—" }}</td>
+        <td>
+          {% if enabled %}
+            <form method="POST" action="{{ url_for('main.disable_user') }}">
+                <input type="hidden" name="mail" value="{{ mail }}">
+                <button type="submit" class="btn btn-sm btn-warning">Deaktivovat</button>
+            </form>
+          {% else %}
+            <form method="POST" action="{{ url_for('main.enable_user') }}">
+                <input type="hidden" name="mail" value="{{ mail }}">
+                <button type="submit" class="btn btn-sm btn-success">Aktivovat</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+{% endfor %}
+
+    </tbody>
+</table>
+
+
+<h4>Přidat nového uživatele</h4>
+<form method="POST" action="{{ url_for('main.add_user') }}">
+  <div class="mb-3">
+    <label for="name" class="form-label">Jméno</label>
+    <input type="text" class="form-control" id="name" name="name" required>
+  </div>
+  <div class="mb-3">
+    <label for="mail" class="form-label">Email</label>
+    <input type="email" class="form-control" id="mail" name="mail" required>
+  </div>
+  <div class="mb-3">
+    <label for="group_role" class="form-label">Role</label>
+    <select class="form-select" id="group_role" name="group_role" required>
+      <option value="archeolog">archeolog</option>
+      <option value="documentator">documentator</option>
+      <option value="analyst">analyst</option>
+    </select>
+  </div>
+  <button type="submit" class="btn btn-success">Vytvořit uživatele</button>
+</form>
+
+
+
+<hr>
+
+<h3>Správa databází</h3>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Název databáze</th>
+            <th>Velikost</th>
+            <th>Akce</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for dbname, size in terrain_dbs %}
+        <tr>
+            <td>{{ dbname }}</td>
+            <td>{{ (size / 1024 / 1024) | round(2) }} MB</td>
+            <td>
+                <form method="POST" action="{{ url_for('main.backup_database') }}" style="display: inline;">
+                    <input type="hidden" name="dbname" value="{{ dbname }}">
+                    <button type="submit" class="btn btn-sm btn-secondary">Zálohovat</button>
+                </form>
+                <form method="POST" action="{{ url_for('main.delete_database') }}" style="display: inline;" onsubmit="return confirm('Opravdu chcete smazat databázi {{ dbname }}?');">
+                    <input type="hidden" name="dbname" value="{{ dbname }}">
+                    <button type="submit" class="btn btn-sm btn-danger">Smazat</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+
+<h4>Vytvořit novou databázi</h4>
+<form method="POST" action="/create-database" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="dbname" class="form-control" placeholder="Např. 04_novy_projekt" required>
+        <button type="submit" class="btn btn-primary">Vytvořit</button>
+    </div>
+</form>
+
+
+{% endblock %}
