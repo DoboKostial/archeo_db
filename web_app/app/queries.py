@@ -153,3 +153,9 @@ def update_user_password_and_commit(conn, email, password_hash):
 
 
 # here queries for data manipulation in terrain DBs
+
+def count_sj_total():
+    return "SELECT COUNT(*) FROM tab_sj;"
+
+def count_sj_by_type(sj_typ):
+    return "SELECT COUNT(*) FROM tab_sj WHERE sj_typ = %s;", (sj_typ,)
