@@ -3,20 +3,22 @@ from flask import Blueprint, render_template, jsonify, request, redirect, make_r
 import re
 from functools import wraps
 import jwt
-import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash, generate_password_hash
 import psycopg2
 from psycopg2 import sql
-from app.database import get_auth_connection, create_database_backup
+from app.database import get_auth_connection, get_terrain_connection, create_database_backup
 from app import utils
 from app.utils import (
     send_password_change_email, 
     send_password_reset_email, 
     send_new_account_email, 
-    sync_users_to_terrain_dbs
+    sync_users_to_terrain_dbs,
+    float_or_none,
+    require_selected_db
 )
 from app.logger import setup_logger
-from app import queries
+# from app import queries (na konci, az to dopises, tak zmaz jednotlie importy a prefixni metody, napr. cur.execute(queries.count_sj_total()))
 from app.queries import (
     get_user_password_hash,
     get_user_name_and_last_login,
@@ -31,7 +33,9 @@ from app.queries import (
     get_user_role, 
     get_user_name_and_last_login,
     get_enabled_user_name_by_email,
-    get_terrain_db_list
+    get_terrain_db_list,
+    count_sj_by_type,
+    count_sj_total
  )
 
 
@@ -88,7 +92,7 @@ def login():
             token = jwt.encode(
                 {
                     'email': email,
-                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+                    'exp': datetime.utcnow() + timedelta(hours=1)
                 },
                 Config.SECRET_KEY,
                 algorithm="HS256"
@@ -129,7 +133,7 @@ def forgot_password():
 
         token = jwt.encode({
             'email': email,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+            'exp': datetime.utcnow() + timedelta(minutes=30)
         }, Config.SECRET_KEY, algorithm='HS256')
 
         reset_url = url_for('main.profile', _external=True)
@@ -634,3 +638,168 @@ def create_database():
         flash("Chyba při vytváření databáze.", "danger")
 
     return redirect('/admin')
+
+
+#######
+# here fun begins - endpoints for data manipulation from terrain DBs...
+#######
+
+@main.route('/add-sj', methods=['GET', 'POST'])
+@require_selected_db
+def add_sj():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    cur.execute("SELECT COALESCE(MAX(id_sj), 0) + 1 FROM tab_sj;")
+    suggested_id = cur.fetchone()[0]
+
+    cur.execute("SELECT mail FROM gloss_personalia ORDER BY mail;")
+    authors = [row[0] for row in cur.fetchall()]
+
+    form_data = {}
+
+    # Přehled o tom, co již bylo zapsáno – vždy, i při GET
+    cur.execute(count_sj_total())
+    sj_count_total = cur.fetchone()[0]
+
+    # Počet podle typu
+    cur.execute(*count_sj_by_type('deposit'))
+    sj_count_deposit = cur.fetchone()[0]
+
+    cur.execute(*count_sj_by_type('negativ'))
+    sj_count_negative = cur.fetchone()[0]
+
+    cur.execute(*count_sj_by_type('structure'))
+    sj_count_structure = cur.fetchone()[0]
+
+    if request.method == 'POST':
+        try:
+            id_sj = int(request.form.get('id_sj'))
+            cur.execute("SELECT 1 FROM tab_sj WHERE id_sj = %s;", (id_sj,))
+            if cur.fetchone():
+                flash(f"ID stratigrafické jednotky #{id_sj} už existuje. Zadejte jiné ID.", "warning")
+                form_data = request.form.to_dict(flat=True)
+                return render_template('add_sj.html', suggested_id=suggested_id, authors=authors, selected_db=selected_db, form_data=form_data,
+                                       sj_count_total=sj_count_total,
+                                       sj_count_deposit=sj_count_deposit,
+                                       sj_count_negativ=sj_count_negative,
+                                       sj_count_structure=sj_count_structure)
+
+            sj_typ = request.form.get('sj_typ')
+            description = request.form.get('description')
+            interpretation = request.form.get('interpretation')
+            author = request.form.get('author')
+            recorded = datetime.now()
+            docu_plan = 'docu_plan' in request.form
+            docu_vertical = 'docu_vertical' in request.form
+
+            # Zápis do tab_sj
+            cur.execute("""
+                INSERT INTO tab_sj (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical))
+
+            # Zápis do konkrétní typové tabulky
+            if sj_typ == 'deposit':
+                cur.execute("""
+                    INSERT INTO tab_sj_deposit (id_deposit, deposit_typ, color, boundary_visibility, "structure", compactness, deposit_removed)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_sj,
+                    request.form.get('deposit_typ'),
+                    request.form.get('color'),
+                    request.form.get('boundary_visibility'),
+                    request.form.get('structure'),
+                    request.form.get('compactness'),
+                    request.form.get('deposit_removed')
+                ))
+            elif sj_typ == 'negativ':
+                cur.execute("""
+                    INSERT INTO tab_sj_negativ (id_negativ, negativ_typ, excav_extent, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_sj,
+                    request.form.get('negativ_typ'),
+                    request.form.get('excav_extent'),
+                    'ident_niveau_cut' in request.form,
+                    request.form.get('shape_plan'),
+                    request.form.get('shape_sides'),
+                    request.form.get('shape_bottom')
+                ))
+            elif sj_typ == 'structure':
+                cur.execute("""
+                    INSERT INTO tab_sj_structure (id_structure, structure_typ, construction_typ, binder, basic_material, length_m, width_m, height_m)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    id_sj,
+                    request.form.get('structure_typ'),
+                    request.form.get('construction_typ'),
+                    request.form.get('binder'),
+                    request.form.get('basic_material'),
+                    float_or_none(request.form.get('length_m')),
+                    float_or_none(request.form.get('width_m')),
+                    float_or_none(request.form.get('height_m'))
+                ))
+            else:
+                flash("Neplatný typ stratigrafické jednotky.", "danger")
+                form_data = request.form.to_dict(flat=True)
+                return render_template('add_sj.html', suggested_id=suggested_id, authors=authors, selected_db=selected_db, form_data=form_data,
+                                       sj_count_total=sj_count_total,
+                                       sj_count_deposit=sj_count_deposit,
+                                       sj_count_negativ=sj_count_negative,
+                                       sj_count_structure=sj_count_structure)
+
+            # Stratigrafické vztahy – nová verze s více vstupy
+            relation_inputs = {
+                '>': [request.form.get('above_1'), request.form.get('above_2')],
+                '<': [request.form.get('below_1'), request.form.get('below_2')],
+                '=': [request.form.get('equal')],
+            }
+
+            for relation, sj_list in relation_inputs.items():
+                for sj_str in sj_list:
+                    if sj_str:
+                        try:
+                            related_sj = int(sj_str)
+                            if relation == '>':
+                                cur.execute("""
+                                    INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
+                                    VALUES (%s, %s, %s)
+                                """, (related_sj, '>', id_sj))  # related_sj > id_sj
+                            elif relation == '<':
+                                cur.execute("""
+                                    INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
+                                    VALUES (%s, %s, %s)
+                                """, (id_sj, '<', related_sj))  # id_sj < related_sj
+                            elif relation == '=':
+                                cur.execute("""
+                                    INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
+                                    VALUES (%s, %s, %s)
+                                """, (id_sj, '=', related_sj))  # id_sj = related_sj
+                        except ValueError:
+                            flash(f"Neplatné číslo SJ '{sj_str}' pro vztah '{relation}' – záznam nebyl uložen.", "warning")
+
+
+        except Exception as e:
+            flash(f"Chyba při ukládání SJ: {e}", "danger")
+            conn.rollback()
+            form_data = request.form.to_dict(flat=True)
+        else:
+            flash(f"SU '{sj_str}' was saved to DB")
+            conn.commit()
+    cur.close()
+    conn.close()
+    return render_template('add_sj.html', 
+                           suggested_id=suggested_id, 
+                           authors=authors, 
+                           selected_db=selected_db, 
+                           form_data=form_data,
+                           sj_count_total=sj_count_total,
+                           sj_count_deposit=sj_count_deposit,
+                           sj_count_negativ=sj_count_negative,
+                           sj_count_structure=sj_count_structure)
+
+
+
+
