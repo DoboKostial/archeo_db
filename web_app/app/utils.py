@@ -6,6 +6,8 @@ from app.database import get_auth_connection, get_terrain_connection
 from app.queries import get_user_password_hash, get_terrain_db_list
 import secrets
 import string
+from functools import wraps
+from flask import session, redirect, flash
 from app.logger import setup_logger
 
 logger = setup_logger('app_archeodb')
@@ -150,8 +152,24 @@ def sync_single_user_to_all_terrain_dbs(mail, name, group_role):
         return False
 
 
-
-
 def generate_random_password(length=12):
     chars = string.ascii_letters + string.digits
     return ''.join(secrets.choice(chars) for _ in range(length))
+
+
+# this function is a decorator and enables requirement of 'selected db' in routes
+def require_selected_db(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'selected_db' not in session:
+            flash("Nejdřív vyberte databázi, se kterou chcete pracovat.", "warning")
+            return redirect('/index')
+        return f(*args, **kwargs)
+    return decorated_function
+
+def float_or_none(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
