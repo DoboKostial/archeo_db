@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Seznam archeologických objektů{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Seznam archeologických objektů</h2>
+
+    <ul class="nav nav-tabs mb-3" id="viewTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#textView" type="button" role="tab">Textový výpis</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="graphic-tab" data-bs-toggle="tab" data-bs-target="#graphicView" type="button" role="tab">Grafické zobrazení</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="viewTabsContent">
+        <!-- TEXTOVÝ VÝPIS -->
+        <div class="tab-pane fade show active" id="textView" role="tabpanel">
+            {% if objects %}
+                <ul class="list-group">
+                    {% for obj in objects %}
+                        <li class="list-group-item">
+                            <strong>ID objektu:</strong> {{ obj[0] }} |
+                            <strong>Typ:</strong> {{ obj[1] }} |
+                            <strong>Nadřazený objekt:</strong> {{ obj[2] or "—" }}<br>
+                            <strong>SJ:</strong> {{ obj[4]|join(", ") if obj[4] else "žádné" }}<br>
+                            <em>{{ obj[3] }}</em>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>Žádné objekty nebyly nalezeny.</p>
+            {% endif %}
+        </div>
+
+        <!-- GRAFICKÉ ZOBRAZENÍ -->
+        <div class="tab-pane fade" id="graphicView" role="tabpanel">
+            <div class="d-flex flex-wrap justify-content-start">
+                {% for obj in objects %}
+                    <div class="card m-2" style="min-width: 250px;">
+                        <div class="card-header bg-primary text-white">
+                            Objekt {{ obj[0] }} ({{ obj[1] }})
+                            {% if obj[2] %}
+                                <span class="badge bg-light text-dark float-end">↑ {{ obj[2] }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <p><strong>SJ:</strong></p>
+                            {% if obj[4] %}
+                                <ul>
+                                    {% for sj in obj[4] %}
+                                        <li>SJ {{ sj }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p><em>Žádné SJ</em></p>
+                            {% endif %}
+                            {% if obj[3] %}
+                                <hr>
+                                <p class="text-muted">{{ obj[3] }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <form action="{{ url_for('main.generate_objects_pdf') }}" method="POST" target="_blank">
+            <button type="submit" class="btn btn-outline-secondary">Tisk do PDF</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

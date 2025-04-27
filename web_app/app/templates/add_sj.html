@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+{% block title %}Nová stratigrafická jednotka{% endblock %}
+
+
+{% block content %}
+<div class="alert alert-info" role="alert">
+    Pracujete nad databází <strong>{{ selected_db }}</strong>. Další volné SJ je <strong>{{ suggested_id }}</strong>.
+</div>
+<div class="container mt-4">
+    <h3>New startigraphis unit</h3>
+    <form method="POST">
+        <div class="container">
+            <div class="row mb-4">
+                <!-- A. Základní informace -->
+                <div class="col-md-6">
+                    <fieldset class="border p-3 bg-light">
+                        <legend class="w-auto px-2">A. Základní informace</legend>
+    
+                        <div class="mb-3">
+                            <label for="id_sj" class="form-label">ID SJ</label>
+                            <input type="number" class="form-control" id="id_sj" name="id_sj" value="{{ suggested_id }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sj_typ" class="form-label">Typ SJ</label>
+                            <select class="form-select" id="sj_typ" name="sj_typ" required onchange="toggleFields()">
+                                <option value="">-- vyberte --</option>
+                                <option value="deposit">Deposit</option>
+                                <option value="negativ">Negativ</option>
+                                <option value="structure">Structure</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Popis</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="interpretation" class="form-label">Interpretace</label>
+                            <textarea class="form-control" id="interpretation" name="interpretation" rows="3"></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="docu_plan" name="docu_plan">
+                            <label class="form-check-label" for="docu_plan">Dokumentace – plán</label>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="docu_vertical" name="docu_vertical">
+                            <label class="form-check-label" for="docu_vertical">Dokumentace – řez</label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="author" class="form-label">Autor</label>
+                            <select class="form-select" id="author" name="author" required>
+                                {% for email in authors %}
+                                    <option value="{{ email }}">{{ email }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </fieldset>
+                </div>
+    
+                <!-- B. Vlastnosti dle typu -->
+                <div class="col-md-6">
+                    <fieldset class="border p-3 bg-warning-subtle">
+                        <legend class="w-auto px-2">B. Vlastnosti dle typu</legend>
+    
+                        <!-- DEPOSIT -->
+                        <div id="deposit_fields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Typ depositu</label>
+                                <input type="text" class="form-control" name="deposit_typ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Barva</label>
+                                <input type="text" class="form-control" name="color">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Viditelnost hranic</label>
+                                <input type="text" class="form-control" name="boundary_visibility">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Struktura</label>
+                                <input type="text" class="form-control" name="structure">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Kompaktnost</label>
+                                <input type="text" class="form-control" name="compactness">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="deposit_removed" name="deposit_removed">
+                                <label class="form-check-label" for="deposit_removed">Deposit byl odstraněn</label>
+                            </div>
+                        </div>
+    
+                        <!-- NEGATIV -->
+                        <div id="negativ_fields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Typ negativu</label>
+                                <input type="text" class="form-control" name="negativ_typ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Rozsah odkryvu</label>
+                                <input type="text" class="form-control" name="excav_extent">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="ident_niveau_cut" name="ident_niveau_cut">
+                                <label class="form-check-label" for="ident_niveau_cut">Identifikace úrovně zahloub.</label>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Tvar půdorysu</label>
+                                <input type="text" class="form-control" name="shape_plan">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Tvar stěn</label>
+                                <input type="text" class="form-control" name="shape_sides">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Tvar dna</label>
+                                <input type="text" class="form-control" name="shape_bottom">
+                            </div>
+                        </div>
+    
+                        <!-- STRUCTURE -->
+                        <div id="structure_fields" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Typ struktury</label>
+                                <input type="text" class="form-control" name="structure_typ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Typ konstrukce</label>
+                                <input type="text" class="form-control" name="construction_typ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Pojivo</label>
+                                <input type="text" class="form-control" name="binder">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Základní materiál</label>
+                                <input type="text" class="form-control" name="basic_material">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Délka (m)</label>
+                                <input type="number" step="0.1" class="form-control" name="length_m">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Šířka (m)</label>
+                                <input type="number" step="0.1" class="form-control" name="width_m">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Výška (m)</label>
+                                <input type="number" step="0.1" class="form-control" name="height_m">
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+            </div>
+    
+            <div class="row mb-4">
+                <!-- C. Stratigrafie -->
+                <div class="col-md-6">
+                    <fieldset class="border p-3 bg-info-subtle">
+                        <legend class="w-auto px-2">C. Stratigrafické vztahy</legend>
+                        <div class="row">
+                            <div class="col-12 mb-2">
+                                <small>Zadej čísla SJ, které mají vztah k této SJ:</small>
+                            </div>
+                  
+
+                            <!-- Leží pod -->
+                            <div class="col-md-6 mb-3">
+                                <label for="below_1" class="form-label">Leží pod (SJ #1)</label>
+                                <input type="number" class="form-control" id="below_1" name="below_1" placeholder="např. 44">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="below_2" class="form-label">Leží pod (SJ #2)</label>
+                                <input type="number" class="form-control" id="below_2" name="below_2" placeholder="např. 45">
+                            </div>
+
+                            <!-- Současné -->
+                            <div class="col-md-12 mb-3">
+                                <label for="equal" class="form-label">Současné s (SJ)</label>
+                                <input type="number" class="form-control" id="equal" name="equal" placeholder="např. 46">
+                            </div> 
+
+
+
+                            <!-- Leží nad -->
+                            <div class="col-md-6 mb-3">
+                                <label for="above_1" class="form-label">Leží nad (SJ #1)</label>
+                                <input type="number" class="form-control" id="above_1" name="above_1" placeholder="např. 42">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="above_2" class="form-label">Leží nad (SJ #2)</label>
+                                <input type="number" class="form-control" id="above_2" name="above_2" placeholder="např. 43">
+                            </div>
+                
+
+
+                        </div>
+                    </fieldset>
+                </div>
+    
+                <!-- D. Přehled -->
+                <div class="col-md-6">
+                    <fieldset class="border p-3 bg-light">
+                    <legend class="w-auto px-2">D. Přehled SJ v databázi "{{ selected_db }}"</legend>
+                    <ul class="list-unstyled">
+                        <li>Total stratigraphic units: <strong>{{ sj_count_total }}</strong></li>
+                        <li>Deposits: <strong>{{ sj_count_deposit }}</strong></li>
+                        <li>Negatives: <strong>{{ sj_count_negative }}</strong></li>
+                        <li>Structures: <strong>{{ sj_count_structure }}</strong></li>
+                    </ul>
+                    </fieldset>
+                </div>
+    
+            <div class="text-center mb-5">
+                <button type="submit" class="btn btn-primary btn-lg">Uložit SJ</button>
+            </div>
+        </div>
+    </form>
+    
+    
+</div>
+
+<script>
+
+function toggleFields() {
+        const sjTyp = document.getElementById("sj_typ").value;
+
+        document.getElementById("deposit_fields").style.display = (sjTyp === "deposit") ? "block" : "none";
+        document.getElementById("negativ_fields").style.display = (sjTyp === "negativ") ? "block" : "none";
+        document.getElementById("structure_fields").style.display = (sjTyp === "structure") ? "block" : "none";
+    }
+
+    window.onload = toggleFields;
+
+
+</script>
+{% endblock %}

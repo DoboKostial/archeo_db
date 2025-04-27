@@ -159,3 +159,58 @@ def count_sj_total():
 
 def count_sj_by_type(sj_typ):
     return "SELECT COUNT(*) FROM tab_sj WHERE sj_typ = %s;", (sj_typ,)
+
+
+def count_sj_by_type_all():
+    return """
+        SELECT sj_typ, COUNT(*) 
+        FROM tab_sj 
+        GROUP BY sj_typ;
+    """
+
+
+def count_total_sj():
+    return "SELECT COUNT(*) FROM tab_sj;"
+
+
+def count_objects():
+    return "SELECT COUNT(DISTINCT ref_object) FROM tab_sj WHERE ref_object IS NOT NULL;"
+
+
+def count_sj_without_relation():
+    return """
+        SELECT COUNT(*) FROM tab_sj s
+        LEFT JOIN (
+            SELECT ref_sj1 AS sj FROM tab_sj_stratigraphy
+            UNION
+            SELECT ref_sj2 AS sj FROM tab_sj_stratigraphy
+        ) rel ON s.id_sj = rel.sj
+        WHERE rel.sj IS NULL;
+    """
+
+
+def get_stratigraphy_relations():
+    return "SELECT ref_sj1, relation, ref_sj2 FROM tab_sj_stratigraphy;"
+
+
+def get_sj_types_and_objects():
+    return "SELECT id_sj, sj_typ, ref_object FROM tab_sj;"
+
+def fetch_stratigraphy_relations(conn):
+    sql = """
+        SELECT sj_top, sj_bottom, relation
+        FROM tab_sj_stratigraphy;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        return cur.fetchall()
+    
+def count_sj_by_type_all():
+    return """
+        SELECT sj_typ, COUNT(*)
+        FROM tab_sj
+        GROUP BY sj_typ;
+    """
+
+def count_total_sj():
+    return "SELECT COUNT(*) FROM tab_sj;"

@@ -1,8 +1,12 @@
 from config import Config
 from flask import Blueprint, render_template, jsonify, request, redirect, make_response, session, url_for, flash, get_flashed_messages
 import re
+import os
 from functools import wraps
 import jwt
+import time
+import matplotlib.pyplot as plt
+import networkx as nx
 from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash, generate_password_hash
 import psycopg2
@@ -17,6 +21,11 @@ from app.utils import (
     float_or_none,
     require_selected_db
 )
+from collections import defaultdict
+from weasyprint import HTML
+import io
+import networkx as nx
+import matplotlib.pyplot as plt
 from app.logger import setup_logger
 # from app import queries (na konci, az to dopises, tak zmaz jednotlie importy a prefixni metody, napr. cur.execute(queries.count_sj_total()))
 from app.queries import (
@@ -35,7 +44,17 @@ from app.queries import (
     get_enabled_user_name_by_email,
     get_terrain_db_list,
     count_sj_by_type,
-    count_sj_total
+    count_sj_total,
+    count_sj_by_type_all,
+    count_total_sj,
+    count_objects,
+    count_sj_without_relation,
+    get_stratigraphy_relations, 
+    get_sj_types_and_objects,
+    fetch_stratigraphy_relations,
+    count_sj_by_type_all,
+    count_total_sj
+
  )
 
 
@@ -766,7 +785,7 @@ def add_sj():
                                 cur.execute("""
                                     INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
                                     VALUES (%s, %s, %s)
-                                """, (related_sj, '>', id_sj))  # related_sj > id_sj
+                                """, (related_sj, '<', id_sj))  # related_sj > id_sj
                             elif relation == '<':
                                 cur.execute("""
                                     INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
@@ -799,6 +818,320 @@ def add_sj():
                            sj_count_deposit=sj_count_deposit,
                            sj_count_negativ=sj_count_negative,
                            sj_count_structure=sj_count_structure)
+
+
+@main.route('/objects', methods=['GET', 'POST'])
+@require_selected_db
+def objects():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    # Návrh ID objektu
+    cur.execute("SELECT COALESCE(MAX(id_object), 0) + 1 FROM tab_object;")
+    suggested_id = cur.fetchone()[0]
+
+    # Typy objektu pro roletku
+    cur.execute("SELECT object_typ FROM gloss_object_type ORDER BY object_typ;")
+    object_types = [row[0] for row in cur.fetchall()]
+
+    form_data = {}
+
+    if request.method == 'POST':
+        try:
+            # Získání a kontrola hodnot z formuláře
+            id_object = int(request.form.get('id_object'))
+            object_typ = request.form.get('object_typ')
+            superior_object = request.form.get('superior_object') or None
+            notes = request.form.get('notes')
+            sj_ids_raw = request.form.getlist('sj_ids[]')  # seznam SJ (z HTML name="sj_ids[]")
+
+            # Validace: ID nesmí existovat
+            cur.execute("SELECT 1 FROM tab_object WHERE id_object = %s;", (id_object,))
+            if cur.fetchone():
+                flash(f"Object #{id_object} already exists.", "warning")
+                raise ValueError("Duplicity of ID object.")
+
+            # Validace: nejméně 2 SJ
+            if len(sj_ids_raw) < 2:
+                flash("Objekt musí obsahovat alespoň dvě stratigrafické jednotky.", "warning")
+                raise ValueError("Nedostatečný počet SJ.")
+
+            # Validace: všechny SJ musí existovat
+            sj_ids = []
+            for sj_id_str in sj_ids_raw:
+                try:
+                    sj_id = int(sj_id_str)
+                    cur.execute("SELECT 1 FROM tab_sj WHERE id_sj = %s;", (sj_id,))
+                    if not cur.fetchone():
+                        flash(f"SJ #{sj_id} neexistuje.", "danger")
+                        raise ValueError(f"SJ {sj_id} neexistuje.")
+                    sj_ids.append(sj_id)
+                except ValueError:
+                    flash(f"Neplatné číslo SJ: {sj_id_str}", "danger")
+                    raise
+
+            # Zápis do tab_object
+            cur.execute("""
+                INSERT INTO tab_object (id_object, object_typ, superior_object, notes)
+                VALUES (%s, %s, %s, %s)
+            """, (id_object, object_typ, superior_object, notes))
+
+            # Aktualizace ref_object v tab_sj
+            for sj_id in sj_ids:
+                cur.execute("""
+                    UPDATE tab_sj SET ref_object = %s WHERE id_sj = %s
+                """, (id_object, sj_id))
+
+            conn.commit()
+            flash(f"Objekt #{id_object} byl úspěšně vytvořen.", "success")
+            return redirect(url_for('main.objects'))
+
+        except Exception as e:
+            conn.rollback()
+            print(f"Chyba při ukládání objektu: {e}")
+            form_data = request.form.to_dict(flat=True)
+
+    cur.close()
+    conn.close()
+    return render_template("objects.html",
+                           suggested_id=suggested_id,
+                           object_types=object_types,
+                           selected_db=selected_db,
+                           form_data=form_data)
+
+
+@main.route('/define-object-type', methods=['POST'])
+@require_selected_db
+def define_object_type():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    data = request.get_json()
+    new_type = data.get('object_typ', '').strip()
+    description = data.get('description_typ', '').strip()
+
+    if not new_type:
+        logger.warning(f"Uživatel se pokusil zadat prázdný typ objektu v databázi {selected_db}.")
+        return jsonify({'error': 'Chybí název typu objektu.'}), 400
+
+    try:
+        cur.execute(
+            "INSERT INTO gloss_object_type (object_typ, description_typ) VALUES (%s, %s) ON CONFLICT DO NOTHING;",
+            (new_type, description)
+        )
+        conn.commit()
+        logger.info(f"Do databáze {selected_db} byl přidán nový typ objektu: '{new_type}' (popis: '{description}').")
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Chyba při ukládání typu objektu '{new_type}' do DB {selected_db}: {e}")
+        return jsonify({'error': f'Chyba při ukládání: {str(e)}'}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({'message': f"Typ '{new_type}' byl uložen."}), 200
+
+
+@main.route('/list-objects')
+@require_selected_db
+def list_objects():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    try:
+        # Načtení všech objektů a jejich SJ
+        cur.execute("""
+            SELECT o.id_object, o.object_typ, o.superior_object, o.notes,
+                   ARRAY_AGG(s.id_sj ORDER BY s.id_sj) AS sj_ids
+            FROM tab_object o
+            LEFT JOIN tab_sj s ON s.ref_object = o.id_object
+            GROUP BY o.id_object
+            ORDER BY o.id_object;
+        """)
+        objects = cur.fetchall()
+    except Exception as e:
+        conn.rollback()
+        flash(f"Chyba při načítání objektů: {e}", "danger")
+        objects = []
+
+    cur.close()
+    conn.close()
+
+    return render_template('list_objects.html', objects=objects)
+
+
+@main.route('/generate-objects-pdf', methods=['POST'])
+@require_selected_db
+def generate_objects_pdf():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT o.id_object, o.object_typ, o.superior_object, o.notes,
+                ARRAY(SELECT s.id_sj FROM tab_sj s WHERE s.ref_object = o.id_object ORDER BY s.id_sj)
+            FROM tab_object o
+            ORDER BY o.id_object;
+            """)
+        objects = cur.fetchall()
+    except Exception as e:
+        cur.close()
+        conn.close()
+        flash(f"Chyba při generování PDF: {e}", "danger")
+        return redirect(url_for('main.objects'))
+
+    cur.close()
+    conn.close()
+
+    # Vygeneruj HTML pro PDF
+    rendered = render_template('pdf_objects.html', objects=objects)
+    pdf_io = io.BytesIO()
+    HTML(string=rendered).write_pdf(pdf_io)
+    pdf_io.seek(0)
+
+    # Vrať PDF jako odpověď
+    response = make_response(pdf_io.read())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'inline; filename=objekty.pdf'
+    return response
+
+
+@main.route('/harrismatrix', methods=['GET', 'POST'])
+@require_selected_db
+def harrismatrix():
+    selected_db = session['selected_db']
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+
+    try:
+        cur.execute(count_sj_by_type_all())
+        sj_type_counts = cur.fetchall()
+
+        cur.execute(count_total_sj())
+        total_sj_count = cur.fetchone()[0]
+
+        cur.execute(count_objects())
+        object_count = cur.fetchone()[0]
+
+        cur.execute(count_sj_without_relation())
+        sj_without_relation = cur.fetchone()[0]
+
+    finally:
+        cur.close()
+        conn.close()
+
+    return render_template(
+        'harrismatrix.html',
+        selected_db=selected_db,
+        sj_type_counts=sj_type_counts,
+        total_sj_count=total_sj_count,
+        object_count=object_count,
+        sj_without_relation=sj_without_relation,
+        harris_image=None  # přidáno
+    )
+
+
+@main.route('/generate-harrismatrix', methods=['POST'])
+@require_selected_db
+def generate_harrismatrix():
+    selected_db = session.get('selected_db')
+    if not selected_db:
+        flash('Není vybraná databáze.', 'danger')
+        return redirect(url_for('main.harrismatrix'))
+
+    conn = None  # Inicializace, abychom mohli bezpečně zavřít připojení ve finally
+
+    try:
+        # Připojení k databázi
+        conn = get_terrain_connection(selected_db)
+
+        # Načti vztahy
+        relations = fetch_stratigraphy_relations(conn)
+
+        # Inicializace grafu
+        G = nx.DiGraph()
+
+        # Přidávání hran a slučování '=' vztahů
+        equals_groups = []
+        processed_equals = set()
+
+        for ref_sj1, relation, ref_sj2 in relations:
+            if relation == '=':
+                if ref_sj1 not in processed_equals and ref_sj2 not in processed_equals:
+                    equals_groups.append({ref_sj1, ref_sj2})
+                else:
+                    for group in equals_groups:
+                        if ref_sj1 in group or ref_sj2 in group:
+                            group.update([ref_sj1, ref_sj2])
+                            break
+                processed_equals.update([ref_sj1, ref_sj2])
+
+        # Mapování: původní SJ ➔ spojené ID (reprezentant)
+        node_mapping = {}
+        for group in equals_groups:
+            representative = min(group)
+            for node in group:
+                node_mapping[node] = representative
+
+        # Přidávání hran podle < a > vztahů
+        for ref_sj1, relation, ref_sj2 in relations:
+            if relation in ('<', '>'):
+                source = node_mapping.get(ref_sj1, ref_sj1)
+                target = node_mapping.get(ref_sj2, ref_sj2)
+                if relation == '<':
+                    G.add_edge(source, target)
+                elif relation == '>':
+                    G.add_edge(target, source)
+
+        # Detekce cyklů
+        try:
+            cycles = list(nx.find_cycle(G, orientation='original'))
+            if cycles:
+                flash('Nalezen cyklus ve vztazích! Matice nebyla vygenerována.', 'danger')
+                return redirect(url_for('main.harrismatrix'))
+        except nx.exception.NetworkXNoCycle:
+            pass  # žádný cyklus, v pořádku
+
+        # Layout
+        pos = nx.drawing.nx_pydot.graphviz_layout(G, prog='dot')
+
+        # Barvy uzlů
+        node_colors = '#ADD8E6'  # světle modrá default
+        plt.figure(figsize=(12, 10))
+        nx.draw(
+            G, pos,
+            with_labels=True,
+            node_color=node_colors,
+            node_size=2000,
+            font_size=10,
+            font_color='black',
+            arrows=True
+        )
+
+        # Vytvoř název souboru
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{selected_db}_{timestamp}.png"
+        filepath = os.path.join(HARRISMATRIX_IMGS, filename)
+
+        plt.savefig(filepath, format="png", bbox_inches='tight')
+        plt.close()
+
+        flash('Harrisova matice byla vygenerována.', 'success')
+        return redirect(url_for('main.harrismatrix'))
+
+    except Exception as e:
+        flash(f'Chyba při generování Harris Matrix: {str(e)}', 'danger')
+        return redirect(url_for('main.harrismatrix'))
+
+    finally:
+        if conn:
+            conn.close()
+
+
 
 
 

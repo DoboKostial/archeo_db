@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; font-size: 12pt; }
+        h1 { text-align: center; }
+        .object-box { border: 1px solid #999; padding: 10px; margin-bottom: 20px; }
+        .object-title { font-weight: bold; font-size: 14pt; }
+        .sj-list { margin: 0; padding-left: 20px; }
+        .description { font-style: italic; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Seznam archeologických objektů</h1>
+
+    {% for obj in objects %}
+        <div class="object-box">
+            <div class="object-title">
+                Objekt {{ obj[0] }} – {{ obj[1] }}
+                {% if obj[2] %}(↑ {{ obj[2] }}){% endif %}
+            </div>
+            {% if obj[4] %}
+                <p>SJ:</p>
+                <ul class="sj-list">
+                    {% for sj in obj[4] %}
+                        <li>SJ {{ sj }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p><em>Žádné stratigrafické jednotky</em></p>
+            {% endif %}
+            {% if obj[3] %}
+                <p class="description">{{ obj[3] }}</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+</body>
+</html>
