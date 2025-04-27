@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Zadání objektu{% endblock %}
+
+{% block content %}
+<div class="alert alert-info" role="alert">
+    Pracujete nad databází <strong>{{ selected_db }}</strong>. Další volné onjekt je <strong>{{ suggested_id }}</strong>.
+</div>
+<div class="container mt-4">
+    <h3>New archaeological object</h3>
+
+    <form method="POST">
+        <div class="mb-3">
+            <h5>
+            <label for="id_object" class="form-label">ID objektu</label>
+            <input type="number" class="form-control" id="id_object" name="id_object" required
+                   value="{{ form_data.get('id_object', suggested_id) }}">
+            </h5>
+        </div>
+
+        <div class="mb-3">
+            <label for="object_typ" class="form-label">Typ objektu</label>
+            <div class="input-group">
+                <select class="form-select" id="object_typ" name="object_typ" required>
+                    <option value="">-- vyber typ --</option>
+                    {% for typ in object_types %}
+                        <option value="{{ typ }}" {% if form_data.get('object_typ') == typ %}selected{% endif %}>{{ typ }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#defineObjectTypeModal">
+                    Definuj
+                </button>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="superior_object" class="form-label">Belongs to object of higher category (optional)</label>
+            <input type="number" class="form-control" id="superior_object" name="superior_object"
+                   value="{{ form_data.get('superior_object', '') }}">
+        </div>
+
+        <div class="mb-3">
+            <label for="notes" class="form-label">Notes for object</label>
+            <textarea class="form-control" id="notes" name="notes" rows="3">{{ form_data.get('notes', '') }}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Stratigrafické jednotky tvořící objekt</label>
+            <div id="sj-container">
+                {% if form_data.getlist %}
+                    {% for sj in form_data.getlist('sj_ids[]') %}
+                        <div class="input-group mb-2 sj-input">
+                            <input type="number" name="sj_ids[]" class="form-control" value="{{ sj }}" required>
+                            <button type="button" class="btn btn-outline-danger remove-sj">×</button>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="input-group mb-2 sj-input">
+                        <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
+                        <button type="button" class="btn btn-outline-danger remove-sj">×</button>
+                    </div>
+                {% endif %}
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="add-sj">+ přidej SJ</button>
+        </div>
+
+        <button type="submit" class="btn btn-success">Uložit objekt</button>
+        <a href="{{ url_for('main.list_objects') }}" class="btn btn-info mt-2">Vylistuj objekty</a>
+    </form>
+</div>
+
+
+
+<!-- Modal pro definici nového typu objektu -->
+<div class="modal fade" id="defineObjectTypeModal" tabindex="-1" aria-labelledby="defineObjectTypeLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="defineObjectTypeLabel">Nový typ objektu</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="newObjectType" class="form-label">Název typu</label>
+          <input type="text" class="form-control" id="newObjectType" required>
+        </div>
+        <div class="mb-3">
+          <label for="newDescription" class="form-label">Popis</label>
+          <textarea class="form-control" id="newDescription" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="submitNewType">Uložit typ</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zavřít</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const sjContainer = document.getElementById("sj-container");
+    const addBtn = document.getElementById("add-sj");
+
+    addBtn.addEventListener("click", function () {
+        const inputGroup = document.createElement("div");
+        inputGroup.className = "input-group mb-2 sj-input";
+        inputGroup.innerHTML = `
+            <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
+            <button type="button" class="btn btn-outline-danger remove-sj">×</button>
+        `;
+        sjContainer.appendChild(inputGroup);
+    });
+
+    sjContainer.addEventListener("click", function (e) {
+        if (e.target.classList.contains("remove-sj")) {
+            e.target.closest(".sj-input").remove();
+        }
+    });
+});
+</script>
+
+<script>
+document.getElementById('submitNewType').addEventListener('click', function () {
+    const newType = document.getElementById('newObjectType').value.trim();
+    const description = document.getElementById('newDescription').value.trim();
+
+    if (!newType) {
+        alert("Zadejte název typu objektu.");
+        return;
+    }
+
+    fetch("{{ url_for('main.define_object_type') }}", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": "{{ csrf_token() if csrf_token else '' }}"
+        },
+        body: JSON.stringify({
+            object_typ: newType,
+            description_typ: description
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => { throw new Error(data.error || 'Chyba při ukládání'); });
+        }
+        return response.json();
+    })
+    .then(data => {
+        const select = document.getElementById('object_typ');
+        const newOption = document.createElement('option');
+        newOption.value = newType;
+        newOption.text = newType;
+        newOption.selected = true;
+        select.appendChild(newOption);
+
+        const modalElement = document.getElementById('defineObjectTypeModal');
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        modal.hide();
+
+        document.getElementById('newObjectType').value = '';
+        document.getElementById('newDescription').value = '';
+    })
+    .catch(error => {
+        alert("Chyba: " + error.message);
+    });
+});
+</script>
+{% endblock %}
