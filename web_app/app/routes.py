@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from datetime import datetime, timedelta
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 import psycopg2
 from psycopg2 import sql
 from app.database import get_auth_connection, get_terrain_connection, create_database_backup
@@ -19,7 +20,8 @@ from app.utils import (
     send_new_account_email, 
     sync_users_to_terrain_dbs,
     float_or_none,
-    require_selected_db
+    require_selected_db, process_polygon_upload, 
+    prepare_polygons
 )
 from collections import defaultdict
 from weasyprint import HTML
@@ -53,7 +55,8 @@ from app.queries import (
     get_sj_types_and_objects,
     fetch_stratigraphy_relations,
     count_sj_by_type_all,
-    count_total_sj
+    count_total_sj,
+    insert_polygons
 
  )
 
@@ -1024,16 +1027,15 @@ def harrismatrix():
         cur.close()
         conn.close()
 
-    return render_template(
-        'harrismatrix.html',
-        selected_db=selected_db,
-        sj_type_counts=sj_type_counts,
-        total_sj_count=total_sj_count,
-        object_count=object_count,
-        sj_without_relation=sj_without_relation,
-        harris_image=None  # přidáno
-    )
+    harris_image = request.args.get('harris_image')
 
+    return render_template('harrismatrix.html',
+                           selected_db=selected_db,
+                           total_sj_count=total_sj_count,
+                           object_count=object_count,
+                           sj_without_relation=sj_without_relation,
+                           sj_type_counts=sj_type_counts,
+                           harris_image=harris_image)
 
 @main.route('/generate-harrismatrix', methods=['POST'])
 @require_selected_db
@@ -1043,19 +1045,18 @@ def generate_harrismatrix():
         flash('Není vybraná databáze.', 'danger')
         return redirect(url_for('main.harrismatrix'))
 
-    conn = None  # Inicializace, abychom mohli bezpečně zavřít připojení ve finally
-
+    conn = None  # Inicializace spojení
     try:
-        # Připojení k databázi
+        # Připojení k DB
         conn = get_terrain_connection(selected_db)
 
-        # Načti vztahy
+        # Načíst stratigrafické vztahy
         relations = fetch_stratigraphy_relations(conn)
 
         # Inicializace grafu
         G = nx.DiGraph()
 
-        # Přidávání hran a slučování '=' vztahů
+        # Zpracování rovností (=) do skupin
         equals_groups = []
         processed_equals = set()
 
@@ -1070,14 +1071,14 @@ def generate_harrismatrix():
                             break
                 processed_equals.update([ref_sj1, ref_sj2])
 
-        # Mapování: původní SJ ➔ spojené ID (reprezentant)
+        # Mapování na reprezentanty
         node_mapping = {}
         for group in equals_groups:
             representative = min(group)
             for node in group:
                 node_mapping[node] = representative
 
-        # Přidávání hran podle < a > vztahů
+        # Přidávání hran < a >
         for ref_sj1, relation, ref_sj2 in relations:
             if relation in ('<', '>'):
                 source = node_mapping.get(ref_sj1, ref_sj1)
@@ -1087,20 +1088,43 @@ def generate_harrismatrix():
                 elif relation == '>':
                     G.add_edge(target, source)
 
-        # Detekce cyklů
+        # Kontrola cyklů
         try:
             cycles = list(nx.find_cycle(G, orientation='original'))
             if cycles:
                 flash('Nalezen cyklus ve vztazích! Matice nebyla vygenerována.', 'danger')
                 return redirect(url_for('main.harrismatrix'))
         except nx.exception.NetworkXNoCycle:
-            pass  # žádný cyklus, v pořádku
+            pass  # Žádný cyklus - OK
 
-        # Layout
+        # Layout s obrácenou osou Y
         pos = nx.drawing.nx_pydot.graphviz_layout(G, prog='dot')
+        for node in pos:
+            x, y = pos[node]
+            pos[node] = (x, -y)  # Otočení podle Y
 
-        # Barvy uzlů
-        node_colors = '#ADD8E6'  # světle modrá default
+        # Načíst typy SJ
+        types_dict = {}
+        with conn.cursor() as cur:
+            cur.execute("SELECT id_sj, sj_typ FROM tab_sj")
+            for id_sj, sj_typ in cur.fetchall():
+                types_dict[id_sj] = sj_typ.lower()
+
+        # Definice barev podle typu
+        color_map = {
+            'deposit': '#90EE90',   # zelená
+            'negative': '#FFA07A',  # oranžová
+            'structure': '#87CEFA'  # modrá
+        }
+
+        # Přiřazení barev uzlům
+        node_colors = []
+        for node in G.nodes():
+            node_type = types_dict.get(node, 'unknown')
+            color = color_map.get(node_type, '#D3D3D3')  # šedá jako default
+            node_colors.append(color)
+
+        # Vykreslení grafu
         plt.figure(figsize=(12, 10))
         nx.draw(
             G, pos,
@@ -1109,16 +1133,22 @@ def generate_harrismatrix():
             node_size=2000,
             font_size=10,
             font_color='black',
-            arrows=True
+            arrows=False  # bez šipek!
         )
 
-        # Vytvoř název souboru
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Vytvořit cílový adresář
+        os.makedirs(Config.HARRISMATRIX_IMGS, exist_ok=True)
+
+        # Generování názvu souboru
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{selected_db}_{timestamp}.png"
-        filepath = os.path.join(HARRISMATRIX_IMGS, filename)
+        filepath = os.path.join(Config.HARRISMATRIX_IMGS, filename)
 
         plt.savefig(filepath, format="png", bbox_inches='tight')
         plt.close()
+
+        # Uložit cestu k vygenerovanému obrázku do session
+        session['harrismatrix_image'] = filename
 
         flash('Harrisova matice byla vygenerována.', 'success')
         return redirect(url_for('main.harrismatrix'))
@@ -1132,7 +1162,227 @@ def generate_harrismatrix():
             conn.close()
 
 
+from app.queries import get_polygons_list, insert_polygon_sql
+import os
+import io
+import csv
+import shapefile  # PyShp
+from flask import flash
 
 
+@main.route('/polygons', methods=['GET'])
+@require_selected_db
+def polygons():
+    selected_db = session.get('selected_db')
+    conn = get_terrain_connection(selected_db)
+    polygons = []
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(get_polygons_list())
+            polygons = [
+                {'name': row[0], 'points': row[1], 'epsg': row[2]}
+                for row in cur.fetchall()
+            ]
+    finally:
+        conn.close()
+
+    return render_template('polygons.html', polygons=polygons)
+
+
+@main.route('/upload-polygons', methods=['POST'])
+@require_selected_db
+def upload_polygons():
+    selected_db = session.get('selected_db')
+    file = request.files.get('file')
+    epsg = request.form.get('epsg')
+
+    if not file or not epsg:
+        flash('Musíte vybrat soubor a EPSG.', 'danger')
+        return redirect(url_for('main.polygons'))
+
+    conn = get_terrain_connection(selected_db)
+
+    try:
+        # Zpracuj CSV soubor a získej data
+        uploaded_polygons, epsg_code = process_polygon_upload(file, epsg)
+
+        with conn.cursor() as cur:
+            for polygon_name, points in uploaded_polygons.items():
+                sql = insert_polygon_sql(polygon_name, points, epsg_code)
+                cur.execute(sql, (polygon_name,))
+        
+        conn.commit()
+        flash('Polygon(y) byly úspěšně nahrány.', 'success')
+
+    except Exception as e:
+        flash(f'Chyba při nahrávání polygonů: {str(e)}', 'danger')
+    finally:
+        conn.close()
+
+    return redirect(url_for('main.polygons'))
+
+
+from io import BytesIO
+import shapefile
+import zipfile
+from flask import send_file
+
+@main.route('/download-polygons')
+@require_selected_db
+def download_polygons():
+    selected_db = session.get('selected_db')
+    conn = get_terrain_connection(selected_db)
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT polygon_name, ST_AsText(geom)
+                FROM tab_polygons;
+            """)
+            results = cur.fetchall()
+
+        # Paměťové streamy pro SHP soubory
+        shp_io = BytesIO()
+        shx_io = BytesIO()
+        dbf_io = BytesIO()
+
+        # Vytvoření SHP do paměti
+        with shapefile.Writer(shp=shp_io, shx=shx_io, dbf=dbf_io, shapeType=shapefile.POLYGON) as shp:
+            shp.field('name', 'C')
+
+            for name, wkt in results:
+                coords = []
+                coord_text = wkt.replace('POLYGON((', '').replace('))', '')
+                for part in coord_text.split(','):
+                    x, y = map(float, part.strip().split())
+                    coords.append((x, y))
+                shp.poly([coords])
+                shp.record(name)
+
+        # ZIP soubor v paměti
+        zip_io = BytesIO()
+        with zipfile.ZipFile(zip_io, 'w') as zipf:
+            zipf.writestr(f"{selected_db}.shp", shp_io.getvalue())
+            zipf.writestr(f"{selected_db}.shx", shx_io.getvalue())
+            zipf.writestr(f"{selected_db}.dbf", dbf_io.getvalue())
+
+            # Volitelně přidej .prj
+            prj = 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],' \
+                  'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]'
+            zipf.writestr(f"{selected_db}.prj", prj)
+
+        zip_io.seek(0)
+        return send_file(
+            zip_io,
+            mimetype='application/zip',
+            download_name=f"{selected_db}_polygons.zip",
+            as_attachment=True
+        )
+
+    except Exception as e:
+        flash(f'Chyba při generování SHP: {str(e)}', 'danger')
+        return redirect(url_for('main.polygons'))
+    finally:
+        conn.close()
+
+
+@main.route('/upload-foto', methods=['GET', 'POST'])
+@require_selected_db
+def upload_foto():
+    selected_db = session.get('selected_db')
+    conn = get_terrain_connection(selected_db)
+    thumb_dir = os.path.join(Config.TERR_FOTO_DIR, 'thumbs')
+    os.makedirs(Config.TERR_FOTO_DIR, exist_ok=True)
+    os.makedirs(thumb_dir, exist_ok=True)
+
+    if request.method == 'POST':
+        file = request.files.get('file')
+        datum = request.form.get('datum') or None
+        author = request.form.get('author') or None
+        notes = request.form.get('notes') or None
+        selected_sjs = request.form.getlist('ref_sj')
+        selected_polygon = request.form.get('ref_polygon')
+
+        if file:
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(Config.TERR_FOTO_DIR, filename)
+            file.save(filepath)
+
+            # Thumbnail
+            from PIL import Image
+            with Image.open(filepath) as img:
+                img.thumbnail((200, 150))
+                thumb_path = os.path.join(thumb_dir, filename.rsplit('.', 1)[0] + '_thumb.jpeg')
+                img.save(thumb_path, 'JPEG')
+
+            try:
+                with conn:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO tab_foto (id_foto, datum, author, notes)
+                            VALUES (%s, %s, %s, %s)
+                        """, (filename, datum, author, notes))
+
+                        for sj in selected_sjs:
+                            cur.execute("""
+                                INSERT INTO tabaid_foto_sj (ref_foto, ref_sj)
+                                VALUES (%s, %s)
+                            """, (filename, sj))
+
+                flash('Fotografie byla úspěšně nahrána.', 'success')
+                return redirect(url_for('main.upload_foto'))
+
+            except Exception as e:
+                flash(f'Chyba při nahrávání: {str(e)}', 'danger')
+
+    # GET request – načíst data pro formulář
+    sj_options = []
+    polygon_options = []
+    author_options = []
+    recent_photos = []
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id_sj FROM tab_sj ORDER BY id_sj")
+            sj_options = [row[0] for row in cur.fetchall()]
+
+            cur.execute("SELECT polygon_name FROM tab_polygons ORDER BY polygon_name")
+            polygon_options = [row[0] for row in cur.fetchall()]
+
+            cur.execute("SELECT mail FROM gloss_personalia ORDER BY mail")
+            author_options = [row[0] for row in cur.fetchall()]
+
+            # Získat posledních 10 nahraných fotek podle DATUM sestupně
+            cur.execute("""
+                SELECT id_foto FROM tab_foto
+                WHERE datum IS NOT NULL
+                ORDER BY datum DESC
+                LIMIT 10
+            """)
+            recent_photos = cur.fetchall()
+
+    finally:
+        conn.close()
+
+    return render_template('upload_foto.html',
+                           sj_options=sj_options,
+                           polygon_options=polygon_options,
+                           author_options=author_options,
+                           recent_photos=recent_photos)
+
+
+from flask import send_from_directory
+from config import Config
+
+@main.route('/terr_foto/<path:filename>')
+@require_selected_db
+def serve_terr_foto(filename):
+    return send_from_directory(Config.TERR_FOTO_DIR, filename)
+
+@main.route('/terr_foto/thumbs/<path:filename>')
+@require_selected_db
+def serve_terr_thumb(filename):
+    return send_from_directory(Config.TERR_FOTO_THUMBS_DIR, filename)
 
 
