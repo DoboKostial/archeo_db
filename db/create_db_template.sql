@@ -16,6 +16,8 @@ CREATE DATABASE terrain_db_template OWNER app_terrain_db ENCODING 'UTF8' IS_TEMP
 -- Connect to the template database to configure it
 \c terrain_db_template;
 
+CREATE EXTENSION postgis;
+
 -- default privileges for users
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO app_terrain_db;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO app_terrain_db;
@@ -98,12 +100,10 @@ CREATE TABLE tab_object (
 
 -- public.tab_polygon definition
 
-CREATE TABLE tab_polygon (
-	id_polygon int4 NOT NULL,
-	polygon_typ varchar(50) NULL,
-	superior_polygon int4 NULL DEFAULT 0,
-	notes varchar(200) NULL,
-	CONSTRAINT tab_polygon_pk PRIMARY KEY (id_polygon)
+CREATE TABLE tab_polygons (
+    id SERIAL PRIMARY KEY,
+    polygon_name TEXT NOT NULL,
+    geom geometry(Polygon, 4326) -- or another EPSG, but 4326 (WGS 84) is standard
 );
 
 
