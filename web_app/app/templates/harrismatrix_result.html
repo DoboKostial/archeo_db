@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Výsledek - Harrisova matice</h2>
+    <div class="text-center my-4">
+        <img src="{{ img_path }}" alt="Harrisova matice" class="img-fluid shadow" style="border: 1px solid #ccc; padding: 10px;">
+    </div>
+    <div class="text-center mt-4">
+        <a href="{{ url_for('main.harrismatrix') }}" class="btn btn-primary">← Zpět na generování</a>
+    </div>
+</div>
+{% endblock %}
+

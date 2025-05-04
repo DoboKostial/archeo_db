@@ -7,6 +7,7 @@ GRANT pg_write_all_data TO grp_dbas;
 CREATE ROLE grp_analysts WITH INHERIT;
 GRANT pg_read_all_data TO grp_analysts;
 CREATE ROLE app_terrain_db WITH LOGIN;
+ALTER ROLE app_terrain_db WITH createdb;
 GRANT grp_dbas TO app_terrain_db;
 
 -- This database is intended to be a template while assuming

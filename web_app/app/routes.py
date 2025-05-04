@@ -1187,7 +1187,8 @@ def polygons():
     finally:
         conn.close()
 
-    return render_template('polygons.html', polygons=polygons)
+    return render_template('polygons.html', polygons=polygons, selected_db=selected_db)
+
 
 
 @main.route('/upload-polygons', methods=['POST'])
@@ -1369,7 +1370,8 @@ def upload_foto():
                            sj_options=sj_options,
                            polygon_options=polygon_options,
                            author_options=author_options,
-                           recent_photos=recent_photos)
+                           recent_photos=recent_photos,
+                           selected_db=selected_db)
 
 
 from flask import send_from_directory

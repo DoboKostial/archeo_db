@@ -177,50 +177,45 @@ import csv
 from flask import flash
 
 #utility for upload and control of .csv file with polygon vertices
-def process_polygon_upload(uploaded_file_path):
-    points = []
-    errors = []
-    try:
-        with open(uploaded_file_path, mode='r', newline='', encoding='utf-8') as csvfile:
-            reader = csv.reader(csvfile, delimiter=',')
-            line_number = 0
-            for row in reader:
-                line_number += 1
-                if not row or all(not field.strip() for field in row):
-                    continue
-                if len(row) != 5:
-                    errors.append(f"Řádek {line_number}: očekáváno 5 polí, nalezeno {len(row)} polí.")
-                    continue
-                try:
-                    id_str, x_str, y_str, z_str, description = row
-                    id_int = int(id_str)
-                    x = float(x_str)
-                    y = float(y_str)
-                    z = float(z_str)
-                    description = description.strip()
-                    if not description:
-                        errors.append(f"Řádek {line_number}: popis (description) je prázdný.")
-                        continue
-                    points.append({
-                        'id': id_int,
-                        'x': x,
-                        'y': y,
-                        'z': z,
-                        'description': description
-                    })
-                except ValueError as ve:
-                    errors.append(f"Řádek {line_number}: chyba při konverzi hodnot ({ve}).")
-                    continue
+import csv
+import tempfile
 
-    except Exception as e:
-        flash(f"Chyba při zpracování souboru: {str(e)}", 'danger')
-        return None, None
+def process_polygon_upload(file, epsg_code):
+    """
+    Načte CSV soubor a připraví slovník polygonů.
+    Vrací: (dict polygon_name -> [(x, y), ...]), int epsg_code
+    """
+    polygons = {}
 
-    if errors:
-        for err in errors:
-            flash(err, 'warning')
+    # Dočasně uložíme FileStorage na disk, protože csv.reader potřebuje cestu nebo file-like objekt
+    with tempfile.NamedTemporaryFile(delete=False, mode='w+', encoding='utf-8') as tmp:
+        file.stream.seek(0)
+        content = file.read().decode('utf-8')
+        tmp.write(content)
+        tmp.flush()
+        tmp.seek(0)
 
-    return points, errors
+        reader = csv.reader(tmp)
+        next(reader, None)  # přeskoč hlavičku
+
+        for row in reader:
+            if len(row) < 5:
+                raise ValueError("Řádek v souboru nemá dostatek hodnot (očekáváno 5).")
+
+            id_point, x, y, z, polygon_name = row
+            x, y = float(x), float(y)
+
+            if polygon_name not in polygons:
+                polygons[polygon_name] = []
+            polygons[polygon_name].append((x, y))
+
+    # Uzavři každý polygon, pokud není uzavřen
+    for poly_points in polygons.values():
+        if poly_points[0] != poly_points[-1]:
+            poly_points.append(poly_points[0])
+
+    return polygons, int(epsg_code)
+
 
 def prepare_polygons(points):
     """

@@ -198,7 +198,7 @@ def get_sj_types_and_objects():
 
 def fetch_stratigraphy_relations(conn):
     sql = """
-        SELECT sj_top, sj_bottom, relation
+        SELECT ref_sj1, relation, ref_sj2
         FROM tab_sj_stratigraphy;
     """
     with conn.cursor() as cur:
@@ -214,3 +214,44 @@ def count_sj_by_type_all():
 
 def count_total_sj():
     return "SELECT COUNT(*) FROM tab_sj;"
+
+def get_polygons_list():
+    return """
+        SELECT polygon_name, ST_NPoints(geom), ST_SRID(geom)
+        FROM tab_polygons
+        ORDER BY polygon_name;
+    """
+
+
+def insert_polygons():
+    return """
+    INSERT INTO tab_polygons (polygon_name, geom)
+    VALUES (%s, ST_Transform(
+                   ST_SetSRID(
+                       ST_MakePolygon(
+                           ST_GeomFromText('LINESTRING(%s)')
+                       ), %s
+                   ), 4326)
+           )
+    """
+
+
+def insert_polygon_sql(polygon_name, points, source_epsg):
+    sql = f"""
+    INSERT INTO tab_polygons (polygon_name, geom)
+    VALUES (
+        %s,
+        ST_Transform(
+            ST_SetSRID(
+                ST_MakePolygon(
+                    ST_MakeLine(ARRAY[
+                        {','.join([f"ST_MakePoint({x}, {y})" for x, y in points])}
+                    ])
+                ),
+                {source_epsg}
+            ),
+            4326
+        )
+    );
+    """
+    return sql
