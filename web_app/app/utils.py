@@ -33,7 +33,7 @@ def send_password_change_email(user_email, user_name):
         print("Chyba při odesílání e-mailu:", e)
 
 
-# utility for sending mail when forget password
+# utility for sending mail when forgot password
 def send_password_reset_email(user_email, user_name, reset_url):
     msg = EmailMessage()
     msg['Subject'] = 'Obnova hesla – ArcheoDB'
@@ -59,23 +59,23 @@ def send_password_reset_email(user_email, user_name, reset_url):
 # if archeolog creates new app user account, mail would be sent
 def send_new_account_email(user_email, user_name, password):
     msg = EmailMessage()
-    msg['Subject'] = 'Váš účet do ArcheoDB byl vytvořen'
+    msg['Subject'] = 'Your account in ArcheoDB test environment was created'
     msg['From'] = Config.ADMIN_EMAIL
     msg['To'] = user_email
     msg.set_content(
-        f"Dobrý den {user_name},\n\n"
-        f"byl Vám zřízen účet do systému ArcheoDB.\n\n"
-        f"Vaše přihlašovací údaje:\n"
+        f"Hi {user_name},\n\n"
+        f"an access to ArcheoDB test (https://sulis183.zcu.cz) was granted.\n\n"
+        f"Your credentials:\n"
         f"E-mail: {user_email}\n"
-        f"Heslo: {password}\n\n"
-        f"Doporučujeme si heslo změnit po prvním přihlášení (v sekci Můj profil).\n\n"
-        f"S pozdravem,\n{Config.ADMIN_NAME}"
+        f"Password: {password}\n\n"
+        f"You are encouraged to change Ypor password immediately after forst succesfull login (in My Profile).\n\n"
+        f"Have a nice day,\n{Config.ADMIN_NAME}"
     )
     try:
         with smtplib.SMTP('localhost') as smtp:
             smtp.send_message(msg)
     except Exception as e:
-        logger.error(f"Chyba při odesílání e-mailu novému uživateli: {e}")
+        logger.error(f"While sending an email to new user an error occured: {e}")
 
 
 # this is for syncying new terrain Dbs with auth_db (app users)
@@ -89,9 +89,9 @@ def sync_single_db(db_name, users):
                         VALUES (%s, %s, %s)
                     """, (mail, name, group_role))
             conn.commit()
-        logger.info(f"Uživatelé byli úspěšně synchronizováni do DB '{db_name}'.")
+        logger.info(f"Users were succcessfully synchronised to DB '{db_name}'.")
     except Exception as e:
-        logger.error(f"Chyba při synchronizaci DB '{db_name}': {e}")
+        logger.error(f"There is an error while synchro to DB '{db_name}': {e}")
 
 
 # this is for syncying terrain Dbs with auth_db (app users)
@@ -112,14 +112,14 @@ def sync_users_to_terrain_dbs():
         conn.close()
 
         for db_name in terrain_dbs:
-            logger.info(f"Synchronizace DB: {db_name}")
+            logger.info(f"Synchro DB: {db_name}")
             sync_single_db(db_name, users)
 
-        logger.info("Synchronizace všech databází proběhla úspěšně.")
+        logger.info("All DBs were synchonized successfully.")
         return True
 
     except Exception as e:
-        logger.error(f"Chyba při synchronizaci uživatelů: {e}")
+        logger.error(f"An error while synchronisation of users: {e}")
         return False
 
 # after creating a new app user (in auth_db) write him to terrain Dbs as well (to gloss_personalia)
@@ -131,7 +131,7 @@ def sync_single_user_to_all_terrain_dbs(mail, name, group_role):
         conn.close()
 
         for db_name in terrain_dbs:
-            logger.info(f"Synchronizace uživatele {mail} do DB: {db_name}")
+            logger.info(f"Synchro of user {mail} to DB: {db_name}")
             try:
                 conn_terrain = get_terrain_connection(db_name)
                 with conn_terrain.cursor() as cur:
@@ -142,13 +142,13 @@ def sync_single_user_to_all_terrain_dbs(mail, name, group_role):
                 conn_terrain.commit()
                 conn_terrain.close()
             except Exception as e:
-                logger.error(f"Chyba při synchronizaci uživatele {mail} do DB '{db_name}': {str(e)}")
+                logger.error(f"Error while synchro of user {mail} to DB '{db_name}': {str(e)}")
                 return False
 
-        logger.info(f"Uživatel {mail} úspěšně synchronizován do všech databází.")
+        logger.info(f"User {mail} was synchronized successfully into all DBs.")
         return True
     except Exception as e:
-        logger.error(f"Chyba při synchronizaci uživatele {mail}: {str(e)}")
+        logger.error(f"Ooops, an error while synchro of user {mail}: {str(e)}")
         return False
 
 
@@ -162,7 +162,7 @@ def require_selected_db(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'selected_db' not in session:
-            flash("Nejdřív vyberte databázi, se kterou chcete pracovat.", "warning")
+            flash("Please select the DB You would like to work upon.", "warning")
             return redirect('/index')
         return f(*args, **kwargs)
     return decorated_function
@@ -182,12 +182,12 @@ import tempfile
 
 def process_polygon_upload(file, epsg_code):
     """
-    Načte CSV soubor a připraví slovník polygonů.
-    Vrací: (dict polygon_name -> [(x, y), ...]), int epsg_code
+    Reads CSV file and prepares the list of polygons.
+    Returns: (dict polygon_name -> [(x, y), ...]), int epsg_code
     """
     polygons = {}
 
-    # Dočasně uložíme FileStorage na disk, protože csv.reader potřebuje cestu nebo file-like objekt
+    # We store FileStorage on disk temporarily, while csv.reader needs path or file-like object
     with tempfile.NamedTemporaryFile(delete=False, mode='w+', encoding='utf-8') as tmp:
         file.stream.seek(0)
         content = file.read().decode('utf-8')
@@ -196,11 +196,11 @@ def process_polygon_upload(file, epsg_code):
         tmp.seek(0)
 
         reader = csv.reader(tmp)
-        next(reader, None)  # přeskoč hlavičku
+        next(reader, None)  # skip header if present
 
         for row in reader:
             if len(row) < 5:
-                raise ValueError("Řádek v souboru nemá dostatek hodnot (očekáváno 5).")
+                raise ValueError("The row in file does not have enough values (expected 5).")
 
             id_point, x, y, z, polygon_name = row
             x, y = float(x), float(y)
@@ -209,7 +209,7 @@ def process_polygon_upload(file, epsg_code):
                 polygons[polygon_name] = []
             polygons[polygon_name].append((x, y))
 
-    # Uzavři každý polygon, pokud není uzavřen
+    # Close the polygon if not closed yet
     for poly_points in polygons.values():
         if poly_points[0] != poly_points[-1]:
             poly_points.append(poly_points[0])
@@ -219,7 +219,7 @@ def process_polygon_upload(file, epsg_code):
 
 def prepare_polygons(points):
     """
-    Ze seznamu bodů připraví slovník polygonů: {jmeno_polygonu: [(x, y), (x, y), ...]}
+    This prepared the list (glossary) of polygons from points records: {polygon_name: [(x, y), (x, y), ...]}
     """
     polygons = {}
 
@@ -232,7 +232,7 @@ def prepare_polygons(points):
             polygons[description] = []
         polygons[description].append((x, y))
 
-    # Uzavřeme každý polygon automaticky
+    # Close the polygons automatically
     for description, pts in polygons.items():
         if pts[0] != pts[-1]:
             pts.append(pts[0])

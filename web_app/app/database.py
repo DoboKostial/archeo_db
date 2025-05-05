@@ -4,15 +4,6 @@ import os
 from config import Config
 import psycopg2
 
-#def get_db_connection():
-#    return psycopg2.connect(
-#        dbname=Config.DB_NAME,
-#        user=Config.DB_USER,
-#        password=Config.DB_PASSWORD,
-#        host=Config.DB_HOST,
-#        port=Config.DB_PORT
-#    )
-
 def get_auth_connection():
     return psycopg2.connect(
         dbname=Config.AUTH_DB_NAME,
@@ -32,14 +23,13 @@ def get_terrain_connection(dbname):
     )
 
 
-
 # here the logic for DB backups - will be used in routes.py
 def create_database_backup(dbname):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_filename = f"{dbname}_{timestamp}.backup"
     backup_path = os.path.join(Config.BACKUP_DIR, backup_filename)
 
-    os.makedirs(Config.BACKUP_DIR, exist_ok=True)  # vytvoří složku, pokud neexistuje
+    os.makedirs(Config.BACKUP_DIR, exist_ok=True)  # create folder if does not exists. Watch permissions
 
     subprocess.run(
         [
@@ -54,5 +44,3 @@ def create_database_backup(dbname):
     )
 
     return backup_path
-
-

@@ -49,7 +49,7 @@ def create_app():
                 cur.close()
                 conn.close()
             except Exception as e:
-                logging.warning(f"Chyba při získávání informací o uživateli: {e}")
+                logging.warning(f"An error occured while retrieving info about user: {e}")
 
         return dict(user_name=user_name, user_email=user_email, last_login=last_login)
 
