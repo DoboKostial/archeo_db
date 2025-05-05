@@ -70,7 +70,7 @@ def archeolog_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_role' not in session or session['user_role'] != 'archeolog':
-            logger.warning(f"Neautorizovaný pokus o přístup na /admin od uživatele {session.get('user_email')}")
+            logger.warning(f"Non authorized attempt for /admin from user {session.get('user_email')}")
             return redirect(url_for('main.index'))
         return f(*args, **kwargs)
     return decorated_function
@@ -97,16 +97,16 @@ def login():
     email = data.get('email')
     password = data.get('password')
 
-    logger.info(f"Pokus o přihlášení: {email}")
+    logger.info(f"Login attempt: {email}")
 
     try:
         conn = get_auth_connection()
 
-        # Kontrola, zda je účet aktivní
+        # Is account valid and enbled?
         enabled = is_user_enabled(conn, email)
         if enabled is False:
-            logger.warning(f"Přihlášení zamítnuto – účet zakázán: {email}")
-            return jsonify({"error": "Váš účet byl deaktivován. Kontaktujte administrátora."}), 403
+            logger.warning(f"Login denied, account locked for: {email}")
+            return jsonify({"error": "Your account is inactive. Please contact administrator."}), 403
 
         # Kontrola hesla
         password_hash = get_user_password_hash(conn, email)
@@ -120,18 +120,18 @@ def login():
                 algorithm="HS256"
             )
 
-            logger.info(f"Úspěšné přihlášení: {email}")
+            logger.info(f"Succesfull login for: {email}")
 
             response = make_response(jsonify({"success": True}))
             response.set_cookie('token', token, httponly=True, samesite='Lax')
             return response
         else:
-            logger.warning(f"Neplatné přihlašovací údaje: {email}")
-            return jsonify({"error": "Neplatné přihlašovací údaje"}), 403
+            logger.warning(f"Non valid credentials for: {email}")
+            return jsonify({"error": "Non valid credentials."}), 403
 
     except Exception as e:
-        logger.error(f"Chyba při ověřování přihlášení: {e}")
-        return jsonify({"error": "Chyba serveru"}), 500
+        logger.error(f"An error occured while login verification: {e}")
+        return jsonify({"error": "Server fault"}), 500
     finally:
         conn.close()
 
@@ -150,8 +150,8 @@ def forgot_password():
         user_name = get_enabled_user_name_by_email(conn, email)
 
         if not user_name:
-            logger.warning(f"Neplatný požadavek na reset hesla pro e-mail: {email}")
-            return jsonify({"error": "Účet neexistuje nebo je deaktivován."}), 400
+            logger.warning(f"Non valid request for password reset for e-mail: {email}")
+            return jsonify({"error": "This account does not exist or was disabled."}), 400
 
         token = jwt.encode({
             'email': email,
@@ -161,12 +161,12 @@ def forgot_password():
         reset_url = url_for('main.profile', _external=True)
         send_password_reset_email(email, user_name, reset_url)
 
-        logger.info(f"Odeslán e-mail pro reset hesla: {email}")
+        logger.info(f"A request for password reset was sent to: {email}")
         return jsonify({"success": True})
 
     except Exception as e:
-        logger.error(f"Chyba při generování reset linku: {e}")
-        return jsonify({"error": "Chyba serveru."}), 500
+        logger.error(f"An error occured during password reset link generation: {e}")
+        return jsonify({"error": "Server fatal surprise."}), 500
     finally:
         conn.close()
 
@@ -177,20 +177,20 @@ def emergency_login(token):
         payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
         user_email = payload['email']
     except jwt.ExpiredSignatureError:
-        logger.warning("Expirace nouzového JWT tokenu – přesměrování na /login")
+        logger.warning("Expiration of emergency JWT token -> redirecting to /login")
         return redirect('/login')
     except jwt.InvalidTokenError:
-        logger.warning("Neplatný nouzový JWT token – přesměrování na /login")
+        logger.warning("Non valid emergency JWT token: redirecting to /login")
         return redirect('/login')
 
     conn = get_auth_connection()
     is_enabled = is_user_enabled(conn, user_email)
     if not is_enabled:
-        logger.warning(f"Nouzové přihlášení zablokovaného nebo neexistujícího uživatele: {user_email}")
+        logger.warning(f"Emergency login of disabled or non-existing user: {user_email}")
         conn.close()
         return redirect('/login')
 
-    logger.info(f"Nouzové přihlášení úspěšné pro uživatele: {user_email}")
+    logger.info(f"Emergency login successfull for user: {user_email}")
     conn.close()
 
     response = redirect('/profile')
@@ -199,7 +199,7 @@ def emergency_login(token):
         token,
         httponly=True,
         samesite='Lax',
-        max_age=60 * 60 * 24  # 24 hodin – volitelné
+        max_age=60 * 60 * 24  # 24 hours – customizable
     )
     return response
 
@@ -221,21 +221,21 @@ def index():
         conn = get_auth_connection()
         cur = conn.cursor()
 
-        # Uživatel
+        # User info
         user_data = get_user_name_and_last_login(conn, user_email)
         if not user_data:
             return redirect('/login')
         user_name, last_login = user_data
 
-        # Role přihlášeného uživatele
+        # Logged in user role
         cur.execute(get_user_role(), (user_email,))
         user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
 
-        # Verze PostgreSQL
+        # PostgreSQL version
         cur.execute(get_pg_version())
         pg_version = cur.fetchone()[0]
 
-        # Databáze
+        # Existing datbases
         cur.execute(get_terrain_db_sizes())
         terrain_dbs = cur.fetchall()
         db_sizes = [
@@ -244,7 +244,7 @@ def index():
         ]
 
     except Exception as e:
-        logger.error(f"Chyba při načítání údajů pro /index: {e}")
+        logger.error(f"Error fetching data for /index: {e}")
         return redirect('/login')
     finally:
         conn.close()
@@ -257,7 +257,7 @@ def index():
     return render_template(
         'index.html',
         user_name=user_name,
-        last_login=last_login.strftime("%Y-%m-%d") if last_login else "first login ever",
+        last_login=last_login.strftime("%Y-%m-%d") if last_login else "You are logged first time.",
         pg_version=pg_version,
         db_sizes=db_sizes,
         user_role=user_role,
@@ -271,25 +271,25 @@ def index():
 def profile():
     token = request.cookies.get('token')
     if not token:
-        logger.warning("Přístup na /profile bez tokenu – přesměrování na /login")
+        logger.warning("Access on /profile without token -> redirecting to /login")
         return redirect('/login')
 
     try:
         payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
         user_email = payload['email']
     except jwt.ExpiredSignatureError:
-        logger.warning("Expirace JWT tokenu – přesměrování na /login")
+        logger.warning("JWT token expiration -> redirecting to /login")
         return redirect('/login')
 
     conn = get_auth_connection()
     cur = conn.cursor()
 
-    # Zjištění role uživatele
+    # Retrieving user role
     cur.execute(get_user_role(), (user_email,))
     user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
 
     if request.method == 'POST':
-        logger.info(f"Požadavek na změnu hesla pro uživatele: {user_email}")
+        logger.info(f"Request for password change for user: {user_email}")
         data = request.get_json()
         new_password = data.get('new_password')
         confirm_password = data.get('confirm_password')
@@ -1331,13 +1331,13 @@ def upload_foto():
                                 VALUES (%s, %s)
                             """, (filename, sj))
 
-                flash('Fotografie byla úspěšně nahrána.', 'success')
+                flash('Terrain photo was uploaded successfully.', 'success')
                 return redirect(url_for('main.upload_foto'))
 
             except Exception as e:
-                flash(f'Chyba při nahrávání: {str(e)}', 'danger')
+                flash(f'Error during the upload: {str(e)}', 'danger')
 
-    # GET request – načíst data pro formulář
+    # GET request – retrieve data for form
     sj_options = []
     polygon_options = []
     author_options = []
@@ -1354,7 +1354,7 @@ def upload_foto():
             cur.execute("SELECT mail FROM gloss_personalia ORDER BY mail")
             author_options = [row[0] for row in cur.fetchall()]
 
-            # Získat posledních 10 nahraných fotek podle DATUM sestupně
+            # To get 10 last uploaded terrain foto 
             cur.execute("""
                 SELECT id_foto FROM tab_foto
                 WHERE datum IS NOT NULL
@@ -1386,5 +1386,4 @@ def serve_terr_foto(filename):
 @require_selected_db
 def serve_terr_thumb(filename):
     return send_from_directory(Config.TERR_FOTO_THUMBS_DIR, filename)
-
 
