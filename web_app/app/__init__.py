@@ -54,4 +54,3 @@ def create_app():
         return dict(user_name=user_name, user_email=user_email, last_login=last_login)
 
     return app
-
