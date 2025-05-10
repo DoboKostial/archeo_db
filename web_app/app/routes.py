@@ -295,26 +295,26 @@ def profile():
         confirm_password = data.get('confirm_password')
 
         if new_password != confirm_password or not new_password:
-            logger.warning(f"Neúspěšná změna hesla pro {user_email} – hesla se neshodují nebo jsou prázdná.")
+            logger.warning(f"The change of password for {user_email} failed - passwords are not same or empty.")
             conn.close()
-            return jsonify({'error': 'Hesla se neshodují nebo jsou prázdná.'}), 400
+            return jsonify({'error': 'Given passwords are not the same or are empty.'}), 400
 
         password_hash = generate_password_hash(new_password)
         update_user_password_hash(conn, user_email, password_hash)
 
         user_name_for_email = get_user_name_by_email(conn, user_email) or "uživatel"
 
-        logger.info(f"Heslo úspěšně změněno pro {user_email}")
+        logger.info(f"Password changed successfully for {user_email}")
         send_password_change_email(user_email, user_name_for_email)
-        logger.info(f"Potvrzovací e-mail o změně hesla odeslán uživateli {user_email}")
+        logger.info(f"Confirming email about password change was sent to {user_email}")
 
         conn.close()
-        return jsonify({'message': 'Heslo bylo úspěšně změněno a potvrzovací e-mail odeslán.'})
+        return jsonify({'message': 'Password was changed and confirming email was sent.'})
 
-    # GET request – profilová data
+    # GET request – profile data
     user_data = get_full_user_data(conn, user_email)
     if not user_data:
-        logger.error(f"Uživatel {user_email} nebyl nalezen v databázi – přesměrování na /login")
+        logger.error(f"User {user_email} was not found in database -> redirecting to /login")
         conn.close()
         return redirect('/login')
 
@@ -323,7 +323,7 @@ def profile():
 
     conn.close()
 
-    logger.info(f"Načtení profilu pro uživatele {user_email}")
+    logger.info(f"Fetching the profile of user {user_email}")
 
     return render_template(
         'profile.html',
@@ -351,15 +351,15 @@ def logout():
             update_last_login(conn, user_email)
             conn.close()
 
-        logger.info(f"User {user_email} úspěšně odhlášen")
+        logger.info(f"User {user_email} loged out successfully")
     except Exception as e:
-        logger.error(f"Chyba při odhlašování: {e}")
+        logger.error(f"Error during logout: {e}")
 
     response = make_response(redirect('/login'))
     response.set_cookie('token', '', expires=0)
     return response
 
-
+# user would have to choose terrain DB to work with - here logic
 @main.route('/select-db', methods=['POST'])
 def select_db():
     token = request.cookies.get('token')
@@ -375,9 +375,9 @@ def select_db():
     selected_db = request.form.get('selected_db')
     if selected_db:
         session['selected_db'] = selected_db
-        flash(f'Byla vybrána databáze "{selected_db}", která bude nyní Vaší pracovní.', 'success')
+        flash(f'Terrain DB "{selected_db}" was chosen ---> this will be Your working DB while logged in.', 'success')
     else:
-        flash('Nebyla vybrána žádná databáze.', 'warning')
+        flash('No terrain DB was chosen!', 'warning')
 
     return redirect('/index')
 
@@ -388,35 +388,35 @@ def select_db():
 def admin():
     token = request.cookies.get('token')
     if not token:
-        logger.warning("Přístup na /admin bez tokenu – přesměrování na /login")
+        logger.warning("Access to /admin with no token ---> redirecting to /login")
         return redirect('/login')
 
     try:
         payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
         user_email = payload['email']
     except jwt.ExpiredSignatureError:
-        logger.warning("Expirace JWT tokenu – přesměrování na /login")
+        logger.warning("JWT token expired ---> redirecting to /login")
         return redirect('/login')
 
     conn = get_auth_connection()
     cur = conn.cursor()
 
-    # kontrola role
+    # check role
     cur.execute(get_user_role(), (user_email,))
     user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
     if user_role != 'archeolog':
-        logger.warning(f"Uživatel {user_email} s rolí '{user_role}' nemá přístup na /admin – přesměrování na /index")
+        logger.warning(f"User {user_email} with role '{user_role}' is not allowed to /admin ---> redirected to /index")
         conn.close()
         return redirect('/index')
 
-    # načtení všech uživatelů
+    # fetching all users
     cur.execute("SELECT name, mail, group_role, enabled, last_login FROM app_users ORDER BY name")
     users = cur.fetchall()
 
-    # načtení seznamu terénních DB
+    # fetching all terrain DBs
     terrain_db_names = get_terrain_db_list(conn)
 
-    # načtení velikostí všech databází
+    # list the size of all terrain DBs
     cur.execute(get_terrain_db_sizes())
     all_sizes = cur.fetchall()
     terrain_dbs = [(name, int(size)) for name, size in all_sizes if name in terrain_db_names]
@@ -623,11 +623,11 @@ def create_database():
     dbname = request.form.get('dbname')
 
     if not dbname:
-        flash("Název databáze nebyl zadán.", "danger")
+        flash("No name of terrain DB was provided.", "danger")
         return redirect('/admin')
 
     if not re.match(r'^[0-9][a-zA-Z0-9_]*$', dbname):
-        flash("Název databáze musí začínat číslem a obsahovat pouze písmena, čísla nebo podtržítka.", "danger")
+        flash("The name of new terrain DB has to begin with number and contain letters, numbers and underscores only.", "danger")
         return redirect('/admin')
 
     try:
@@ -640,24 +640,24 @@ def create_database():
         )
         cur.close()
         conn.close()
-        logger.info(f"Databáze '{dbname}' byla vytvořena.")
+        logger.info(f"Terrain DB '{dbname}' was created.")
 
-        # Získat uživatele z auth_db.app_users
+        # To get users from auth_db.app_users
         auth_conn = get_auth_connection()
         with auth_conn.cursor() as auth_cur:
             auth_cur.execute("SELECT mail, name, group_role FROM app_users WHERE enabled = TRUE")
             users = auth_cur.fetchall()
 
-        # Synchronizovat s novou DB
+        # Synchronization with new terrain DB
         from app.utils import sync_single_db
         sync_single_db(dbname, users)
 
-        flash(f"Databáze '{dbname}' byla úspěšně vytvořena a synchronizována s uživateli.", "success")
+        flash(f"Terrain DB '{dbname}' was successfully created and synchronized with users.", "success")
     except psycopg2.errors.DuplicateDatabase:
-        flash(f"Databáze '{dbname}' již existuje.", "warning")
+        flash(f"Terrain DB '{dbname}' already exists!", "warning")
     except Exception as e:
-        logger.error(f"Chyba při vytváření databáze '{dbname}': {e}")
-        flash("Chyba při vytváření databáze.", "danger")
+        logger.error(f"Error while creating terrain DB '{dbname}': {e}")
+        flash("Error while creating terrain DB.", "danger")
 
     return redirect('/admin')
 
