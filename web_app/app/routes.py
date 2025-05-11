@@ -618,19 +618,29 @@ def delete_database():
     return redirect('/admin')
 
 
+from app.utils import sync_single_db, update_geometry_srid
+
 @main.route('/create-database', methods=['POST'])
 def create_database():
     dbname = request.form.get('dbname')
+    epsg = request.form.get('epsg')
 
-    if not dbname:
-        flash("No name of terrain DB was provided.", "danger")
+    if not dbname or not epsg:
+        flash("Chybí název databáze nebo EPSG kód.", "danger")
         return redirect('/admin')
 
     if not re.match(r'^[0-9][a-zA-Z0-9_]*$', dbname):
-        flash("The name of new terrain DB has to begin with number and contain letters, numbers and underscores only.", "danger")
+        flash("Název databáze musí začínat číslem a obsahovat jen písmena, číslice nebo podtržítka.", "danger")
         return redirect('/admin')
 
     try:
+        epsg_int = int(epsg)
+        allowed_epsg = [5514, 4326, 3857, 32633, 3035]
+        if epsg_int not in allowed_epsg:
+            flash("Zvolený EPSG není povolen.", "danger")
+            return redirect('/admin')
+
+        # Vytvoření DB z templaty
         conn = get_auth_connection()
         conn.autocommit = True
         cur = conn.cursor()
@@ -640,24 +650,26 @@ def create_database():
         )
         cur.close()
         conn.close()
-        logger.info(f"Terrain DB '{dbname}' was created.")
+        logger.info(f"Databáze '{dbname}' vytvořena.")
 
-        # To get users from auth_db.app_users
+        # Synchronizace uživatelů
         auth_conn = get_auth_connection()
         with auth_conn.cursor() as auth_cur:
             auth_cur.execute("SELECT mail, name, group_role FROM app_users WHERE enabled = TRUE")
             users = auth_cur.fetchall()
 
-        # Synchronization with new terrain DB
-        from app.utils import sync_single_db
         sync_single_db(dbname, users)
 
-        flash(f"Terrain DB '{dbname}' was successfully created and synchronized with users.", "success")
+        # Změna SRID v nově vytvořené DB
+        update_geometry_srid(dbname, epsg_int)
+        logger.info(f"SRID v databázi '{dbname}' změněn na {epsg_int}.")
+
+        flash(f"Databáze '{dbname}' byla vytvořena s EPSG:{epsg_int} a synchronizována s uživateli.", "success")
     except psycopg2.errors.DuplicateDatabase:
-        flash(f"Terrain DB '{dbname}' already exists!", "warning")
+        flash(f"Databáze '{dbname}' už existuje!", "warning")
     except Exception as e:
-        logger.error(f"Error while creating terrain DB '{dbname}': {e}")
-        flash("Error while creating terrain DB.", "danger")
+        logger.error(f"Chyba při vytváření databáze '{dbname}': {e}")
+        flash("Došlo k chybě při vytváření databáze.", "danger")
 
     return redirect('/admin')
 

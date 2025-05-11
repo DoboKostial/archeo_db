@@ -173,13 +173,64 @@ def float_or_none(value):
     except (TypeError, ValueError):
         return None
 
-import csv
-from flask import flash
+
+
+
+from psycopg2 import sql
+from app.database import get_terrain_connection
+import logging
+logger = logging.getLogger(__name__)
+
+def update_geometry_srid(dbname, target_srid):
+    conn = get_terrain_connection(dbname)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT f_table_schema, f_table_name, f_geometry_column, coord_dimension, srid, type
+                FROM geometry_columns
+                WHERE f_table_schema = 'public'
+            """)
+            rows = cur.fetchall()
+
+            for row in rows:
+                schema, table, column, _, current_srid, geom_type = row
+
+                if current_srid != int(target_srid):
+                    logger.info(f"Změna SRID na {target_srid} v {schema}.{table}.{column} ({geom_type})")
+
+                    try:
+                        alter_sql = sql.SQL("""
+                            ALTER TABLE {schema}.{table}
+                            ALTER COLUMN {column}
+                            TYPE geometry({geom_type}, {target_srid})
+                            USING ST_Transform({column}, {target_srid})
+                        """).format(
+                            schema=sql.Identifier(schema),
+                            table=sql.Identifier(table),
+                            column=sql.Identifier(column),
+                            geom_type=sql.SQL(geom_type),
+                            target_srid=sql.Literal(int(target_srid))
+                        )
+
+                        cur.execute(alter_sql)
+                    except Exception as inner_e:
+                        logger.error(f"❌ Chyba při změně SRID v {schema}.{table}.{column}: {inner_e}")
+                        raise inner_e
+
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Chyba při aktualizaci SRID v databázi '{dbname}': {e}")
+        raise
+    finally:
+        conn.close()
+
+        
+
+
 
 #utility for upload and control of .csv file with polygon vertices
 import csv
 import tempfile
-
 def process_polygon_upload(file, epsg_code):
     """
     Reads CSV file and prepares the list of polygons.

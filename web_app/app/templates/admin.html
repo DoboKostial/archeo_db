@@ -98,11 +98,25 @@
 
 <h4>Create new terrain database</h4>
 <form method="POST" action="/create-database" class="mb-4">
-    <div class="input-group">
-        <input type="text" name="dbname" class="form-control" placeholder="E.g.. 04_new_database" required>
-        <button type="submit" class="btn btn-primary">Vytvořit</button>
+  <div class="row g-2">
+    <div class="col-md-6">
+      <input type="text" name="dbname" class="form-control" placeholder="E.g. 004_Troy" required>
     </div>
+    <div class="col-md-4">
+      <select name="epsg" class="form-select" required>
+        <option value="5514">S-JTSK / Křovák (EPSG:5514)</option>
+        <option value="4326">WGS 84 (EPSG:4326)</option>
+        <option value="3857">Web Mercator (EPSG:3857)</option>
+        <option value="32633">UTM zone 33N (EPSG:32633)</option>
+        <option value="3035">ETRS89 / LAEA Europe (EPSG:3035)</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+  </div>
 </form>
+
 
 
 {% endblock %}
