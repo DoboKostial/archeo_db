@@ -409,9 +409,28 @@ def admin():
         conn.close()
         return redirect('/index')
 
-    # fetching all users
-    cur.execute("SELECT name, mail, group_role, enabled, last_login FROM app_users ORDER BY name")
+    # stránkování
+    try:
+        page = int(request.args.get('page', 1))
+    except ValueError:
+        page = 1
+    per_page = 5
+    offset = (page - 1) * per_page
+
+    # počet všech uživatelů
+    cur.execute("SELECT COUNT(*) FROM app_users")
+    total_users = cur.fetchone()[0]
+    total_pages = (total_users + per_page - 1) // per_page
+
+    # načti uživatele s limitem
+    cur.execute("""
+        SELECT name, mail, group_role, enabled, last_login
+        FROM app_users
+        ORDER BY name
+        LIMIT %s OFFSET %s
+    """, (per_page, offset))
     users = cur.fetchall()
+
 
     # fetching all terrain DBs
     terrain_db_names = get_terrain_db_list(conn)
@@ -423,7 +442,7 @@ def admin():
 
     conn.close()
 
-    return render_template('admin.html', users=users, terrain_dbs=terrain_dbs)
+    return render_template('admin.html', users=users, page=page, total_pages=total_pages, terrain_dbs=terrain_dbs)
 
 
 # creating new app user in administration panel
