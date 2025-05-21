@@ -12,7 +12,7 @@ PostgreSQL environment - hence relation standard.
 
 Webapp stack is written in python/Flask environment
 
-<h2How to install</h2>
+<h2>How to install</h2>
 
 python 3
 requirements.txt
