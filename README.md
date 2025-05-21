@@ -8,3 +8,12 @@ here SK - https://archeoconsult.org/good-data/good-data-internal/standard-terenn
 
 It is not a specialized database, but of general use (universal archaeological terain excavation) and created in 
 PostgreSQL environment - hence relation standard.
+
+For DEV/TEST
+1. git clone / git pull
+2. customize config.py for DB credentials, log/file paths
+
+<h2>PROD environment philosophy:</h2>h2>
+1. Flask ---> Gunicorn
+2. Gunicorn configured as systemd daemon/service
+3. Nginx like a reverse proxy
