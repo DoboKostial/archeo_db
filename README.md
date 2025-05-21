@@ -1,3 +1,4 @@
+<h2>The idea</h2>
 The 'archeo_db' project is a database layer modeling for a field database of facts of destructive 
 archaeological research (excavation research). It is conceptually based on a general analysis of 
 research and definition of research entities:
@@ -9,11 +10,19 @@ here SK - https://archeoconsult.org/good-data/good-data-internal/standard-terenn
 It is not a specialized database, but of general use (universal archaeological terain excavation) and created in 
 PostgreSQL environment - hence relation standard.
 
-<h2>For DEV/TEST</h2>
+Webapp stack is written in python/Flask environment
+
+<h2How to install</h2>
+
+python 3
+requirements.txt
+
+<h3>For DEV/TEST</h3>
+
 1. git clone / git pull
 2. customize config.py for DB credentials, log/file paths
 
-<h2>PROD environment philosophy:</h2>
+<h3>PROD environment philosophy:</h3>
 
 1. Flask ---> Gunicorn
 2. Gunicorn configured as systemd daemon/service
