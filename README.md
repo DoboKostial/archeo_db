@@ -41,12 +41,14 @@ requirements.txt
 ###
 
 [Unit]
+
 Description=Gunicorn instance to serve archeodb
 
 After=network.target
 
 
 [Service]
+
 User=your_user
 
 Group=www-data
@@ -60,6 +62,7 @@ ExecStart=/home/your_user/web_app/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 run:a
 
 
 [Install]
+
 WantedBy=multi-user.target
 
 
