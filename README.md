@@ -59,6 +59,10 @@ Environment="PATH=/home/your_user/web_app/venv/bin"
 
 ExecStart=/home/your_user/web_app/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 run:app
 
+Restart=on-failure
+
+TimeoutStartSec=30
+
 
 
 [Install]
