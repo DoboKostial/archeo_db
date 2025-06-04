@@ -33,7 +33,8 @@ requirements.txt
 7. config.py is modified for your needs
 
 <h3>how to prepare Gunicorn as a systemd daemon</h3>
-vim /etc/systemd/system/archeodb.service
+
+<code>vim /etc/systemd/system/archeodb.service</code>
 
 ###
 #customize Your paths
@@ -56,4 +57,4 @@ WantedBy=multi-user.target
 
 
 <code>sudo systemctl enable archeodb</code>
-sudo systemctl start archeodb
+<code>sudo systemctl start archeodb</code>
