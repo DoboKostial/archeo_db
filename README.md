@@ -31,3 +31,23 @@ requirements.txt
 5. virtual environment is ready (python3 -m venv venv)
 6. runs locally (flask run or python run.py)
 7. config.py is modified for your needs
+
+<h3>how to prepare Gunicorn as a systemd daemon</h3>
+vim /etc/systemd/system/archeodb.service
+###
+#customize Your paths
+###
+
+[Unit]
+Description=Gunicorn instance to serve archeodb
+After=network.target
+
+[Service]
+User=your_user
+Group=www-data
+WorkingDirectory=/home/your_user/web_app
+Environment="PATH=/home/your_user/web_app/venv/bin"
+ExecStart=/home/your_user/web_app/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 run:app
+
+[Install]
+WantedBy=multi-user.target
