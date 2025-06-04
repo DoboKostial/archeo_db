@@ -28,3 +28,6 @@ requirements.txt
 2. Gunicorn configured as systemd daemon/service
 3. Nginx like a reverse proxy
 4. pip install -r requirements.txt
+5. virtual environment is ready (python3 -m venv venv)
+6. runs locally (flask run or python run.py)
+7. config.py is modified for your needs
