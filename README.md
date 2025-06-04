@@ -34,6 +34,7 @@ requirements.txt
 
 <h3>how to prepare Gunicorn as a systemd daemon</h3>
 vim /etc/systemd/system/archeodb.service
+
 ###
 #customize Your paths
 ###
@@ -51,3 +52,8 @@ ExecStart=/home/your_user/web_app/venv/bin/gunicorn -w 4 -b 127.0.0.1:8000 run:a
 
 [Install]
 WantedBy=multi-user.target
+
+
+
+<code>sudo systemctl enable archeodb</code>
+sudo systemctl start archeodb
