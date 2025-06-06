@@ -34,7 +34,3 @@ requirements.txt
 
 ... or just simly use deploy script deploy_webapp_archeodb.sh
 
-
-
-<code>sudo systemctl enable archeodb</code>
-<code>sudo systemctl start archeodb</code>
