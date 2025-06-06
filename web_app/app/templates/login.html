@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 
-{% block title %}Přihlášení{% endblock %}
+{% block title %}Login{% endblock %}
 
 {% block content %}
 <div class="container mt-5" style="max-width: 400px;">
-    <h2 class="mb-4 text-center">Přihlášení</h2>
+    <h2 class="mb-4 text-center">Login</h2>
 
     <form id="loginForm">
         <div class="mb-3">
@@ -14,9 +14,9 @@
             <input type="password" id="password" class="form-control" placeholder="Heslo" required>
         </div>
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <a href="/forgot-password" class="text-muted small">Zapomněli jste heslo?</a>
+            <a href="/forgot-password" class="text-muted small">Forgotten password?</a>
         </div>
-        <button type="submit" class="btn btn-primary w-100">Přihlásit</button>
+        <button type="submit" class="btn btn-primary w-100">login</button>
     </form>
 
     <p id="errorMessage" class="text-danger mt-3 text-center"></p>
@@ -30,7 +30,7 @@
         const password = document.getElementById('password').value.trim();
 
         if (!email || !password) {
-            document.getElementById('errorMessage').innerText = "Vyplňte všechny údaje.";
+            document.getElementById('errorMessage').innerText = "Please fill all info.";
             return;
         }
 
@@ -44,17 +44,17 @@
             const data = await response.json();
 
             if (response.ok && data.success) {
-                window.location.href = '/index';  // token je už v cookie
+                window.location.href = '/index';  // token is already in cookie
             } else {
                 document.getElementById('errorMessage').innerText = data.error;
             }
         } catch (error) {
-            console.error("Chyba při přihlašování:", error);
-            document.getElementById('errorMessage').innerText = "Chyba serveru.";
+            console.error("Error while login:", error);
+            document.getElementById('errorMessage').innerText = "Server fault.";
         }
     });
 
-    // Zajistíme, že Enter na celé stránce pošle formulář, pokud je aktivní
+    // Ensure that Enter will send a form, if active
     document.addEventListener('keydown', function(event) {
         if (event.key === 'Enter') {
             const form = document.getElementById('loginForm');

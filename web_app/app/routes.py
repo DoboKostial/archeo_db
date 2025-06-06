@@ -382,8 +382,7 @@ def select_db():
     return redirect('/index')
 
 
-#administrative endpoint enabled only if group_role
-# 'archeolog' is logged in
+#administrative endpoint enabled only if group_role 'archeolog' is logged in
 @main.route('/admin')
 def admin():
     token = request.cookies.get('token')
@@ -409,7 +408,7 @@ def admin():
         conn.close()
         return redirect('/index')
 
-    # stránkování
+    # pagination
     try:
         page = int(request.args.get('page', 1))
     except ValueError:
@@ -417,12 +416,12 @@ def admin():
     per_page = 5
     offset = (page - 1) * per_page
 
-    # počet všech uživatelů
+    # the number of all users
     cur.execute("SELECT COUNT(*) FROM app_users")
     total_users = cur.fetchone()[0]
     total_pages = (total_users + per_page - 1) // per_page
 
-    # načti uživatele s limitem
+    # fetch users with limit (offset)
     cur.execute("""
         SELECT name, mail, group_role, enabled, last_login
         FROM app_users
@@ -458,7 +457,7 @@ def add_user():
     except jwt.ExpiredSignatureError:
         return redirect('/login')
 
-    # ověření oprávnění
+    # verify the role rights
     conn = get_auth_connection()
     cur = conn.cursor()
     cur.execute(get_user_role(), (current_user_email,))
@@ -467,48 +466,48 @@ def add_user():
         conn.close()
         return redirect('/index')
 
-    # načtení dat z formuláře
+    # reading data from form
     name = request.form.get('name')
     mail = request.form.get('mail')
     group_role = request.form.get('group_role')
 
     if not name or not mail or not group_role:
         conn.close()
-        flash("Neúplná data ve formuláři.", "danger")
+        flash("Missing data in the form.", "danger")
         return redirect('/admin')
 
-    # kontrola duplicity
+    # duplicity check
     cur.execute("SELECT 1 FROM app_users WHERE mail = %s", (mail,))
     if cur.fetchone():
         conn.close()
-        flash(f"Uživatel s e-mailem {mail} již existuje.", "warning")
+        flash(f"User with mail {mail} already exists.", "warning")
         return redirect('/admin')
 
-    # generování hesla
+    # password generator
     raw_password = utils.generate_random_password()
     password_hash = generate_password_hash(raw_password)
 
-    # vložení do DB
+    # inserting to DB
     cur.execute("""
         INSERT INTO app_users (name, mail, group_role, password_hash, enabled)
         VALUES (%s, %s, %s, %s, TRUE)
     """, (name, mail, group_role, password_hash))
     conn.commit()
 
-    # odeslání e-mailu
+    # sending email
     try:
         utils.send_new_account_email(mail, name, raw_password)
     except Exception as e:
-        logger.error(f"Chyba při odesílání e-mailu novému uživateli {mail}: {str(e)}")
+        logger.error(f"There is an error while sending email to new user {mail}: {str(e)}")
 
-    logger.info(f"Nový uživatel {mail} přidán archeologem {current_user_email}.")
+    logger.info(f"New user {mail} was created by archeolog {current_user_email}.")
     conn.close()
 
-    # >>> SYNC JEN NOVÉHO UŽIVATELE <<<
+    # >>> SYNCYNG ONLY NEW USER <<<
     success = utils.sync_single_user_to_all_terrain_dbs(mail, name, group_role)
-    flash(f"Uživatel {mail} was caeted and synchronized into terrain databases.", "success")
+    flash(f"User {mail} was created and synchronized into terrain databases.", "success")
     if not success:
-        flash("Uživatel byl vytvořen, ale synchronizace do terénních DB selhala.", "warning")
+        flash("User was created but sync to terrain DBs failed.", "warning")
 
     return redirect('/admin')
 
@@ -517,19 +516,19 @@ def add_user():
 def disable_user():
     token = request.cookies.get('token')
     if not token:
-        logger.warning("Přístup na /disable-user bez tokenu – přesměrování na /login")
+        logger.warning("An access to/disable-user with no token ---> redirecting to /login")
         return redirect('/login')
 
     try:
         payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
         current_user = payload['email']
     except jwt.ExpiredSignatureError:
-        logger.warning("Expirace JWT tokenu při pokusu o deaktivaci uživatele")
+        logger.warning("JWT token expiration during the action of user deactivation.")
         return redirect('/login')
 
     user_to_disable = request.form.get('mail')
     if not user_to_disable:
-        flash("Chybí email uživatele pro deaktivaci", "danger")
+        flash("Missing email of user to be deactivated", "danger")
         return redirect('/admin')
 
     conn = get_auth_connection()
@@ -537,11 +536,11 @@ def disable_user():
     try:
         cur.execute("UPDATE app_users SET enabled = false WHERE mail = %s", (user_to_disable,))
         conn.commit()
-        logger.info(f"Uživatel {current_user} deaktivoval uživatele {user_to_disable}")
-        flash(f"Uživatel {user_to_disable} byl deaktivován.", "success")
+        logger.info(f"User {current_user} deactivated user {user_to_disable}")
+        flash(f"User {user_to_disable} was disabled.", "success")
     except Exception as e:
-        logger.error(f"Chyba při deaktivaci uživatele {user_to_disable}: {e}")
-        flash("Chyba při deaktivaci uživatele", "danger")
+        logger.error(f"An error while deactivation of user {user_to_disable}: {e}")
+        flash("Error while disabling user", "danger")
     finally:
         conn.close()
 
@@ -563,18 +562,18 @@ def enable_user():
     conn = get_auth_connection()
     cur = conn.cursor()
 
-    # Zkontroluj, zda je aktuální uživatel archeolog
+    # Check if currrent user is archeolog
     cur.execute(get_user_role(), (user_email,))
     role = cur.fetchone()[0]
     if role != 'archeolog':
         conn.close()
-        flash("Nemáte oprávnění aktivovat uživatele.", "danger")
+        flash("You have no rights to enable user. Must be an archeolog.", "danger")
         return redirect('/admin')
 
     mail_to_enable = request.form.get('mail')
     if not mail_to_enable:
         conn.close()
-        flash("Chyba: nebyl vybrán žádný uživatel.", "warning")
+        flash("Error: no user was selected.", "warning")
         return redirect('/admin')
 
     cur.execute("""
@@ -584,9 +583,9 @@ def enable_user():
     """, (mail_to_enable,))
     conn.commit()
 
-    logger.info(f"Uživatel {user_email} aktivoval uživatele {mail_to_enable}")
+    logger.info(f"User {user_email} activated user {mail_to_enable}")
     conn.close()
-    flash(f"Uživatel {mail_to_enable} byl aktivován.", "success")
+    flash(f"User {mail_to_enable} was enabled.", "success")
     return redirect('/admin')
 
 
@@ -594,16 +593,16 @@ def enable_user():
 def backup_database():
     dbname = request.form.get('dbname')
     if not dbname:
-        flash("Název databáze nebyl zadán", "danger")
+        flash("The name of DB was not provided", "danger")
         return redirect('/admin')
 
     try:
         backup_path = create_database_backup(dbname)
-        logger.info(f"Záloha databáze '{dbname}' vytvořena: {backup_path}")
-        flash(f"Záloha databáze '{dbname}' byla úspěšně vytvořena.", "success")
+        logger.info(f"Backup of DB '{dbname}' created at: {backup_path}")
+        flash(f"DB backup of '{dbname}' was successfuly created.", "success")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Chyba při záloze databáze '{dbname}': {e}")
-        flash(f"Chyba při záloze databáze '{dbname}'.", "danger")
+        logger.error(f"Error while backing up the DB '{dbname}': {e}")
+        flash(f"Error while backing up the DB '{dbname}'.", "danger")
 
     return redirect('/admin')
 
@@ -612,7 +611,7 @@ def backup_database():
 def delete_database():
     dbname = request.form.get('dbname')
     if not dbname:
-        flash("Název databáze nebyl zadán.", "danger")
+        flash("The name of DB was not provided.", "danger")
         return redirect('/admin')
 
     try:
@@ -622,17 +621,17 @@ def delete_database():
 
         cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(dbname)))
 
-        logger.warning(f"Databáze '{dbname}' byla smazána.")
-        flash(f"Databáze '{dbname}' byla úspěšně smazána.", "warning")
+        logger.warning(f"Database '{dbname}' was deleted.")
+        flash(f"Database '{dbname}' was succesfully deleted.", "warning")
 
         cur.close()
         conn.close()
     except psycopg2.errors.ObjectInUse:
-        logger.error(f"Nelze smazat databázi '{dbname}' – je právě používána.")
-        flash(f"Databázi '{dbname}' nelze smazat, protože je právě používána.", "danger")
+        logger.error(f"Can not delete DB '{dbname}' - currently in use.")
+        flash(f"Database '{dbname}' can not be deleted - is currently in use.", "danger")
     except Exception as e:
-        logger.error(f"Chyba při mazání databáze '{dbname}': {e}")
-        flash(f"Nastala chyba při mazání databáze '{dbname}'. Zkontrolujte logy.", "danger")
+        logger.error(f"An error during deletion of DB '{dbname}': {e}")
+        flash(f"An error during deletion of DB '{dbname}'. Check logs.", "danger")
 
     return redirect('/admin')
 
@@ -645,21 +644,21 @@ def create_database():
     epsg = request.form.get('epsg')
 
     if not dbname or not epsg:
-        flash("Chybí název databáze nebo EPSG kód.", "danger")
+        flash("The name of database or epsg code is missing.", "danger")
         return redirect('/admin')
 
     if not re.match(r'^[0-9][a-zA-Z0-9_]*$', dbname):
-        flash("Název databáze musí začínat číslem a obsahovat jen písmena, číslice nebo podtržítka.", "danger")
+        flash("The name of DB has to start with number and could contain only letters, numbers and underscores.", "danger")
         return redirect('/admin')
 
     try:
         epsg_int = int(epsg)
         allowed_epsg = [5514, 4326, 3857, 32633, 3035]
         if epsg_int not in allowed_epsg:
-            flash("Zvolený EPSG není povolen.", "danger")
+            flash("Chosen EPSG is not allowed.", "danger")
             return redirect('/admin')
 
-        # Vytvoření DB z templaty
+        # Creating DB from template
         conn = get_auth_connection()
         conn.autocommit = True
         cur = conn.cursor()
@@ -669,9 +668,9 @@ def create_database():
         )
         cur.close()
         conn.close()
-        logger.info(f"Databáze '{dbname}' vytvořena.")
+        logger.info(f"Database '{dbname}' was created.")
 
-        # Synchronizace uživatelů
+        # Users synchronisation to terrain databases
         auth_conn = get_auth_connection()
         with auth_conn.cursor() as auth_cur:
             auth_cur.execute("SELECT mail, name, group_role FROM app_users WHERE enabled = TRUE")
@@ -679,16 +678,16 @@ def create_database():
 
         sync_single_db(dbname, users)
 
-        # Změna SRID v nově vytvořené DB
+        # The change of SRID in newly created database
         update_geometry_srid(dbname, epsg_int)
-        logger.info(f"SRID v databázi '{dbname}' změněn na {epsg_int}.")
+        logger.info(f"SRID in DB '{dbname}' changed to {epsg_int}.")
 
-        flash(f"Databáze '{dbname}' byla vytvořena s EPSG:{epsg_int} a synchronizována s uživateli.", "success")
+        flash(f"Database '{dbname}' was created with EPSG:{epsg_int} and synchronized with users.", "success")
     except psycopg2.errors.DuplicateDatabase:
-        flash(f"Databáze '{dbname}' už existuje!", "warning")
+        flash(f"Database '{dbname}' already exists!", "warning")
     except Exception as e:
-        logger.error(f"Chyba při vytváření databáze '{dbname}': {e}")
-        flash("Došlo k chybě při vytváření databáze.", "danger")
+        logger.error(f"Error during creating DB '{dbname}': {e}")
+        flash("Error during creating DB.", "danger")
 
     return redirect('/admin')
 
@@ -712,11 +711,11 @@ def add_sj():
 
     form_data = {}
 
-    # Přehled o tom, co již bylo zapsáno – vždy, i při GET
+    # Overview what was written to DB - always, GET as well
     cur.execute(count_sj_total())
     sj_count_total = cur.fetchone()[0]
 
-    # Počet podle typu
+    # The number of SUs by type
     cur.execute(*count_sj_by_type('deposit'))
     sj_count_deposit = cur.fetchone()[0]
 
@@ -731,7 +730,7 @@ def add_sj():
             id_sj = int(request.form.get('id_sj'))
             cur.execute("SELECT 1 FROM tab_sj WHERE id_sj = %s;", (id_sj,))
             if cur.fetchone():
-                flash(f"ID stratigrafické jednotky #{id_sj} už existuje. Zadejte jiné ID.", "warning")
+                flash(f"ID of strat. unit #{id_sj} already exists. Provide another ID.", "warning")
                 form_data = request.form.to_dict(flat=True)
                 return render_template('add_sj.html', suggested_id=suggested_id, authors=authors, selected_db=selected_db, form_data=form_data,
                                        sj_count_total=sj_count_total,
@@ -747,13 +746,13 @@ def add_sj():
             docu_plan = 'docu_plan' in request.form
             docu_vertical = 'docu_vertical' in request.form
 
-            # Zápis do tab_sj
+            # Insert to tab_sj (SUs)
             cur.execute("""
                 INSERT INTO tab_sj (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical))
 
-            # Zápis do konkrétní typové tabulky
+            # Insert into tables of particular SU type
             if sj_typ == 'deposit':
                 cur.execute("""
                     INSERT INTO tab_sj_deposit (id_deposit, deposit_typ, color, boundary_visibility, "structure", compactness, deposit_removed)
@@ -795,7 +794,7 @@ def add_sj():
                     float_or_none(request.form.get('height_m'))
                 ))
             else:
-                flash("Neplatný typ stratigrafické jednotky.", "danger")
+                flash("Nonvalid type of strat. unit.", "danger")
                 form_data = request.form.to_dict(flat=True)
                 return render_template('add_sj.html', suggested_id=suggested_id, authors=authors, selected_db=selected_db, form_data=form_data,
                                        sj_count_total=sj_count_total,
@@ -803,7 +802,7 @@ def add_sj():
                                        sj_count_negativ=sj_count_negative,
                                        sj_count_structure=sj_count_structure)
 
-            # Stratigrafické vztahy – nová verze s více vstupy
+            # Stratigraphic relations
             relation_inputs = {
                 '>': [request.form.get('above_1'), request.form.get('above_2')],
                 '<': [request.form.get('below_1'), request.form.get('below_2')],
@@ -831,11 +830,11 @@ def add_sj():
                                     VALUES (%s, %s, %s)
                                 """, (id_sj, '=', related_sj))  # id_sj = related_sj
                         except ValueError:
-                            flash(f"Neplatné číslo SJ '{sj_str}' pro vztah '{relation}' – záznam nebyl uložen.", "warning")
+                            flash(f"Nonvalid ID of strat. unit '{sj_str}' for relation '{relation}' - record not saved.", "warning")
 
 
         except Exception as e:
-            flash(f"Chyba při ukládání SJ: {e}", "danger")
+            flash(f"Error while commiting SU: {e}", "danger")
             conn.rollback()
             form_data = request.form.to_dict(flat=True)
         else:
