@@ -7,17 +7,16 @@ from config import Config
 
 
 def setup_logging():
-    os.makedirs(Config.LOG_DIR, exist_ok=True)
-
+    log_path = Config.APP_LOG
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(Config.MAIN_LOG_PATH),
+            logging.FileHandler(log_path),
             logging.StreamHandler()
         ]
     )
-
 
 def create_app():
     setup_logging()
