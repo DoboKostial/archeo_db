@@ -10,7 +10,7 @@ DOMAIN="FQDN of Your server"
 
 cd $APP_DIR
 
-# ==== 1. Vytvoř venv, pokud neexistuje ====
+# ==== 1. Create venv, if not exists ====
 if [ ! -d "$VENV" ]; then
     python3 -m venv venv
     echo "New venv created."
