@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# ==== VARS (customize!) ====
+# ==== VARS ====
 USER="dobo"
 APP_DIR="/var/www/archeodb_web_app"
 VENV="$APP_DIR/venv"
 SERVICE="/etc/systemd/system/archeodb.service"
 NGINX_CONF="/etc/nginx/sites-available/archeodb"
-DOMAIN="FQDN of Your server"
+DOMAIN="example.yourdomain.cz"
 
 cd $APP_DIR
 
@@ -26,6 +26,7 @@ if [ -f requirements.txt ]; then
     echo "Requirements installed."
 else
     echo "ERROR: requirements.txt not found!"
+    exit 1
 fi
 deactivate
 
@@ -94,4 +95,3 @@ echo "- Gunicorn status: sudo systemctl status archeodb"
 echo "- Nginx status:    sudo systemctl status nginx"
 echo "- Web:           https://$DOMAIN/"
 echo "=================================="
-

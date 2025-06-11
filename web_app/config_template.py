@@ -1,4 +1,4 @@
-#this is tempalte config. Please edit 'XXX' values according Your needs
+# This is a tempialte config. Please edit 'XXX' values for your deployment.
 
 import os
 
@@ -16,28 +16,24 @@ class Config:
     TERRAIN_DB_HOST = "localhost"
     TERRAIN_DB_PORT = 5432
 
-
-    # Secret key pro JWT
+    # Secret key for JWT
     SECRET_KEY = "XXX"
 
-    # log paths
-    APP_LOG = "XXX"
-        
-
-    # administrator of app
+    # Administrator contact
     ADMIN_NAME = 'Ďobo'
     ADMIN_EMAIL = "dobo@dobo.sk"
-    
 
-    #where are DB dumps stored? define backup abspath
-    BACKUP_DIR = "XXX"
+    # === PATHS (define absolute paths for server!) ===
 
-    #Images
-    HARRISMATRIX_IMGS = "XXX"
+    # Single log file for whole app
+    APP_LOG = "XXX"  # e.g. "/var/www/archeodb_web_app/log/app_archeodb.log"
 
-    #General folder for temporary uploading
-    UPLOAD_FOLDER = "XXX"
+    # Directory for DB dumps/backups
+    BACKUP_DIR = "XXX"  # e.g. "/var/backups/archeodb/"
 
-    # folders for graphic documentation
-    TERR_FOTO_DIR = "XXX"
-    TERR_FOTO_THUMBS_DIR = os.path.join(TERR_FOTO_DIR, "thumbs")
+    # Directory for file uploads
+    UPLOAD_FOLDER = "XXX"  # e.g. "/var/www/archeodb_web_app/uploads/"
+
+    # General data directory (for graphics, binaries, ...), e.g. images, PDF
+    DATA_DIR = "XXX"  # e.g. "/var/www/archeodb_web_app/data/"
+
