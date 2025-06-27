@@ -261,7 +261,8 @@ def index():
         pg_version=pg_version,
         db_sizes=db_sizes,
         user_role=user_role,
-        db_selected_message=db_selected_message
+        db_selected_message=db_selected_message,
+        app_version=Config.APP_VERSION
     )
 
 

@@ -7,7 +7,7 @@
           <li class="nav-item"><a class="nav-link" href="/index">Home</a></li>
           <li class="nav-item"><a class="nav-link" href="/profile">My profile</a></li>
           {% if user_role == 'archeolog' %}
-          <li class="nav-item"><a class="nav-link text-warning" href="/admin">Administration</a></li>
+          <li class="nav-item"><a class="nav-link text-warning" href="/admin">Admin</a></li>
           {% endif %}
           <li class="nav-item"><a class="nav-link text-danger" href="/add-sj">TE: ST. UNITS</a></li>
           <li class="nav-item"><a class="nav-link text-danger" href="/objects">TE: OBJECTS</a></li>
@@ -16,9 +16,9 @@
           <li class="nav-item"><a class="nav-link text-danger" href="/upload-foto">DE: TERRAIN PHOTOS</a></li>
         </ul>
         <span class="navbar-text text-light me-3">
-          Přihlášen jako: {{ user_name }} ({{ user_email }})
+          Logged: {{ user_name }} ({{ user_email }})
         </span>
-        <a href="/logout" class="btn btn-outline-light btn-sm">Odhlásit se</a>
+        <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
       </div>
     </div>
   </nav>
@@ -31,7 +31,7 @@
                 window.location.href = '/login';
             })
             .catch(error => {
-                console.error("Chyba při odhlašování:", error);
+                console.error("Error while logout:", error);
                 window.location.href = '/login';
             });
     }

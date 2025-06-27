@@ -1,52 +1,52 @@
 {% extends 'base.html' %}
-{% block title %}Nová stratigrafická jednotka{% endblock %}
+{% block title %}New stratigraphic unit{% endblock %}
 
 
 {% block content %}
 <div class="alert alert-info" role="alert">
-    Pracujete nad databází <strong>{{ selected_db }}</strong>. Další volné SJ je <strong>{{ suggested_id }}</strong>.
+    You are working on DB <strong>{{ selected_db }}</strong>. Next free SU ID is <strong>{{ suggested_id }}</strong>.
 </div>
 <div class="container mt-4">
-    <h3>New startigraphis unit</h3>
+    <h3>New startigraphic unit</h3>
     <form method="POST">
         <div class="container">
             <div class="row mb-4">
-                <!-- A. Základní informace -->
+                <!-- A. SU basix info -->
                 <div class="col-md-6">
                     <fieldset class="border p-3 bg-light">
-                        <legend class="w-auto px-2">A. Základní informace</legend>
+                        <legend class="w-auto px-2">A. Basic description</legend>
     
                         <div class="mb-3">
                             <label for="id_sj" class="form-label">ID SJ</label>
                             <input type="number" class="form-control" id="id_sj" name="id_sj" value="{{ suggested_id }}" required>
                         </div>
                         <div class="mb-3">
-                            <label for="sj_typ" class="form-label">Typ SJ</label>
+                            <label for="sj_typ" class="form-label">SU type</label>
                             <select class="form-select" id="sj_typ" name="sj_typ" required onchange="toggleFields()">
-                                <option value="">-- vyberte --</option>
+                                <option value="">-- choose --</option>
                                 <option value="deposit">Deposit</option>
                                 <option value="negativ">Negativ</option>
                                 <option value="structure">Structure</option>
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="description" class="form-label">Popis</label>
+                            <label for="description" class="form-label">Description</label>
                             <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="interpretation" class="form-label">Interpretace</label>
+                            <label for="interpretation" class="form-label">Interpretation</label>
                             <textarea class="form-control" id="interpretation" name="interpretation" rows="3"></textarea>
                         </div>
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="docu_plan" name="docu_plan">
-                            <label class="form-check-label" for="docu_plan">Dokumentace – plán</label>
+                            <label class="form-check-label" for="docu_plan">Documentation – plan</label>
                         </div>
                         <div class="form-check mb-3">
                             <input type="checkbox" class="form-check-input" id="docu_vertical" name="docu_vertical">
-                            <label class="form-check-label" for="docu_vertical">Dokumentace – řez</label>
+                            <label class="form-check-label" for="docu_vertical">Dokumentation – cut</label>
                         </div>
                         <div class="mb-3">
-                            <label for="author" class="form-label">Autor</label>
+                            <label for="author" class="form-label">Author</label>
                             <select class="form-select" id="author" name="author" required>
                                 {% for email in authors %}
                                     <option value="{{ email }}">{{ email }}</option>
@@ -56,23 +56,23 @@
                     </fieldset>
                 </div>
     
-                <!-- B. Vlastnosti dle typu -->
+                <!-- B. Attributes depending on SU type -->
                 <div class="col-md-6">
                     <fieldset class="border p-3 bg-warning-subtle">
-                        <legend class="w-auto px-2">B. Vlastnosti dle typu</legend>
+                        <legend class="w-auto px-2">B. Attributes depending on SU type</legend>
     
                         <!-- DEPOSIT -->
                         <div id="deposit_fields" style="display: none;">
                             <div class="mb-3">
-                                <label class="form-label">Typ depositu</label>
+                                <label class="form-label">Deposit type</label>
                                 <input type="text" class="form-control" name="deposit_typ">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Barva</label>
+                                <label class="form-label">Color</label>
                                 <input type="text" class="form-control" name="color">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Viditelnost hranic</label>
+                                <label class="form-label">Boundary visibility</label>
                                 <input type="text" class="form-control" name="boundary_visibility">
                             </div>
                             <div class="mb-3">

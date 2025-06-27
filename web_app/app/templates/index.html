@@ -3,17 +3,17 @@
 {% block content %}
 <div class="container mt-4">
 
-    <h2>Vítejte, {{ user_name }}!</h2>
-    <p>Poslední přihlášení: {{ last_login }}</p>
+    <h4>Welcome, {{ user_name }}!</h4>
+    <p>Last login: {{ last_login }}</p>
 
     <hr>
 
-    <h4>PostgreSQL verze:</h4>
+    <h4>PostgreSQL version and App version:</h4>
     <p>{{ pg_version }}</p>
-
+    <p>Application version: {{ app_version }} (see <a href="https://github.com/DoboKostial/archeo_db">Github</a> for actual versions)</p>
     <hr>
 
-    <h4>Velikosti terénních databází</h4>
+    <h4>Sizes of terrain databases</h4>
     <div class="mb-4" style="max-height: 400px; overflow-y: auto;">
         <canvas id="dbSizeChart"></canvas>
     </div>
@@ -26,8 +26,8 @@
     {% endif %}
 
     <div class="card">
-        <div class="card-body">
-            <h5 class="card-title">Výběr pracovní databáze</h5>
+        <div class="card-body" style="background-color: #ffe5e5;">
+            <h4 class="card-title">Choose the DB to work upon:</h4>
             <form action="/select-db" method="POST" class="row g-3 align-items-center">
                 <div class="col-auto">
                     <label for="selected_db" class="col-form-label">Databáze:</label>
@@ -40,7 +40,7 @@
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">Použít</button>
+                    <button type="submit" class="btn btn-primary">Choose</button>
                 </div>
             </form>
         </div>

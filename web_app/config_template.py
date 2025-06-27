@@ -3,6 +3,9 @@
 import os
 
 class Config:
+
+    APP_VERSION = "1.0.0"
+
     # Auth DB
     AUTH_DB_NAME = "auth_db"
     AUTH_DB_USER = "app_terrain_db"
