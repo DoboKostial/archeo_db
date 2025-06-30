@@ -654,7 +654,7 @@ def create_database():
 
     try:
         epsg_int = int(epsg)
-        allowed_epsg = [5514, 4326, 3857, 32633, 3035]
+        allowed_epsg = [5514, 5515, 4326, 32633, 3035, 32643]
         if epsg_int not in allowed_epsg:
             flash("Chosen EPSG is not allowed.", "danger")
             return redirect('/admin')
@@ -682,6 +682,15 @@ def create_database():
         # The change of SRID in newly created database
         update_geometry_srid(dbname, epsg_int)
         logger.info(f"SRID in DB '{dbname}' changed to {epsg_int}.")
+        
+        # Folder structure for content data
+        db_dir = os.path.join(DATA_DIR, dbname)
+        subfolders = ['photos', 'drawings', 'sketches', 'harrismatrix']
+        os.makedirs(db_dir, exist_ok=True)
+        for folder in subfolders:
+            os.makedirs(os.path.join(db_dir, folder), exist_ok=True)
+        logger.info(f"File structure created for DB '{dbname}' at {db_dir}")
+
 
         flash(f"Database '{dbname}' was created with EPSG:{epsg_int} and synchronized with users.", "success")
     except psycopg2.errors.DuplicateDatabase:
