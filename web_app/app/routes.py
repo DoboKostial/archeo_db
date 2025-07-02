@@ -682,14 +682,20 @@ def create_database():
         # The change of SRID in newly created database
         update_geometry_srid(dbname, epsg_int)
         logger.info(f"SRID in DB '{dbname}' changed to {epsg_int}.")
-        
-        # Folder structure for content data
-        db_dir = os.path.join(DATA_DIR, dbname)
+
+
+        # 4. Folderstructure for content data + thumbs
+        db_dir = os.path.join(Config.DATA_DIR, dbname)
         subfolders = ['photos', 'drawings', 'sketches', 'harrismatrix']
         os.makedirs(db_dir, exist_ok=True)
+
         for folder in subfolders:
-            os.makedirs(os.path.join(db_dir, folder), exist_ok=True)
-        logger.info(f"File structure created for DB '{dbname}' at {db_dir}")
+            folder_path = os.path.join(db_dir, folder)
+            thumbs_path = os.path.join(folder_path, 'thumbs')
+            os.makedirs(folder_path, exist_ok=True)
+            os.makedirs(thumbs_path, exist_ok=True)
+
+        logger.info(f"File and thumbs structure created for DB '{dbname}' at {db_dir}")
 
 
         flash(f"Database '{dbname}' was created with EPSG:{epsg_int} and synchronized with users.", "success")
