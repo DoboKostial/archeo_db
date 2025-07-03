@@ -40,7 +40,7 @@ def create_database_backup(dbname):
     # Dump DB
     subprocess.run(
         [
-            'pg_dump',
+            Config.PGDUMP_PATH,
             '-h', Config.AUTH_DB_HOST,
             '-U', Config.AUTH_DB_USER,
             '-d', dbname,
