@@ -1,6 +1,7 @@
 from config import Config
 from flask import Blueprint, render_template, jsonify, request, redirect, make_response, session, url_for, flash, get_flashed_messages
 import re
+from flask import send_file
 import os
 import shutil
 from functools import wraps
@@ -599,12 +600,29 @@ def backup_database():
         return redirect('/admin')
 
     try:
-        backup_path = create_database_backup(dbname)
-        logger.info(f"Backup of DB '{dbname}' created at: {backup_path}")
-        flash(f"DB backup of '{dbname}' was successfuly created.", "success")
+        gz_dump_path, gz_files_path = create_database_backup(dbname)
+        logger.info(f"Backup of DB '{dbname}' created at: {gz_dump_path}, {gz_files_path}")
+
+        # Option 1: zabalit oboje do jednoho ZIP a poslat
+        from zipfile import ZipFile
+
+        zip_path = gz_dump_path.replace('.backup.gz', '_full_backup.zip')
+        with ZipFile(zip_path, 'w') as zipf:
+            zipf.write(gz_dump_path, arcname=os.path.basename(gz_dump_path))
+            zipf.write(gz_files_path, arcname=os.path.basename(gz_files_path))
+
+        return send_file(
+            zip_path,
+            as_attachment=True,
+            download_name=os.path.basename(zip_path)
+        )
+
     except subprocess.CalledProcessError as e:
         logger.error(f"Error while backing up the DB '{dbname}': {e}")
         flash(f"Error while backing up the DB '{dbname}'.", "danger")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        flash(f"Unexpected error during backup.", "danger")
 
     return redirect('/admin')
 
