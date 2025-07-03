@@ -2,6 +2,7 @@ from config import Config
 from flask import Blueprint, render_template, jsonify, request, redirect, make_response, session, url_for, flash, get_flashed_messages
 import re
 import os
+import shutil
 from functools import wraps
 import jwt
 import time
@@ -620,19 +621,28 @@ def delete_database():
         conn.autocommit = True
         cur = conn.cursor()
 
+        # 1. DROP DATABASE
         cur.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(dbname)))
-
-        logger.warning(f"Database '{dbname}' was deleted.")
-        flash(f"Database '{dbname}' was succesfully deleted.", "warning")
-
         cur.close()
         conn.close()
+
+        logger.warning(f"Database '{dbname}' was deleted.")
+        flash(f"Database '{dbname}' was successfully deleted.", "warning")
+
+        # 2. deleting respective folders from FS
+        db_folder_path = os.path.join(Config.DATA_DIR, dbname)
+        if os.path.exists(db_folder_path) and os.path.isdir(db_folder_path):
+            shutil.rmtree(db_folder_path)
+            logger.info(f"Folder structure for DB '{dbname}' was removed from {db_folder_path}")
+        else:
+            logger.warning(f"Folder structure for DB '{dbname}' was not found at {db_folder_path}")
+
     except psycopg2.errors.ObjectInUse:
         logger.error(f"Can not delete DB '{dbname}' - currently in use.")
         flash(f"Database '{dbname}' can not be deleted - is currently in use.", "danger")
     except Exception as e:
         logger.error(f"An error during deletion of DB '{dbname}': {e}")
-        flash(f"An error during deletion of DB '{dbname}'. Check logs.", "danger")
+        flash(f"An error occurred during deletion of DB '{dbname}'. Check logs.", "danger")
 
     return redirect('/admin')
 
@@ -684,7 +694,7 @@ def create_database():
         logger.info(f"SRID in DB '{dbname}' changed to {epsg_int}.")
 
 
-        # 4. Folderstructure for content data + thumbs
+        # 4. Folder structure for content data + thumbs
         db_dir = os.path.join(Config.DATA_DIR, dbname)
         subfolders = ['photos', 'drawings', 'sketches', 'harrismatrix']
         os.makedirs(db_dir, exist_ok=True)
