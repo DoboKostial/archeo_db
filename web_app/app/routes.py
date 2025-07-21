@@ -602,15 +602,15 @@ def backup_database():
 
     try:
         gz_dump_path, gz_files_path = create_database_backup(dbname)
-        logger.info(f"Backup of DB '{dbname}' created at: {gz_dump_path}, {gz_files_path}")
+        logger.info(f"Backup of DB '{dbname}' created: dump at '{gz_dump_path}', files at '{gz_files_path}'")
 
-        # Option 1: zabalit oboje do jednoho ZIP a poslat
-        from zipfile import ZipFile
-
+        # pack all in one .zip and provide for download
         zip_path = gz_dump_path.replace('.backup.gz', '_full_backup.zip')
         with ZipFile(zip_path, 'w') as zipf:
             zipf.write(gz_dump_path, arcname=os.path.basename(gz_dump_path))
             zipf.write(gz_files_path, arcname=os.path.basename(gz_files_path))
+
+        logger.info(f"Full backup zip created at '{zip_path}' and sent to user")
 
         return send_file(
             zip_path,
@@ -619,13 +619,14 @@ def backup_database():
         )
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error while backing up the DB '{dbname}': {e}")
-        flash(f"Error while backing up the DB '{dbname}'.", "danger")
+        logger.error(f"Error while backing up DB '{dbname}': {e.stderr.strip() if e.stderr else e}")
+        flash(f"Error while backing up DB '{dbname}'. Check logs for details.", "danger")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        flash(f"Unexpected error during backup.", "danger")
+        logger.error(f"Unexpected error while backing up DB '{dbname}': {e}")
+        flash(f"Unexpected error during backup of DB '{dbname}'.", "danger")
 
     return redirect('/admin')
+
 
 
 @main.route('/delete-database', methods=['POST'])
