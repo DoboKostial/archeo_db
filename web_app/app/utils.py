@@ -22,7 +22,7 @@ def send_password_change_email(user_email, user_name):
     msg['From'] = Config.ADMIN_EMAIL
     msg['To'] = user_email
     msg.set_content(
-        f"Dear {user_name},\n\nYour password has been changed.\n"
+        f"Dear {user_name},\n\nYour password in ArcheoDB has been changed.\n"
         f"If you are not aware of this action, please contact the application administrator: {Config.ADMIN_NAME} ({Config.ADMIN_EMAIL})."
     )
 
