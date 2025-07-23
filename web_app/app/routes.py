@@ -106,13 +106,13 @@ def login():
     try:
         conn = get_auth_connection()
 
-        # Is account valid and enbled?
+        # Is account valid and enabled?
         enabled = is_user_enabled(conn, email)
         if enabled is False:
             logger.warning(f"Login denied, account locked for: {email}")
             return jsonify({"error": "Your account is inactive. Please contact administrator."}), 403
 
-        # Kontrola hesla
+        # password check
         password_hash = get_user_password_hash(conn, email)
         if password_hash and check_password_hash(password_hash, password):
             token = jwt.encode(
@@ -144,37 +144,43 @@ def login():
 @main.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
     if request.method == 'GET':
+        logger.info(f"GET /forgot-password from {request.remote_addr}")
         return render_template('forgot_password.html')
 
     data = request.get_json()
     email = data.get('email')
+
+    logger.info(f"Password reset requested from {request.remote_addr} for email: {email}")
 
     try:
         conn = get_auth_connection()
         user_name = get_enabled_user_name_by_email(conn, email)
 
         if not user_name:
-            logger.warning(f"Non valid request for password reset for e-mail: {email}")
-            return jsonify({"error": "This account does not exist or was disabled."}), 400
+            logger.warning(f"Password reset failed – no such enabled user: {email}")
+            return jsonify({"error": "This account does not exist or is disabled."}), 400
 
         token = jwt.encode({
             'email': email,
             'exp': datetime.utcnow() + timedelta(minutes=30)
         }, Config.SECRET_KEY, algorithm='HS256')
 
-        reset_url = url_for('main.profile', _external=True)
+        reset_url = url_for('main.emergency_login', token=token, _external=True)
+
         send_password_reset_email(email, user_name, reset_url)
 
-        logger.info(f"A request for password reset was sent to: {email}")
+        logger.info(f"Password reset link sent to {email}")
         return jsonify({"success": True})
 
     except Exception as e:
-        logger.error(f"An error occured during password reset link generation: {e}")
-        return jsonify({"error": "Server fatal surprise."}), 500
+        logger.error(f"Fatal error during password reset for {email} from {request.remote_addr}: {repr(e)}")
+        return jsonify({"error": "Internal server error."}), 500
     finally:
         conn.close()
 
 
+
+# here logic for emergency login with token per user
 @main.route('/emergency-login/<token>')
 def emergency_login(token):
     try:

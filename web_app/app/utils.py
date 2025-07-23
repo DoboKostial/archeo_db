@@ -36,24 +36,24 @@ def send_password_change_email(user_email, user_name):
 # utility for sending mail when forgot password
 def send_password_reset_email(user_email, user_name, reset_url):
     msg = EmailMessage()
-    msg['Subject'] = 'Obnova hesla – ArcheoDB'
+    msg['Subject'] = 'Password reset for ArcheoDB'
     msg['From'] = Config.ADMIN_EMAIL
     msg['To'] = user_email
     msg.set_content(
-    f"Dobrý den {user_name},\n\n"
-    f"požádali jste o resetování hesla do systému ArcheoDB. "
-    f"Pro nastavení nového hesla klikněte na následující odkaz:\n\n"
+    f"Hi {user_name},\n\n"
+    f"You requested for password reset ArcheoDB system."
+    f"For new password please use the following link:\n\n"
     f"{reset_url}\n\n"
-    f"Po kliknutí budete vyzváni ke změně hesla. Tento odkaz je platný 30 minut.\n\n"
-    f"Pokud jste o změnu nežádali, kontaktujte prosím správce: {Config.ADMIN_NAME} ({Config.ADMIN_EMAIL})\n\n"
-    f"S pozdravem,\nTým ArcheoDB"
+    f"After this You will be requested to change Your password. This link is valid for 30 minutes.\n\n"
+    f"If You DID NOT request for new password, please be so kind and contact app admin immediately: {Config.ADMIN_NAME} ({Config.ADMIN_EMAIL})\n\n"
+    f"Have a nice day,\nArcheoDB team"
     )
 
     try:
         with smtplib.SMTP('localhost') as smtp:
             smtp.send_message(msg)
     except Exception as e:
-        print("Chyba při odesílání e-mailu:", e)
+        print("There is an error while sending email:", e)
 
 
 # if archeolog creates new app user account, mail would be sent
@@ -68,7 +68,7 @@ def send_new_account_email(user_email, user_name, password):
         f"Your credentials:\n"
         f"E-mail: {user_email}\n"
         f"Password: {password}\n\n"
-        f"You are encouraged to change Ypor password immediately after forst succesfull login (in My Profile).\n\n"
+        f"You are encouraged to change Yor password immediately after first succesfull login (in Profile section).\n\n"
         f"Have a nice day,\n{Config.ADMIN_NAME}"
     )
     try:
