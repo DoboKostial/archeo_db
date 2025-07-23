@@ -332,6 +332,12 @@ def profile():
     user_name, mail, last_login = user_data
     citation = get_random_citation(conn)
 
+    if not last_login:
+        logger.warning(f"User {user_email} has no recorded last_login.")
+        last_login_str = "N/A"
+    else:
+        last_login_str = last_login.strftime('%Y-%m-%d')
+
     conn.close()
 
     logger.info(f"Fetching the profile of user {user_email}")
@@ -340,10 +346,11 @@ def profile():
         'profile.html',
         user_name=user_name,
         user_email=mail,
-        last_login=last_login.strftime('%Y-%m-%d'),
+        last_login=last_login_str,
         citation=citation,
         user_role=user_role
     )
+
 
 
 #user logout and get to main login endpoint
