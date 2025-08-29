@@ -64,7 +64,7 @@
         </div>
 
         <button type="submit" class="btn btn-success">Uložit objekt</button>
-        <a href="{{ url_for('main.list_objects') }}" class="btn btn-info mt-2">Vylistuj objekty</a>
+        <a href="{{ url_for('archeo_objects.list_objects') }}" class="btn btn-info mt-2">Vylistuj objekty</a>
     </form>
 </div>
 
@@ -130,7 +130,7 @@ document.getElementById('submitNewType').addEventListener('click', function () {
         return;
     }
 
-    fetch("{{ url_for('main.define_object_type') }}", {
+    fetch("{{ url_for('archeo_objects.define_object_type') }}", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",

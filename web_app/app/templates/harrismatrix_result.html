@@ -2,13 +2,16 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Výsledek - Harrisova matice</h2>
+    <h2>Result – Harris Matrix</h2>
+
+    <!-- Display generated image -->
     <div class="text-center my-4">
-        <img src="{{ img_path }}" alt="Harrisova matice" class="img-fluid shadow" style="border: 1px solid #ccc; padding: 10px;">
+        <img src="{{ img_path }}" alt="Harris Matrix" class="img-fluid shadow" style="border: 1px solid #ccc; padding: 10px;">
     </div>
+
+    <!-- Back button -->
     <div class="text-center mt-4">
-        <a href="{{ url_for('main.harrismatrix') }}" class="btn btn-primary">← Zpět na generování</a>
+        <a href="{{ url_for('su.harrismatrix') }}" class="btn btn-primary">← Back to generation</a>
     </div>
 </div>
 {% endblock %}
-

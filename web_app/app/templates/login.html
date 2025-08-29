@@ -1,67 +1,59 @@
-{% extends 'base.html' %}
-
-{% block title %}Login{% endblock %}
-
+{% extends "base.html" %}
 {% block content %}
-<div class="container mt-5" style="max-width: 400px;">
-    <h2 class="mb-4 text-center">Login</h2>
-
-    <form id="loginForm">
-        <div class="mb-3">
-            <input type="email" id="email" class="form-control" placeholder="Email" required autofocus>
-        </div>
-        <div class="mb-3">
-            <input type="password" id="password" class="form-control" placeholder="Heslo" required>
-        </div>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <a href="/forgot-password" class="text-muted small">Forgotten password?</a>
-        </div>
-        <button type="submit" class="btn btn-primary w-100">login</button>
-    </form>
-
-    <p id="errorMessage" class="text-danger mt-3 text-center"></p>
+<div class="container py-4" style="max-width: 480px;">
+  <h2 class="mb-3">Sign in</h2>
+  <form id="loginForm" method="POST" action="{{ url_for('auth.login') }}">
+    <div class="mb-3">
+      <label for="email" class="form-label">Email</label>
+      <input type="email" class="form-control" id="email" name="email" autocomplete="username" required>
+    </div>
+    <div class="mb-3">
+      <label for="password" class="form-label">Password</label>
+      <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+    </div>
+    <input type="hidden" name="next" value="{{ request.args.get('next','') }}">
+    <button type="submit" class="btn btn-primary w-100" id="loginBtn">Login</button>
+    <div class="form-text mt-2"><a href="{{ url_for('auth.forgot_password') }}">Forgot password?</a></div>
+  </form>
 </div>
-
 <script>
-    document.getElementById('loginForm').addEventListener('submit', async function(event) {
-        event.preventDefault();
+(function(){
+  const form = document.getElementById('loginForm');
+  const btn  = document.getElementById('loginBtn');
 
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value.trim();
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault(); // prevent native submit (avoids double POST)
+    btn.disabled = true;
 
-        if (!email || !password) {
-            document.getElementById('errorMessage').innerText = "Please fill all info.";
-            return;
+    const fd = new FormData(form);
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: fd,
+        headers: {'X-Requested-With': 'fetch', 'Accept':'application/json'}
+      });
+
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('application/json')) {
+        const data = await res.json();
+        if (data.ok) {
+          window.location.href = data.redirect || '/';
+          return;
+        } else {
+          alert(data.error || 'Login failed.');
+          btn.disabled = false;
+          return;
         }
-
-        try {
-            const response = await fetch('/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-                window.location.href = '/index';  // token is already in cookie
-            } else {
-                document.getElementById('errorMessage').innerText = data.error;
-            }
-        } catch (error) {
-            console.error("Error while login:", error);
-            document.getElementById('errorMessage').innerText = "Server fault.";
-        }
-    });
-
-    // Ensure that Enter will send a form, if active
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            const form = document.getElementById('loginForm');
-            if (form && document.activeElement.tagName !== 'TEXTAREA') {
-                form.dispatchEvent(new Event('submit', { cancelable: true }));
-            }
-        }
-    });
+      } else {
+        // Server may have redirected with HTML; follow it
+        window.location.href = res.url || '/';
+      }
+    } catch (e) {
+      console.error('Error while login:', e);
+      alert('Network error during login.');
+      btn.disabled = false;
+    }
+  }, { once: true }); // ensure we don't attach multiple handlers
+})();
 </script>
 {% endblock %}

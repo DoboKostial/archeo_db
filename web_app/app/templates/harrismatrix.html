@@ -2,23 +2,23 @@
 
 {% block content %}
 <div class="alert alert-info" role="alert">
-    Pracujete nad databází <strong>{{ selected_db }}</strong>.
+    You are working with database <strong>{{ selected_db }}</strong>.
 </div>
 
-<h2>Přehled stratigrafických jednotek a objektů</h2>
+<h2>Overview of Stratigraphic Units and Objects</h2>
 
 <ul>
-    <li><strong>Celkový počet SJ:</strong> {{ total_sj_count }}</li>
-    <li><strong>Počet objektů:</strong> {{ object_count }}</li>
-    <li><strong>SJ bez stratigrafických vztahů:</strong> {{ sj_without_relation }}</li>
+    <li><strong>Total number of stratigraphic units (SU):</strong> {{ total_sj_count }}</li>
+    <li><strong>Number of archaeological objects:</strong> {{ object_count }}</li>
+    <li><strong>SUs without stratigraphic relations:</strong> {{ sj_without_relation }}</li>
 </ul>
 
-<h3>Počty SJ podle typu</h3>
+<h3>Number of SUs by type</h3>
 <table class="table table-striped table-bordered">
     <thead>
         <tr>
-            <th>Typ SJ</th>
-            <th>Počet</th>
+            <th>SU Type</th>
+            <th>Count</th>
         </tr>
     </thead>
     <tbody>
@@ -31,45 +31,44 @@
     </tbody>
 </table>
 
-    <!-- Formulář pro zadání parametrů -->
-    <div class="card mb-4">
-        <div class="card-header">
-            Parametry pro generování Harris Matrix
-        </div>
-        <div class="card-body">
-            <form action="{{ url_for('main.generate_harrismatrix') }}" method="post">
-
-                <div class="row mb-3">
-                    <div class="col">
-                        <label for="deposit_color" class="form-label">Barva Deposit</label>
-                        <input type="color" class="form-control form-control-color" id="deposit_color" name="deposit_color" value="#ADD8E6">
-                    </div>
-                    <div class="col">
-                        <label for="negative_color" class="form-label">Barva Negative</label>
-                        <input type="color" class="form-control form-control-color" id="negative_color" name="negative_color" value="#90EE90">
-                    </div>
-                    <div class="col">
-                        <label for="structure_color" class="form-label">Barva Structure</label>
-                        <input type="color" class="form-control form-control-color" id="structure_color" name="structure_color" value="#FFD700">
-                    </div>
-                </div>
-
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="draw_objects" name="draw_objects">
-                    <label class="form-check-label" for="draw_objects">
-                        Vykreslit objekty vyššího řádu
-                    </label>
-                </div>
-
-                <button type="submit" class="btn btn-primary">Generuj Harris Matrix</button>
-            </form>
-        </div>
+<!-- Form for entering Harris Matrix generation parameters -->
+<div class="card mb-4">
+    <div class="card-header">
+        Parameters for Harris Matrix generation
     </div>
+    <div class="card-body">
+        <form action="{{ url_for('su.generate_harrismatrix') }}" method="post">
+            <div class="row mb-3">
+                <div class="col">
+                    <label for="deposit_color" class="form-label">Color for Deposit</label>
+                    <input type="color" class="form-control form-control-color" id="deposit_color" name="deposit_color" value="#ADD8E6">
+                </div>
+                <div class="col">
+                    <label for="negative_color" class="form-label">Color for Negative</label>
+                    <input type="color" class="form-control form-control-color" id="negative_color" name="negative_color" value="#90EE90">
+                </div>
+                <div class="col">
+                    <label for="structure_color" class="form-label">Color for Structure</label>
+                    <input type="color" class="form-control form-control-color" id="structure_color" name="structure_color" value="#FFD700">
+                </div>
+            </div>
 
-    <!-- Sekce pro zobrazení posledního vygenerovaného obrázku -->
-    {% if session.get('harrismatrix_image') %}
-    <h3>Vygenerovaná Harrisova matice:</h3>
-    <img src="{{ url_for('static', filename='harrismatrix/' ~ session['harrismatrix_image']) }}" class="img-fluid" alt="Harris Matrix">
-    {% endif %}
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="draw_objects" name="draw_objects">
+                <label class="form-check-label" for="draw_objects">
+                    Draw higher-level objects
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Generate Harris Matrix</button>
+        </form>
+    </div>
 </div>
+
+<!-- Section for displaying the last generated matrix image -->
+{% if harris_image %}
+  <img class="img-fluid border" 
+       src="{{ url_for('su.harrismatrix_image', filename=harris_image) }}" 
+       alt="Harris Matrix">
+{% endif %}
 {% endblock %}

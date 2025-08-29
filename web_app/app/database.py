@@ -6,10 +6,8 @@ import psycopg2
 import tarfile
 import gzip
 import shutil
-from io import BytesIO
-from app.logger import setup_logger
+from app.logger import logger
 
-logger = setup_logger()
 
 def get_auth_connection():
     return psycopg2.connect(

@@ -2,18 +2,18 @@
 
 {% block content %}
 <div class="alert alert-info" role="alert">
-    Pracujete nad databází <strong>{{ selected_db }}</strong>.
+    You are working with database <strong>{{ selected_db }}</strong>.
 </div>
 
 <div class="container mt-4">
 
-    <h2>Existující polygony</h2>
+    <h2>Existing polygons</h2>
     {% if polygons %}
     <table class="table table-bordered">
         <thead>
             <tr>
-                <th>Název polygonu</th>
-                <th>Počet bodů</th>
+                <th>Polygon name</th>
+                <th>Number of points</th>
                 <th>EPSG</th>
             </tr>
         </thead>
@@ -28,31 +28,31 @@
         </tbody>
     </table>
     {% else %}
-    <p>Žádné polygony zatím nejsou uloženy.</p>
+    <p>No polygons stored yet.</p>
     {% endif %}
 
     <hr>
 
-    <h2>Nahrát nový polygonový soubor</h2>
-    <form action="{{ url_for('main.upload_polygons') }}" method="post" enctype="multipart/form-data">
+    <h2>Upload new polygon CSV</h2>
+    <form action="{{ url_for('polygons.upload_polygons') }}" method="post" enctype="multipart/form-data">
         <div class="form-group">
-            <label for="file">Vyber CSV soubor:</label>
+            <label for="file">Select CSV file:</label>
             <input type="file" name="file" class="form-control" accept=".csv" required>
         </div>
         <div class="form-group">
-            <label for="epsg">Vyber EPSG kód souřad. systému:</label>
+            <label for="epsg">Select EPSG coordinate system:</label>
             <select name="epsg" class="form-control" required>
                 <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
                 <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
             </select>
         </div>
-        <button type="submit" class="btn btn-primary mt-2">Nahrát soubor</button>
+        <button type="submit" class="btn btn-primary mt-2">Upload File</button>
     </form>
 
     <hr>
 
-    <h2>Stáhnout všechny polygony</h2>
-    <a href="{{ url_for('main.download_polygons') }}" class="btn btn-success">Stáhnout SHP</a>
+    <h2>Download all polygons</h2>
+    <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success">Download SHP</a>
 
 </div>
 {% endblock %}

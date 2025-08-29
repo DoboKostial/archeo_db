@@ -1,7 +1,6 @@
 #############################
 # app/queries.py
 # all SQL queries in app in one file (= called in app by needs)
-# dobo@dobo.sk
 #############################
 
 #
@@ -13,7 +12,7 @@ def get_user_password_hash(conn, email):
             SELECT password_hash 
             FROM app_users 
             WHERE mail = %s
-            AND enabled = true
+              AND enabled = true
         """, (email,))
         result = cur.fetchone()
         return result[0] if result else None
@@ -114,7 +113,7 @@ def get_terrain_db_list(conn):
         cur.execute("""
             SELECT datname
             FROM pg_database
-            WHERE datname ~'^[0-9]'
+            WHERE datname ~ '^[0-9]'
               AND datistemplate = false
               AND datallowconn = true
             ORDER BY datname
@@ -141,23 +140,12 @@ def get_enabled_user_name_by_email(conn, email):
         return result[0] if result else None
 
 
-def update_user_password_and_commit(conn, email, password_hash):
-    with conn.cursor() as cur:
-        cur.execute("""
-            UPDATE app_users
-            SET password_hash = %s
-            WHERE mail = %s
-        """, (password_hash, email))
-    conn.commit()
-
-
-
-# here queries for data manipulation in terrain DBs
-
-def count_sj_total():
-    return "SELECT COUNT(*) FROM tab_sj;"
+# -------------------------------------------------------------------
+# queries for data manipulation in terrain DBs
+# -------------------------------------------------------------------
 
 def count_sj_by_type(sj_typ):
+    # this function returns (sql, params), to parametrise securely
     return "SELECT COUNT(*) FROM tab_sj WHERE sj_typ = %s;", (sj_typ,)
 
 
@@ -196,6 +184,7 @@ def get_stratigraphy_relations():
 def get_sj_types_and_objects():
     return "SELECT id_sj, sj_typ, ref_object FROM tab_sj;"
 
+
 def fetch_stratigraphy_relations(conn):
     sql = """
         SELECT ref_sj1, relation, ref_sj2
@@ -204,16 +193,7 @@ def fetch_stratigraphy_relations(conn):
     with conn.cursor() as cur:
         cur.execute(sql)
         return cur.fetchall()
-    
-def count_sj_by_type_all():
-    return """
-        SELECT sj_typ, COUNT(*)
-        FROM tab_sj
-        GROUP BY sj_typ;
-    """
 
-def count_total_sj():
-    return "SELECT COUNT(*) FROM tab_sj;"
 
 def get_polygons_list():
     return """
@@ -223,35 +203,26 @@ def get_polygons_list():
     """
 
 
-def insert_polygons():
-    return """
-    INSERT INTO tab_polygons (polygon_name, geom)
-    VALUES (%s, ST_Transform(
-                   ST_SetSRID(
-                       ST_MakePolygon(
-                           ST_GeomFromText('LINESTRING(%s)')
-                       ), %s
-                   ), 4326)
-           )
-    """
-
-
 def insert_polygon_sql(polygon_name, points, source_epsg):
-    sql = f"""
-    INSERT INTO tab_polygons (polygon_name, geom)
-    VALUES (
-        %s,
-        ST_Transform(
-            ST_SetSRID(
-                ST_MakePolygon(
-                    ST_MakeLine(ARRAY[
-                        {','.join([f"ST_MakePoint({x}, {y})" for x, y in points])}
-                    ])
-                ),
-                {source_epsg}
-            ),
-            4326
-        )
-    );
     """
-    return sql
+    Returns parametrized SQL.
+    points: list[(x, y)] (numbers), source_epsg: int
+    """
+    # inserting WKT as a parameter value
+    # we asssume: x,y are already floats (see parsing CSV in utils.process_polygon_upload)
+    wkt_linestring = "LINESTRING(" + ", ".join(f"{float(x)} {float(y)}" for x, y in points) + ")"
+    sql_text = """
+        INSERT INTO tab_polygons (polygon_name, geom)
+        VALUES (
+            %s,
+            ST_Transform(
+                ST_SetSRID(
+                    ST_GeomFromText(%s),
+                    %s
+                ),
+                4326
+            )
+        );
+    """
+    params = (polygon_name, wkt_linestring, int(source_epsg))
+    return sql_text, params

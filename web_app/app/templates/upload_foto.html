@@ -1,73 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
+
 <div class="alert alert-info" role="alert">
-    Pracujete nad databází <strong>{{ selected_db }}</strong>.
+    You are working with database: <strong>{{ selected_db }}</strong>.
 </div>
 
 <div class="container mt-4">
-    <h2>Nahrát terénní fotografii</h2>
+    <h2>Upload Terrain Photo</h2>
 
-    <form action="{{ url_for('main.upload_foto') }}" method="post" enctype="multipart/form-data">
+    <form action="{{ url_for('terr_photo.upload_foto') }}" method="post" enctype="multipart/form-data">
+
+        <!-- Photo file upload -->
         <div class="form-group">
-            <label for="file">Vyber fotografii:</label>
+            <label for="file">Select photo:</label>
             <input type="file" name="file" class="form-control" accept="image/*" required>
         </div>
-    
+
+        <!-- Optional date -->
         <div class="form-group">
-            <label for="datum">Datum:</label>
+            <label for="datum">Date:</label>
             <input type="date" name="datum" class="form-control">
         </div>
-    
+
+        <!-- Photo author -->
         <div class="form-group">
-            <label for="author">Autor:</label>
+            <label for="author">Author:</label>
             <select name="author" class="form-control">
-                <option value="">-- vyber autora --</option>
+                <option value="">-- select author --</option>
                 {% for author in author_options %}
                 <option value="{{ author }}">{{ author }}</option>
                 {% endfor %}
             </select>
         </div>
-    
+
+        <!-- Optional notes -->
         <div class="form-group">
-            <label for="notes">Poznámky:</label>
+            <label for="notes">Notes:</label>
             <textarea name="notes" class="form-control"></textarea>
         </div>
-    
+
+        <!-- Assign to stratigraphic units -->
         <div class="form-group">
-            <label for="ref_sj">Přiřadit ke stratigrafickým jednotkám:</label>
+            <label for="ref_sj">Assign to stratigraphic units:</label>
             <select name="ref_sj" class="form-control" multiple>
                 {% for sj in sj_options %}
                 <option value="{{ sj }}">{{ sj }}</option>
                 {% endfor %}
             </select>
         </div>
-    
+
+        <!-- Assign to polygon -->
         <div class="form-group">
-            <label for="ref_polygon">Přiřadit k polygonu:</label>
+            <label for="ref_polygon">Assign to polygon:</label>
             <select name="ref_polygon" class="form-control">
-                <option value="">-- žádný --</option>
+                <option value="">-- none --</option>
                 {% for poly in polygon_options %}
                 <option value="{{ poly }}">{{ poly }}</option>
                 {% endfor %}
             </select>
         </div>
-    
-        <button type="submit" class="btn btn-primary mt-2">Nahrát fotografii</button>
+
+        <button type="submit" class="btn btn-primary mt-2">Upload Photo</button>
     </form>
 
     <hr>
-    <h3>Posledních 10 nahraných fotek</h3>
+    <h3>Last 10 uploaded photos</h3>
     <div class="row">
         {% for foto in recent_photos %}
         <div class="col-md-2 col-sm-3 col-4 mb-3">
-            <a href="{{ url_for('main.serve_terr_foto', filename=foto[0]) }}" target="_blank">
-                <img src="{{ url_for('main.serve_terr_thumb', filename=foto[0].rsplit('.', 1)[0] ~ '_thumb.jpeg') }}"
+            <a href="{{ url_for('terr_photo.serve_terr_foto', filename=foto[0]) }}" target="_blank">
+                <img src="{{ url_for('terr_photo.serve_terr_thumb', filename=foto[0].rsplit('.', 1)[0] ~ '_thumb.jpeg') }}"
                      class="img-fluid img-thumbnail">
             </a>
         </div>
         {% endfor %}
     </div>
-    
-
 </div>
+
 {% endblock %}

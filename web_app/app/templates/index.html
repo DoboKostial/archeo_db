@@ -8,9 +8,12 @@
 
     <hr>
 
-    <h4>PostgreSQL version and App version:</h4>
+    <h4>PostgreSQL and App version</h4>
     <p>{{ pg_version }}</p>
-    <p>Application version: {{ app_version }} (see <a href="https://github.com/DoboKostial/archeo_db">Github</a> for actual versions)</p>
+    <p>Application version: {{ app_version }} 
+        (<a href="https://github.com/DoboKostial/archeo_db" target="_blank">see GitHub for latest releases</a>)
+    </p>
+
     <hr>
 
     <h4>Sizes of terrain databases</h4>
@@ -19,18 +22,18 @@
     </div>
 
     {% if db_selected_message %}
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-        {{ db_selected_message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Zavřít"></button>
-    </div>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ db_selected_message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
     {% endif %}
 
     <div class="card">
-        <div class="card-body" style="background-color: #ffe5e5;">
-            <h4 class="card-title">Choose the DB to work upon:</h4>
+        <div class="card-body bg-light border border-danger">
+            <h4 class="card-title">Choose the database to work with:</h4>
             <form action="/select-db" method="POST" class="row g-3 align-items-center">
                 <div class="col-auto">
-                    <label for="selected_db" class="col-form-label">Databáze:</label>
+                    <label for="selected_db" class="col-form-label">Database:</label>
                 </div>
                 <div class="col-auto">
                     <select name="selected_db" id="selected_db" class="form-select">
@@ -56,4 +59,3 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', filename='js/graphs.js') }}"></script>
 {% endblock %}
-

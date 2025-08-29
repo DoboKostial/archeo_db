@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <title>{% block title %}Archeo terrain DB{% endblock %}</title>
 
-    <!-- Bootstrap CSS (lokální, aby 100% fungovalo) -->
+    <!-- Bootstrap CSS (local version to ensure offline availability) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
 
     {% block head %}{% endblock %}
@@ -17,26 +17,24 @@
     {% endif %}
 
     <main class="container mt-4">
+        <!-- Flash messages (success, warning, error, etc.) -->
         {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-    {% for category, message in messages %}
-      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Zavřít"></button>
-      </div>
-    {% endfor %}
-  {% endif %}
-{% endwith %}
-
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Bootstrap JS (lokální verze) -->
+    <!-- Bootstrap JS (local version) -->
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>
 </html>
-
-

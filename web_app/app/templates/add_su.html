@@ -76,43 +76,43 @@
                                 <input type="text" class="form-control" name="boundary_visibility">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Struktura</label>
+                                <label class="form-label">Composition</label>
                                 <input type="text" class="form-control" name="structure">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Kompaktnost</label>
+                                <label class="form-label">Compactness</label>
                                 <input type="text" class="form-control" name="compactness">
                             </div>
                             <div class="form-check mb-3">
                                 <input type="checkbox" class="form-check-input" id="deposit_removed" name="deposit_removed">
-                                <label class="form-check-label" for="deposit_removed">Deposit byl odstraněn</label>
+                                <label class="form-check-label" for="deposit_removed">Deposit was completely removed</label>
                             </div>
                         </div>
     
                         <!-- NEGATIV -->
                         <div id="negativ_fields" style="display: none;">
                             <div class="mb-3">
-                                <label class="form-label">Typ negativu</label>
+                                <label class="form-label">Negative type</label>
                                 <input type="text" class="form-control" name="negativ_typ">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Rozsah odkryvu</label>
+                                <label class="form-label">Extent of exposure</label>
                                 <input type="text" class="form-control" name="excav_extent">
                             </div>
                             <div class="form-check mb-3">
                                 <input type="checkbox" class="form-check-input" id="ident_niveau_cut" name="ident_niveau_cut">
-                                <label class="form-check-label" for="ident_niveau_cut">Identifikace úrovně zahloub.</label>
+                                <label class="form-check-label" for="ident_niveau_cut">Cut niveau identification</label>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Tvar půdorysu</label>
+                                <label class="form-label">Plan shape</label>
                                 <input type="text" class="form-control" name="shape_plan">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Tvar stěn</label>
+                                <label class="form-label">Walls shape</label>
                                 <input type="text" class="form-control" name="shape_sides">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Tvar dna</label>
+                                <label class="form-label">Bottom shape</label>
                                 <input type="text" class="form-control" name="shape_bottom">
                             </div>
                         </div>
@@ -120,31 +120,31 @@
                         <!-- STRUCTURE -->
                         <div id="structure_fields" style="display: none;">
                             <div class="mb-3">
-                                <label class="form-label">Typ struktury</label>
+                                <label class="form-label">Structure type</label>
                                 <input type="text" class="form-control" name="structure_typ">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Typ konstrukce</label>
+                                <label class="form-label">Construction type</label>
                                 <input type="text" class="form-control" name="construction_typ">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Pojivo</label>
+                                <label class="form-label">Binder</label>
                                 <input type="text" class="form-control" name="binder">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Základní materiál</label>
+                                <label class="form-label">Basic material</label>
                                 <input type="text" class="form-control" name="basic_material">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Délka (m)</label>
+                                <label class="form-label">Lenght (m)</label>
                                 <input type="number" step="0.1" class="form-control" name="length_m">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Šířka (m)</label>
+                                <label class="form-label">Width (m)</label>
                                 <input type="number" step="0.1" class="form-control" name="width_m">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label">Výška (m)</label>
+                                <label class="form-label">Height (m)</label>
                                 <input type="number" step="0.1" class="form-control" name="height_m">
                             </div>
                         </div>
@@ -153,42 +153,42 @@
             </div>
     
             <div class="row mb-4">
-                <!-- C. Stratigrafie -->
+                <!-- C. STARTIGRAPHY -->
                 <div class="col-md-6">
                     <fieldset class="border p-3 bg-info-subtle">
-                        <legend class="w-auto px-2">C. Stratigrafické vztahy</legend>
+                        <legend class="w-auto px-2">C. Stratigraphic relations</legend>
                         <div class="row">
                             <div class="col-12 mb-2">
-                                <small>Zadej čísla SJ, které mají vztah k této SJ:</small>
+                                <small>Enter the SU numbers that are related to this SU:</small>
                             </div>
                   
 
-                            <!-- Leží pod -->
+                            <!-- LAYING UNDER -->
                             <div class="col-md-6 mb-3">
-                                <label for="below_1" class="form-label">Leží pod (SJ #1)</label>
-                                <input type="number" class="form-control" id="below_1" name="below_1" placeholder="např. 44">
+                                <label for="below_1" class="form-label">Lies under (SU #1):</label>
+                                <input type="number" class="form-control" id="below_1" name="below_1" placeholder="e.g. 44">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="below_2" class="form-label">Leží pod (SJ #2)</label>
-                                <input type="number" class="form-control" id="below_2" name="below_2" placeholder="např. 45">
+                                <label for="below_2" class="form-label">Lies under (SU #2):</label>
+                                <input type="number" class="form-control" id="below_2" name="below_2" placeholder="e.g. 45">
                             </div>
 
-                            <!-- Současné -->
+                            <!-- CONTEMPORARY -->
                             <div class="col-md-12 mb-3">
-                                <label for="equal" class="form-label">Současné s (SJ)</label>
-                                <input type="number" class="form-control" id="equal" name="equal" placeholder="např. 46">
+                                <label for="equal" class="form-label">Contemporary with: (SU):</label>
+                                <input type="number" class="form-control" id="equal" name="equal" placeholder="e.g. 46">
                             </div> 
 
 
 
-                            <!-- Leží nad -->
+                            <!-- LAYING ABOVE -->
                             <div class="col-md-6 mb-3">
-                                <label for="above_1" class="form-label">Leží nad (SJ #1)</label>
-                                <input type="number" class="form-control" id="above_1" name="above_1" placeholder="např. 42">
+                                <label for="above_1" class="form-label">Lies above (SU #1):</label>
+                                <input type="number" class="form-control" id="above_1" name="above_1" placeholder="e.g. 42">
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="above_2" class="form-label">Leží nad (SJ #2)</label>
-                                <input type="number" class="form-control" id="above_2" name="above_2" placeholder="např. 43">
+                                <label for="above_2" class="form-label">Lies above (SU #2):</label>
+                                <input type="number" class="form-control" id="above_2" name="above_2" placeholder="e.g. 43">
                             </div>
                 
 
@@ -197,10 +197,10 @@
                     </fieldset>
                 </div>
     
-                <!-- D. Přehled -->
+                <!-- D. OVERVIEW -->
                 <div class="col-md-6">
                     <fieldset class="border p-3 bg-light">
-                    <legend class="w-auto px-2">D. Přehled SJ v databázi "{{ selected_db }}"</legend>
+                    <legend class="w-auto px-2">D. Overview of SUs in database "{{ selected_db }}"</legend>
                     <ul class="list-unstyled">
                         <li>Total stratigraphic units: <strong>{{ sj_count_total }}</strong></li>
                         <li>Deposits: <strong>{{ sj_count_deposit }}</strong></li>
@@ -211,7 +211,7 @@
                 </div>
     
             <div class="text-center mb-5">
-                <button type="submit" class="btn btn-primary btn-lg">Uložit SJ</button>
+                <button type="submit" class="btn btn-primary btn-lg">Save SU</button>
             </div>
         </div>
     </form>

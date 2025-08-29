@@ -23,20 +23,19 @@
         <td>{{ last_login.strftime('%Y-%m-%d') if last_login else "—" }}</td>
         <td>
           {% if enabled %}
-            <form method="POST" action="{{ url_for('main.disable_user') }}">
+            <form method="POST" action="{{ url_for('admin.disable_user') }}">
                 <input type="hidden" name="mail" value="{{ mail }}">
                 <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
             </form>
           {% else %}
-            <form method="POST" action="{{ url_for('main.enable_user') }}">
+            <form method="POST" action="{{ url_for('admin.enable_user') }}">
                 <input type="hidden" name="mail" value="{{ mail }}">
                 <button type="submit" class="btn btn-sm btn-success">Activate</button>
             </form>
           {% endif %}
         </td>
       </tr>
-         {% endfor %}
-
+        {% endfor %}
     </tbody>
 </table>
 
@@ -45,17 +44,17 @@
   <ul class="pagination">
     {% if page > 1 %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('main.admin', page=page-1) }}">Previous</a>
+        <a class="page-link" href="{{ url_for('admin.admin', page=page-1) }}">Previous</a>
       </li>
     {% endif %}
     {% for p in range(1, total_pages + 1) %}
       <li class="page-item {% if p == page %}active{% endif %}">
-        <a class="page-link" href="{{ url_for('main.admin', page=p) }}">{{ p }}</a>
+        <a class="page-link" href="{{ url_for('admin.admin', page=p) }}">{{ p }}</a>
       </li>
     {% endfor %}
     {% if page < total_pages %}
       <li class="page-item">
-        <a class="page-link" href="{{ url_for('main.admin', page=page+1) }}">Next</a>
+        <a class="page-link" href="{{ url_for('admin.admin', page=page+1) }}">Next</a>
       </li>
     {% endif %}
   </ul>
@@ -65,7 +64,7 @@
 <hr>
 
 <h4>Add new user</h4>
-<form method="POST" action="{{ url_for('main.add_user') }}">
+<form method="POST" action="{{ url_for('admin.add_user') }}">
   <div class="mb-3">
     <label for="name" class="form-label">Name</label>
     <input type="text" class="form-control" id="name" name="name" required>
@@ -85,8 +84,6 @@
   <button type="submit" class="btn btn-success">Create user</button>
 </form>
 
-
-
 <hr>
 
 <h3>Terrain DB management</h3>
@@ -104,13 +101,13 @@
             <td>{{ dbname }}</td>
             <td>{{ (size / 1024 / 1024) | round(2) }} MB</td>
             <td>
-                <form method="POST" action="{{ url_for('main.backup_database') }}" style="display: inline;">
+                <form method="POST" action="{{ url_for('admin.backup_database') }}" style="display: inline;">
                     <input type="hidden" name="dbname" value="{{ dbname }}">
-                    <button type="submit" class="btn btn-sm btn-secondary">Zálohovat</button>
+                    <button type="submit" class="btn btn-sm btn-secondary">Backup</button>
                 </form>
-                <form method="POST" action="{{ url_for('main.delete_database') }}" style="display: inline;" onsubmit="return confirm('Opravdu chcete smazat databázi {{ dbname }}?');">
+                <form method="POST" action="{{ url_for('admin.delete_database') }}" style="display: inline;" onsubmit="return confirm('Are You sure to delete DB {{ dbname }}? This is NOT REVERTIBLE');">
                     <input type="hidden" name="dbname" value="{{ dbname }}">
-                    <button type="submit" class="btn btn-sm btn-danger">Smazat</button>
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                 </form>
             </td>
         </tr>
@@ -118,9 +115,8 @@
     </tbody>
 </table>
 
-
 <h4>Create new terrain database</h4>
-<form method="POST" action="/create-database" class="mb-4">
+<form method="POST" action="{{ url_for('admin.create_database') }}" class="mb-4">
   <div class="row g-2">
     <div class="col-md-6">
       <input type="text" name="dbname" class="form-control" placeholder="E.g. 004_Troy" required>
@@ -132,6 +128,7 @@
         <option value="3857">Web Mercator (EPSG:3857)</option>
         <option value="32633">UTM zone 33N (EPSG:32633)</option>
         <option value="3035">ETRS89 / LAEA Europe (EPSG:3035)</option>
+        <option value="32633">UTM zone 43N (EPSG:32643)</option>
       </select>
     </div>
     <div class="col-md-2">
@@ -139,7 +136,5 @@
     </div>
   </div>
 </form>
-
-
 
 {% endblock %}

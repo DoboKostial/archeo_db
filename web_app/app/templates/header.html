@@ -1,39 +1,46 @@
 <!-- app/templates/header.html -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="/index">ArcheoDB</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item"><a class="nav-link" href="/index">Home</a></li>
-          <li class="nav-item"><a class="nav-link" href="/profile">My profile</a></li>
-          {% if user_role == 'archeolog' %}
-          <li class="nav-item"><a class="nav-link text-warning" href="/admin">Admin</a></li>
-          {% endif %}
-          <li class="nav-item"><a class="nav-link text-danger" href="/add-sj">TE: ST. UNITS</a></li>
-          <li class="nav-item"><a class="nav-link text-danger" href="/objects">TE: OBJECTS</a></li>
-          <li class="nav-item"><a class="nav-link text-danger" href="/harrismatrix">TE: HARRISMATRIX</a></li>
-          <li class="nav-item"><a class="nav-link text-danger" href="/polygons">TE: POLYGONS</a></li>
-          <li class="nav-item"><a class="nav-link text-danger" href="/upload-foto">DE: TERRAIN PHOTOS</a></li>
-        </ul>
-        <span class="navbar-text text-light me-3">
-          Logged: {{ user_name }} ({{ user_email }})
-        </span>
-        <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-      </div>
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('main.index') }}">ArcheoDB</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <!-- General navigation -->
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.profile') }}">My profile</a></li>
+
+        <!-- Admin section (visible only for archeolog) -->
+        {% if user_role == 'archeolog' %}
+        <li class="nav-item"><a class="nav-link text-warning" href="{{ url_for('admin.admin') }}">Admin</a></li>
+        {% endif %}
+
+        <!-- Terrain entry modules -->
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.add_su') }}">TE: ST. UNITS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('archeo_objects.objects') }}">TE: OBJECTS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.harrismatrix') }}">TE: HARRISMATRIX</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('polygons.polygons') }}">TE: POLYGONS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('terr_photo.upload_foto') }}">DE: TERRAIN PHOTOS</a></li>
+      </ul>
+
+      <!-- User info and logout -->
+      <span class="navbar-text text-light me-3">
+        Logged: {{ user_name }} ({{ user_email }})
+      </span>
+      <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-light btn-sm">Logout</a>
     </div>
-  </nav>
+  </div>
+</nav>
 
+<!-- Optional JS logout handler (not used in current template) -->
 <script>
-    function logout() {
-        fetch('/logout')
-            .then(() => {
-                localStorage.removeItem('token');
-                window.location.href = '/login';
-            })
-            .catch(error => {
-                console.error("Error while logout:", error);
-                window.location.href = '/login';
-            });
-    }
+  function logout() {
+    fetch('{{ url_for("auth.logout") }}')
+      .then(() => {
+        localStorage.removeItem('token');
+        window.location.href = '{{ url_for("auth.login") }}';
+      })
+      .catch(error => {
+        console.error("Error while logout:", error);
+        window.location.href = '{{ url_for("auth.login") }}';
+      });
+  }
 </script>
-
