@@ -272,6 +272,7 @@ class DSU:
         else:
             self.parent[ra] = rb
 
+
 @su_bp.route('/generate-harrismatrix', methods=['POST'])
 @require_selected_db
 def generate_harrismatrix():
@@ -280,104 +281,100 @@ def generate_harrismatrix():
         flash('No terrain DB selected.', 'danger')
         return redirect(url_for('su.harrismatrix'))
 
+    # --- 1) načtení barev z formuláře (fallback na rozumné defaulty) ---
+    deposit_color   = (request.form.get('deposit_color')   or '#90EE90').strip()
+    negative_color  = (request.form.get('negative_color')  or '#FFA07A').strip()
+    structure_color = (request.form.get('structure_color') or '#87CEFA').strip()
+
     conn = None
     try:
         conn = get_terrain_connection(selected_db)
 
-        # 1) read all realtionships
+        # 2) načti vztahy a typy SU
         with conn.cursor() as cur:
             cur.execute("SELECT ref_sj1, relation, ref_sj2 FROM tab_sj_stratigraphy;")
             rels = cur.fetchall()
 
-            # read all SUs (to display also isolated / only with "=")
             cur.execute("SELECT id_sj, sj_typ FROM tab_sj;")
             all_sj_rows = cur.fetchall()
 
-        all_sj = {r[0] for r in all_sj_rows}
-        sj_type_map = {r[0]: (r[1] or '').lower() for r in all_sj_rows}
+        all_sj = {int(r[0]) for r in all_sj_rows}
+        sj_type_map = {int(r[0]): (r[1] or '').lower() for r in all_sj_rows}
 
-        # 2) union equals to groups (union-find)
+        # 3) union-find pro '='
         dsu = DSU()
         for a, rel, b in rels:
             if rel == '=':
                 dsu.union(int(a), int(b))
 
-        # create mapping: node -> representative and group for description
+        # skupiny (superuzly) + popisky
         groups = {}
-        for node in all_sj.union({int(a) for a,_,_ in rels}).union({int(b) for _,_,b in rels}):
+        for node in all_sj.union({int(a) for a, _, _ in rels}).union({int(b) for _, _, b in rels}):
             rep = dsu.find(int(node))
             groups.setdefault(rep, set()).add(int(node))
 
-        # description of supernodes, eg. "4=5=6"
         label_map = {rep: "=".join(map(str, sorted(members)))
                      for rep, members in groups.items()}
 
-        # node type (color) – will take most frequent type in group (or first available)
+        # pomocná funkce pro typ skupiny (nejčastější typ ve skupině)
+        from collections import Counter
         def group_type(rep):
             members = groups[rep]
             types = [sj_type_map.get(m, '') for m in members if sj_type_map.get(m, '')]
-            if not types:
-                return ''
-            # most frequent
-            from collections import Counter
-            return Counter(types).most_common(1)[0][0]
+            return Counter(types).most_common(1)[0][0] if types else ''
 
-        # 3) create DAG among supernodes (without "=")
+        # 4) DAG mezi superuzly (POZOR: správné směrování!)
+        #    a > b = a je NAD b  → hrana a -> b (směr shora dolů)
+        #    a < b = a je POD b  → hrana b -> a (opět shora dolů)
         G = nx.DiGraph()
-        # add all supernodes (and isolated as well)
-        for rep in groups.keys():
-            G.add_node(rep)
+        G.add_nodes_from(groups.keys())
 
         for a, rel, b in rels:
             a, b = int(a), int(b)
             if rel == '=':
                 continue
-            u = dsu.find(a)
-            v = dsu.find(b)
+            u, v = dsu.find(a), dsu.find(b)
             if u == v:
-                continue  # equality reduces line to self-loop -> ignore
+                continue
+            if rel == '>':
+                G.add_edge(u, v)   # a nad b → a→b
+            elif rel == '<':
+                G.add_edge(v, u)   # a pod b → b→a
 
-            # tehere are both directions in DB; unify it:
-            # '<' we have a < b (means a->b), '>' as a > b (therefore a<-b)
-            if rel == '<':
-                G.add_edge(u, v)
-            elif rel == '>':
-                G.add_edge(v, u)
+        # 5) acykličnost
+        if not nx.is_directed_acyclic_graph(G):
+            try:
+                cycles = list(nx.find_cycle(G, orientation='original'))
+            except Exception:
+                cycles = []
+            logger.warning(f"[{selected_db}] Cycle detected in relations: {cycles}")
+            flash('A cycle was found in relations! Harris Matrix was not generated.', 'danger')
+            return redirect(url_for('su.harrismatrix'))
 
-        # 4) cycling cotrol (Harris/DAG)
+        # 6) Hasse (transitive reduction)
+        H = nx.algorithms.dag.transitive_reduction(G)
+
+        # 7) layout – explicitně vynutíme top→down
         try:
-            cycles = list(nx.find_cycle(G, orientation='original'))
-            if cycles:
-                flash('A cycle was found in relations! Harris Matrix was not generated.', 'danger')
-                logger.warning(f"[{selected_db}] Cycle in DAG: {cycles}")
-                return redirect(url_for('su.harrismatrix'))
-        except nx.exception.NetworkXNoCycle:
-            pass
-
-        # 5) Hasse diagram = transitive reduction
-        H = transitive_reduction(G)
-
-        # 6) layout (dot – hierarchical)
-        try:
-            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')
+            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot', args='-Grankdir=TB')
         except Exception as e:
             logger.error(f"[{selected_db}] graphviz_layout failed: {e}")
             flash('Graphviz is missing or failed. Install "graphviz" and "pydot".', 'danger')
             return redirect(url_for('su.harrismatrix'))
 
-        # 7) barvy uzlů dle typu
+        # 8) barvy uzlů dle typu (včetně tolerance 'negativ'/'negative')
         color_map = {
-            'deposit': '#90EE90',   # green
-            'negativ': '#FFA07A',   # orange (DB uses "negativ")
-            'negative': '#FFA07A',  # if "negative"
-            'structure': '#87CEFA'  # blue
+            'deposit':   deposit_color,
+            'negativ':   negative_color,   # DB používá "negativ"
+            'negative':  negative_color,   # pro jistotu obě varianty
+            'structure': structure_color
         }
         node_colors = []
         for node in H.nodes():
             t = group_type(node)
             node_colors.append(color_map.get(t, '#D3D3D3'))  # default gray
 
-        # 8) drawing the layout
+        # 9) kreslení
         plt.figure(figsize=(12, 10))
         nx.draw(
             H, pos,
@@ -388,11 +385,13 @@ def generate_harrismatrix():
             font_color='black',
             arrows=False
         )
-        # labels according label_map (supernodes: "4=5")
-        nx.draw_networkx_labels(H, pos, labels={n: label_map.get(n, str(n)) for n in H.nodes()},
-                                font_size=11)
+        nx.draw_networkx_labels(
+            H, pos,
+            labels={n: label_map.get(n, str(n)) for n in H.nodes()},
+            font_size=11
+        )
 
-        # 9) saving to folder of specific DB
+        # 10) uložení do per-DB složky
         images_dir, _ = get_hmatrix_dirs(selected_db)
         os.makedirs(images_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
