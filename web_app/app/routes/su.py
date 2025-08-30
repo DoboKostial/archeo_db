@@ -281,27 +281,25 @@ def generate_harrismatrix():
         flash('No terrain DB selected.', 'danger')
         return redirect(url_for('su.harrismatrix'))
 
-    # --- 1) načtení barev z formuláře (fallback na rozumné defaulty) ---
-    deposit_color   = (request.form.get('deposit_color')   or '#90EE90').strip()
-    negative_color  = (request.form.get('negative_color')  or '#FFA07A').strip()
-    structure_color = (request.form.get('structure_color') or '#87CEFA').strip()
+    # --- barvy z formuláře + rozumné defaulty shodné s HTML ---
+    deposit_color   = (request.form.get('deposit_color')   or '#ADD8E6').strip()
+    negative_color  = (request.form.get('negative_color')  or '#90EE90').strip()
+    structure_color = (request.form.get('structure_color') or '#FFD700').strip()
 
     conn = None
     try:
         conn = get_terrain_connection(selected_db)
 
-        # 2) načti vztahy a typy SU
         with conn.cursor() as cur:
             cur.execute("SELECT ref_sj1, relation, ref_sj2 FROM tab_sj_stratigraphy;")
             rels = cur.fetchall()
-
             cur.execute("SELECT id_sj, sj_typ FROM tab_sj;")
             all_sj_rows = cur.fetchall()
 
         all_sj = {int(r[0]) for r in all_sj_rows}
         sj_type_map = {int(r[0]): (r[1] or '').lower() for r in all_sj_rows}
 
-        # 3) union-find pro '='
+        # --- union-find pro '=' ---
         dsu = DSU()
         for a, rel, b in rels:
             if rel == '=':
@@ -312,23 +310,18 @@ def generate_harrismatrix():
         for node in all_sj.union({int(a) for a, _, _ in rels}).union({int(b) for _, _, b in rels}):
             rep = dsu.find(int(node))
             groups.setdefault(rep, set()).add(int(node))
+        label_map = {rep: "=".join(map(str, sorted(members))) for rep, members in groups.items()}
 
-        label_map = {rep: "=".join(map(str, sorted(members)))
-                     for rep, members in groups.items()}
-
-        # pomocná funkce pro typ skupiny (nejčastější typ ve skupině)
         from collections import Counter
         def group_type(rep):
-            members = groups[rep]
-            types = [sj_type_map.get(m, '') for m in members if sj_type_map.get(m, '')]
+            types = [sj_type_map.get(m, '') for m in groups[rep] if sj_type_map.get(m, '')]
             return Counter(types).most_common(1)[0][0] if types else ''
 
-        # 4) DAG mezi superuzly (POZOR: správné směrování!)
-        #    a > b = a je NAD b  → hrana a -> b (směr shora dolů)
-        #    a < b = a je POD b  → hrana b -> a (opět shora dolů)
+        # --- DAG mezi superuzly (správné směrování pro Hasse) ---
+        # a > b = a je NAD b  → hrana a -> b (směr shora dolů)
+        # a < b = a je POD b  → hrana b -> a
         G = nx.DiGraph()
         G.add_nodes_from(groups.keys())
-
         for a, rel, b in rels:
             a, b = int(a), int(b)
             if rel == '=':
@@ -337,11 +330,11 @@ def generate_harrismatrix():
             if u == v:
                 continue
             if rel == '>':
-                G.add_edge(u, v)   # a nad b → a→b
+                G.add_edge(u, v)
             elif rel == '<':
-                G.add_edge(v, u)   # a pod b → b→a
+                G.add_edge(v, u)
 
-        # 5) acykličnost
+        # acykličnost
         if not nx.is_directed_acyclic_graph(G):
             try:
                 cycles = list(nx.find_cycle(G, orientation='original'))
@@ -351,30 +344,43 @@ def generate_harrismatrix():
             flash('A cycle was found in relations! Harris Matrix was not generated.', 'danger')
             return redirect(url_for('su.harrismatrix'))
 
-        # 6) Hasse (transitive reduction)
+        # --- Hasse: transitive reduction ---
         H = nx.algorithms.dag.transitive_reduction(G)
 
-        # 7) layout – explicitně vynutíme top→down
+        # --- layout dot (bez args), pak OTOČÍME osu Y pro správnou orientaci ---
         try:
-            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot', args='-Grankdir=TB')
+            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')  
         except Exception as e:
             logger.error(f"[{selected_db}] graphviz_layout failed: {e}")
-            flash('Graphviz is missing or failed. Install "graphviz" and "pydot".', 'danger')
+            flash('Graphviz layout failed. Ensure "graphviz" and "pydot" are installed.', 'danger')
             return redirect(url_for('su.harrismatrix'))
 
-        # 8) barvy uzlů dle typu (včetně tolerance 'negativ'/'negative')
+        # --- auto-correct vertical orientation ---
+        # chceme: "top" (kořeny, in_degree==0) NAHOŘE, "bottom" (listy, out_degree==0) DOLE
+        tops = [n for n in H.nodes() if H.in_degree(n) == 0]
+        bottoms = [n for n in H.nodes() if H.out_degree(n) == 0]
+
+        if tops and bottoms:
+            top_mean_y = sum(pos[n][1] for n in tops) / len(tops)
+            bottom_mean_y = sum(pos[n][1] for n in bottoms) / len(bottoms)
+
+            # V matplotlibu roste osa Y nahoru. Pokud jsou "top" uzly níž než "bottom", převrátíme svisle.
+            if top_mean_y < bottom_mean_y:
+                ymin = min(y for (_, y) in pos.values())
+                ymax = max(y for (_, y) in pos.values())
+                for n, (x, y) in list(pos.items()):
+                    pos[n] = (x, (ymax + ymin) - y)
+
+        # --- barvy ---
         color_map = {
             'deposit':   deposit_color,
             'negativ':   negative_color,   # DB používá "negativ"
             'negative':  negative_color,   # pro jistotu obě varianty
-            'structure': structure_color
+            'structure': structure_color,
         }
-        node_colors = []
-        for node in H.nodes():
-            t = group_type(node)
-            node_colors.append(color_map.get(t, '#D3D3D3'))  # default gray
+        node_colors = [color_map.get(group_type(n), '#D3D3D3') for n in H.nodes()]
 
-        # 9) kreslení
+        # --- kreslení ---
         plt.figure(figsize=(12, 10))
         nx.draw(
             H, pos,
@@ -391,7 +397,7 @@ def generate_harrismatrix():
             font_size=11
         )
 
-        # 10) uložení do per-DB složky
+        # --- uložení ---
         images_dir, _ = get_hmatrix_dirs(selected_db)
         os.makedirs(images_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
