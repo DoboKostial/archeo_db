@@ -4,6 +4,7 @@ from datetime import datetime
 
 import jwt
 import networkx as nx
+from networkx.algorithms.dag import transitive_reduction
 import matplotlib
 matplotlib.use('Agg')  # <- backend without GUI (no Tk)
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ from app.queries import (
     count_sj_without_relation,   # returns SQL string
     fetch_stratigraphy_relations # executes & returns rows
 )
+
 
 su_bp = Blueprint('su', __name__)
 
@@ -250,127 +252,166 @@ def harrismatrix():
         harris_image=harris_image,
     )
 
+class DSU:
+    def __init__(self):
+        self.parent = {}
+
+    def find(self, x):
+        self.parent.setdefault(x, x)
+        if self.parent[x] != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, a, b):
+        ra, rb = self.find(a), self.find(b)
+        if ra == rb:
+            return
+        # deterministic: lower ID is representative
+        if ra < rb:
+            self.parent[rb] = ra
+        else:
+            self.parent[ra] = rb
 
 @su_bp.route('/generate-harrismatrix', methods=['POST'])
 @require_selected_db
 def generate_harrismatrix():
     selected_db = session.get('selected_db')
     if not selected_db:
-        flash('No database selected.', 'danger')
+        flash('No terrain DB selected.', 'danger')
         return redirect(url_for('su.harrismatrix'))
 
     conn = None
     try:
         conn = get_terrain_connection(selected_db)
 
-        # Load stratigraphic relations
-        relations = fetch_stratigraphy_relations(conn)
+        # 1) read all realtionships
+        with conn.cursor() as cur:
+            cur.execute("SELECT ref_sj1, relation, ref_sj2 FROM tab_sj_stratigraphy;")
+            rels = cur.fetchall()
 
-        # Build graph
+            # read all SUs (to display also isolated / only with "=")
+            cur.execute("SELECT id_sj, sj_typ FROM tab_sj;")
+            all_sj_rows = cur.fetchall()
+
+        all_sj = {r[0] for r in all_sj_rows}
+        sj_type_map = {r[0]: (r[1] or '').lower() for r in all_sj_rows}
+
+        # 2) union equals to groups (union-find)
+        dsu = DSU()
+        for a, rel, b in rels:
+            if rel == '=':
+                dsu.union(int(a), int(b))
+
+        # create mapping: node -> representative and group for description
+        groups = {}
+        for node in all_sj.union({int(a) for a,_,_ in rels}).union({int(b) for _,_,b in rels}):
+            rep = dsu.find(int(node))
+            groups.setdefault(rep, set()).add(int(node))
+
+        # description of supernodes, eg. "4=5=6"
+        label_map = {rep: "=".join(map(str, sorted(members)))
+                     for rep, members in groups.items()}
+
+        # node type (color) – will take most frequent type in group (or first available)
+        def group_type(rep):
+            members = groups[rep]
+            types = [sj_type_map.get(m, '') for m in members if sj_type_map.get(m, '')]
+            if not types:
+                return ''
+            # most frequent
+            from collections import Counter
+            return Counter(types).most_common(1)[0][0]
+
+        # 3) create DAG among supernodes (without "=")
         G = nx.DiGraph()
+        # add all supernodes (and isolated as well)
+        for rep in groups.keys():
+            G.add_node(rep)
 
-        # Handle equality groups (=)
-        equals_groups = []
-        processed_equals = set()
-        for ref_sj1, relation, ref_sj2 in relations:
-            if relation == '=':
-                if ref_sj1 not in processed_equals and ref_sj2 not in processed_equals:
-                    equals_groups.append({ref_sj1, ref_sj2})
-                else:
-                    for group in equals_groups:
-                        if ref_sj1 in group or ref_sj2 in group:
-                            group.update([ref_sj1, ref_sj2])
-                            break
-                processed_equals.update([ref_sj1, ref_sj2])
+        for a, rel, b in rels:
+            a, b = int(a), int(b)
+            if rel == '=':
+                continue
+            u = dsu.find(a)
+            v = dsu.find(b)
+            if u == v:
+                continue  # equality reduces line to self-loop -> ignore
 
-        # Map nodes to representatives
-        node_mapping = {}
-        for group in equals_groups:
-            representative = min(group)
-            for node in group:
-                node_mapping[node] = representative
+            # tehere are both directions in DB; unify it:
+            # '<' we have a < b (means a->b), '>' as a > b (therefore a<-b)
+            if rel == '<':
+                G.add_edge(u, v)
+            elif rel == '>':
+                G.add_edge(v, u)
 
-        # Add edges for < and >
-        for ref_sj1, relation, ref_sj2 in relations:
-            if relation in ('<', '>'):
-                source = node_mapping.get(ref_sj1, ref_sj1)
-                target = node_mapping.get(ref_sj2, ref_sj2)
-                if relation == '<':
-                    G.add_edge(source, target)
-                elif relation == '>':
-                    G.add_edge(target, source)
-
-        # Detect cycles
+        # 4) cycling cotrol (Harris/DAG)
         try:
             cycles = list(nx.find_cycle(G, orientation='original'))
             if cycles:
-                flash('A cycle was detected in the relations! Matrix was not generated.', 'danger')
+                flash('A cycle was found in relations! Harris Matrix was not generated.', 'danger')
+                logger.warning(f"[{selected_db}] Cycle in DAG: {cycles}")
                 return redirect(url_for('su.harrismatrix'))
         except nx.exception.NetworkXNoCycle:
-            pass  # no cycle → OK
+            pass
 
-        # Layout (Y axis inverted)
-        pos = nx.drawing.nx_pydot.graphviz_layout(G, prog='dot')
-        for node in pos:
-            x, y = pos[node]
-            pos[node] = (x, -y)
+        # 5) Hasse diagram = transitive reduction
+        H = transitive_reduction(G)
 
-        # Load SU types
-        types_dict = {}
-        with conn.cursor() as cur:
-            cur.execute("SELECT id_sj, sj_typ FROM tab_sj")
-            for id_sj, sj_typ in cur.fetchall():
-                types_dict[id_sj] = sj_typ.lower()
+        # 6) layout (dot – hierarchical)
+        try:
+            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')
+        except Exception as e:
+            logger.error(f"[{selected_db}] graphviz_layout failed: {e}")
+            flash('Graphviz is missing or failed. Install "graphviz" and "pydot".', 'danger')
+            return redirect(url_for('su.harrismatrix'))
 
-        # Colors by type (support both 'negativ' and 'negative')
+        # 7) barvy uzlů dle typu
         color_map = {
-            'deposit':   '#90EE90',
-            'negativ':   '#FFA07A',
-            'negative':  '#FFA07A',
-            'structure': '#87CEFA',
+            'deposit': '#90EE90',   # green
+            'negativ': '#FFA07A',   # orange (DB uses "negativ")
+            'negative': '#FFA07A',  # if "negative"
+            'structure': '#87CEFA'  # blue
         }
-
         node_colors = []
-        for node in G.nodes():
-            node_type = types_dict.get(node, 'unknown')
-            node_colors.append(color_map.get(node_type, '#D3D3D3'))
+        for node in H.nodes():
+            t = group_type(node)
+            node_colors.append(color_map.get(t, '#D3D3D3'))  # default gray
 
-        # Render graph
+        # 8) drawing the layout
         plt.figure(figsize=(12, 10))
         nx.draw(
-            G, pos,
-            with_labels=True,
+            H, pos,
+            with_labels=False,
             node_color=node_colors,
             node_size=2000,
             font_size=10,
             font_color='black',
             arrows=False
         )
+        # labels according label_map (supernodes: "4=5")
+        nx.draw_networkx_labels(H, pos, labels={n: label_map.get(n, str(n)) for n in H.nodes()},
+                                font_size=11)
 
-        # Target directory: under DATA_DIR/<db>/harrismatrix
+        # 9) saving to folder of specific DB
         images_dir, _ = get_hmatrix_dirs(selected_db)
         os.makedirs(images_dir, exist_ok=True)
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{selected_db}_{timestamp}.png"
         filepath = os.path.join(images_dir, filename)
-
         plt.savefig(filepath, format="png", bbox_inches='tight')
         plt.close()
 
-        # keep filename in session (if template needs it)
         session['harrismatrix_image'] = filename
-
-        flash('Harris Matrix has been generated.', 'success')
+        flash('Harris Matrix was generated.', 'success')
         return redirect(url_for('su.harrismatrix'))
 
     except Exception as e:
+        logger.error(f"[{selected_db}] Error while generating Harris Matrix: {e}")
         flash(f'Error while generating Harris Matrix: {str(e)}', 'danger')
         return redirect(url_for('su.harrismatrix'))
     finally:
         if conn:
-            try: conn.close()
-            except Exception: pass
+            conn.close()
 
 
 
