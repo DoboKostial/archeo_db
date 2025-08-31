@@ -226,3 +226,25 @@ def insert_polygon_sql(polygon_name, points, source_epsg):
     """
     params = (polygon_name, wkt_linestring, int(source_epsg))
     return sql_text, params
+
+
+# --- Harris / SU & Objects queries ---
+
+def get_all_sj_with_types(conn):
+    """Return [(id_sj, sj_typ), ...]."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id_sj, sj_typ FROM tab_sj;")
+        return cur.fetchall()
+
+def get_sj_with_object_refs(conn):
+    """Return [(id_sj, ref_object), ...] only rows with ref_object IS NOT NULL."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id_sj, ref_object FROM tab_sj WHERE ref_object IS NOT NULL;")
+        return cur.fetchall()
+
+def get_all_objects(conn):
+    """Return [(id_object, object_typ, superior_object), ...]."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT id_object, object_typ, superior_object FROM tab_object;")
+        return cur.fetchall()
+

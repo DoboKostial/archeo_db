@@ -31,39 +31,75 @@
     </tbody>
 </table>
 
-<!-- Form for entering Harris Matrix generation parameters -->
-<div class="card mb-4">
-    <div class="card-header">
-        Parameters for Harris Matrix generation
-    </div>
-    <div class="card-body">
-        <form action="{{ url_for('su.generate_harrismatrix') }}" method="post">
-            <div class="row mb-3">
-                <div class="col">
-                    <label for="deposit_color" class="form-label">Color for Deposit</label>
-                    <input type="color" class="form-control form-control-color" id="deposit_color" name="deposit_color" value="#ADD8E6">
-                </div>
-                <div class="col">
-                    <label for="negative_color" class="form-label">Color for Negative</label>
-                    <input type="color" class="form-control form-control-color" id="negative_color" name="negative_color" value="#90EE90">
-                </div>
-                <div class="col">
-                    <label for="structure_color" class="form-label">Color for Structure</label>
-                    <input type="color" class="form-control form-control-color" id="structure_color" name="structure_color" value="#FFD700">
-                </div>
+<!-- Controls for Harris Matrix -->
+<form action="{{ url_for('su.generate_harrismatrix') }}" method="post" class="mb-4">
+    <div class="row g-3">
+  
+      <!-- Colors -->
+      <div class="col-12 col-md-4">
+        <div class="p-3 h-100 rounded-3" style="background:#f8fbff;border:1px solid #e6eef8;">
+          <h6 class="mb-3 text-primary">SU Colors</h6>
+          <div class="row g-2">
+            <div class="col-6">
+              <label for="deposit_color" class="form-label small">Deposit</label>
+              <input type="color" class="form-control form-control-color w-100" id="deposit_color" name="deposit_color" value="#ADD8E6">
             </div>
-
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="draw_objects" name="draw_objects">
-                <label class="form-check-label" for="draw_objects">
-                    Draw higher-level objects
-                </label>
+            <div class="col-6">
+              <label for="negative_color" class="form-label small">Negative</label>
+              <input type="color" class="form-control form-control-color w-100" id="negative_color" name="negative_color" value="#90EE90">
             </div>
-
-            <button type="submit" class="btn btn-primary">Generate Harris Matrix</button>
-        </form>
+            <div class="col-12 mt-1">
+              <label for="structure_color" class="form-label small">Structure</label>
+              <input type="color" class="form-control form-control-color" id="structure_color" name="structure_color" value="#FFD700">
+            </div>
+          </div>
+        </div>
+      </div>
+  
+      <!-- Higher-level objects -->
+      <div class="col-12 col-md-4">
+        <div class="p-3 h-100 rounded-3" style="background:#f9fff8;border:1px solid #e6f4e6;">
+          <h6 class="mb-3 text-success">Higher-level objects</h6>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="draw_objects" name="draw_objects">
+            <label class="form-check-label" for="draw_objects">
+              Draw higher-level objects (with hierarchy)
+            </label>
+          </div>
+          <div class="small text-muted mt-2">
+            Objects are rendered as light bounding boxes behind the graph.
+          </div>
+        </div>
+      </div>
+  
+      <!-- Node shape -->
+      <div class="col-12 col-md-4">
+        <div class="p-3 h-100 rounded-3" style="background:#fffaf7;border:1px solid #f4e6dd;">
+          <h6 class="mb-3 text-warning">Node shape</h6>
+          <div class="d-flex align-items-center gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="node_shape" id="shape_circle" value="circle" checked>
+              <label class="form-check-label" for="shape_circle">Circle</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="node_shape" id="shape_rectangle" value="rectangle">
+              <label class="form-check-label" for="shape_rectangle">Rectangle</label>
+            </div>
+          </div>
+          <div class="small text-muted mt-2">
+            Rectangles are drawn as squares for clarity.
+          </div>
+        </div>
+      </div>
+  
+      <!-- Action button -->
+      <div class="col-12 d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary">Generate Harris Matrix</button>
+      </div>
+  
     </div>
-</div>
+  </form>
+  
 
 <!-- Section for displaying the last generated matrix image -->
 {% if harris_image %}

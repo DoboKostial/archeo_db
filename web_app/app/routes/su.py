@@ -8,6 +8,8 @@ from networkx.algorithms.dag import transitive_reduction
 import matplotlib
 matplotlib.use('Agg')  # <- backend without GUI (no Tk)
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from collections import defaultdict, Counter
 
 from flask import (
     Blueprint, request, render_template, redirect, url_for, flash, session, send_from_directory
@@ -23,7 +25,10 @@ from app.queries import (
     count_total_sj,              # returns SQL string
     count_objects,               # returns SQL string
     count_sj_without_relation,   # returns SQL string
-    fetch_stratigraphy_relations # executes & returns rows
+    fetch_stratigraphy_relations, # executes & returns rows
+    get_all_sj_with_types,
+    get_all_objects,
+    get_sj_with_object_refs,
 )
 
 
@@ -281,45 +286,46 @@ def generate_harrismatrix():
         flash('No terrain DB selected.', 'danger')
         return redirect(url_for('su.harrismatrix'))
 
-    # --- barvy z formuláře + rozumné defaulty shodné s HTML ---
+    # --- barvy + tvary z formuláře ---
     deposit_color   = (request.form.get('deposit_color')   or '#ADD8E6').strip()
     negative_color  = (request.form.get('negative_color')  or '#90EE90').strip()
     structure_color = (request.form.get('structure_color') or '#FFD700').strip()
+    node_shape_req  = (request.form.get('node_shape') or 'circle').lower()
+    node_shape      = 'o' if node_shape_req == 'circle' else 's'   # 'o' = circle, 's' = square
+    draw_objects    = bool(request.form.get('draw_objects'))
 
     conn = None
     try:
         conn = get_terrain_connection(selected_db)
 
         with conn.cursor() as cur:
-            cur.execute("SELECT ref_sj1, relation, ref_sj2 FROM tab_sj_stratigraphy;")
-            rels = cur.fetchall()
-            cur.execute("SELECT id_sj, sj_typ FROM tab_sj;")
-            all_sj_rows = cur.fetchall()
-
+            rels = fetch_stratigraphy_relations(conn)                  # [(ref_sj1, relation, ref_sj2), ...]
+        
+            all_sj_rows = get_all_sj_with_types(conn)                  # [(id_sj, sj_typ), ...]
+            
         all_sj = {int(r[0]) for r in all_sj_rows}
         sj_type_map = {int(r[0]): (r[1] or '').lower() for r in all_sj_rows}
 
-        # --- union-find pro '=' ---
+        # --- rovnosti -> union-find ---
         dsu = DSU()
         for a, rel, b in rels:
             if rel == '=':
                 dsu.union(int(a), int(b))
 
-        # skupiny (superuzly) + popisky
+        # superuzly a popisky
         groups = {}
-        for node in all_sj.union({int(a) for a, _, _ in rels}).union({int(b) for _, _, b in rels}):
+        for node in all_sj.union({int(a) for a,_,_ in rels}).union({int(b) for _,_,b in rels}):
             rep = dsu.find(int(node))
             groups.setdefault(rep, set()).add(int(node))
         label_map = {rep: "=".join(map(str, sorted(members))) for rep, members in groups.items()}
 
-        from collections import Counter
         def group_type(rep):
             types = [sj_type_map.get(m, '') for m in groups[rep] if sj_type_map.get(m, '')]
             return Counter(types).most_common(1)[0][0] if types else ''
 
-        # --- DAG mezi superuzly (správné směrování pro Hasse) ---
-        # a > b = a je NAD b  → hrana a -> b (směr shora dolů)
-        # a < b = a je POD b  → hrana b -> a
+        # --- DAG (správný směr) ---
+        # a > b  = a nad b → hrana a->b (shora dolů)
+        # a < b  = a pod b → hrana b->a
         G = nx.DiGraph()
         G.add_nodes_from(groups.keys())
         for a, rel, b in rels:
@@ -347,55 +353,121 @@ def generate_harrismatrix():
         # --- Hasse: transitive reduction ---
         H = nx.algorithms.dag.transitive_reduction(G)
 
-        # --- layout dot (bez args), pak OTOČÍME osu Y pro správnou orientaci ---
+        # --- layout (dot) + auto-orientace top-down ---
         try:
-            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')  
+            pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')
         except Exception as e:
             logger.error(f"[{selected_db}] graphviz_layout failed: {e}")
             flash('Graphviz layout failed. Ensure "graphviz" and "pydot" are installed.', 'danger')
             return redirect(url_for('su.harrismatrix'))
 
-        # --- auto-correct vertical orientation ---
-        # chceme: "top" (kořeny, in_degree==0) NAHOŘE, "bottom" (listy, out_degree==0) DOLE
-        tops = [n for n in H.nodes() if H.in_degree(n) == 0]
+        tops    = [n for n in H.nodes() if H.in_degree(n) == 0]
         bottoms = [n for n in H.nodes() if H.out_degree(n) == 0]
-
         if tops and bottoms:
             top_mean_y = sum(pos[n][1] for n in tops) / len(tops)
             bottom_mean_y = sum(pos[n][1] for n in bottoms) / len(bottoms)
-
-            # V matplotlibu roste osa Y nahoru. Pokud jsou "top" uzly níž než "bottom", převrátíme svisle.
+            # chceme top nahoře → pokud je níže, převrátíme svisle
             if top_mean_y < bottom_mean_y:
                 ymin = min(y for (_, y) in pos.values())
                 ymax = max(y for (_, y) in pos.values())
                 for n, (x, y) in list(pos.items()):
                     pos[n] = (x, (ymax + ymin) - y)
 
-        # --- barvy ---
+        # --- barvy uzlů podle typu ---
         color_map = {
             'deposit':   deposit_color,
-            'negativ':   negative_color,   # DB používá "negativ"
-            'negative':  negative_color,   # pro jistotu obě varianty
+            'negativ':   negative_color,   # DB má "negativ"
+            'negative':  negative_color,
             'structure': structure_color,
         }
         node_colors = [color_map.get(group_type(n), '#D3D3D3') for n in H.nodes()]
 
-        # --- kreslení ---
         plt.figure(figsize=(12, 10))
+        ax = plt.gca()
+
+        # --- (volitelně) kreslení obálek objektů ---
+        if draw_objects:
+            try:
+                with conn.cursor() as cur:
+                    obj_rows = get_all_objects(conn)                           # [(id_object, object_typ, superior_object), ...]
+                    obj_rows = [(int(i), t, (int(s) if s not in (None, 0) else None)) for i, t, s in obj_rows]
+
+                    sj_obj_rows = get_sj_with_object_refs(conn)                # [(id_sj, ref_object), ...]
+                    sj_obj_rows = [(int(sj), int(obj)) for sj, obj in sj_obj_rows]
+            except Exception as e:
+                logger.error(f"[{selected_db}] Loading objects failed: {e}")
+                obj_rows, sj_obj_rows = [], []
+
+            # SU → objekt → superuzly (po sloučení '=')
+            obj_to_reps = defaultdict(set)
+            for sj, obj in sj_obj_rows:
+                rep = dsu.find(sj)
+                if rep in H.nodes:  # jen uzly, které se kreslí
+                    obj_to_reps[obj].add(rep)
+
+            # hierarchie objektů (rodič absorbující potomky)
+            children = defaultdict(list)
+            for oid, typ, sup in obj_rows:
+                if sup is not None:
+                    children[sup].append(oid)
+
+            visited = set()
+            def accumulate(oid):
+                if oid in visited:
+                    return obj_to_reps.get(oid, set())
+                reps = set(obj_to_reps.get(oid, set()))
+                for ch in children.get(oid, []):
+                    reps |= accumulate(ch)
+                obj_to_reps[oid] = reps
+                visited.add(oid)
+                return reps
+
+            for oid, _, _ in obj_rows:
+                accumulate(oid)
+
+            # kreslení obdélníkových obálek (za graf, poloprůhledně)
+            for oid, typ, _ in obj_rows:
+                reps = list(obj_to_reps.get(oid, set()))
+                if not reps:
+                    continue
+                xs = [pos[r][0] for r in reps if r in pos]
+                ys = [pos[r][1] for r in reps if r in pos]
+                if not xs or not ys:
+                    continue
+
+                pad = 40.0
+                x0, x1 = min(xs) - pad, max(xs) + pad
+                y0, y1 = min(ys) - pad, max(ys) + pad
+
+                rect = mpatches.FancyBboxPatch(
+                    (x0, y0), x1 - x0, y1 - y0,
+                    boxstyle="round,pad=0.02,rounding_size=8",
+                    linewidth=1.3, edgecolor="#555", facecolor="none",
+                    alpha=0.5, zorder=0
+                )
+                ax.add_patch(rect)
+                # popisek objektu nad rámem
+                # POPISEK: dovnitř do pravého horního rohu, větší a čitelný
+                label = f"Obj {oid}" + (f" ({typ})" if typ else "")
+                ax.text(
+                    x1 - 8.0, y1 - 8.0, label,
+                    ha='right', va='top',
+                    fontsize=13, color="#222", zorder=3,
+                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none", alpha=0.75)
+                )
+        # --- hrany + uzly + popisky (uzly jako circle/square podle volby) ---
         nx.draw(
             H, pos,
             with_labels=False,
             node_color=node_colors,
             node_size=2000,
-            font_size=10,
-            font_color='black',
-            arrows=False
+            arrows=False,
+            node_shape=node_shape,
+            ax=ax
         )
-        nx.draw_networkx_labels(
-            H, pos,
-            labels={n: label_map.get(n, str(n)) for n in H.nodes()},
-            font_size=11
-        )
+        nx.draw_networkx_labels(H, pos,
+                                labels={n: label_map.get(n, str(n)) for n in H.nodes()},
+                                font_size=11, ax=ax)
 
         # --- uložení ---
         images_dir, _ = get_hmatrix_dirs(selected_db)
@@ -417,7 +489,6 @@ def generate_harrismatrix():
     finally:
         if conn:
             conn.close()
-
 
 
 @su_bp.route('/harrismatrix/img/<path:filename>')
