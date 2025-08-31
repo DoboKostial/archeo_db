@@ -278,6 +278,13 @@ class DSU:
             self.parent[ra] = rb
 
 
+def _edge_str(u, v, label_map):
+    """Vypíše hranu ve formátu A > B (podpora superuzlů '4=5')."""
+    a = label_map.get(u, str(u))
+    b = label_map.get(v, str(v))
+    return f"{a} > {b}"
+
+
 @su_bp.route('/generate-harrismatrix', methods=['POST'])
 @require_selected_db
 def generate_harrismatrix():
@@ -343,15 +350,34 @@ def generate_harrismatrix():
         # acykličnost
         if not nx.is_directed_acyclic_graph(G):
             try:
-                cycles = list(nx.find_cycle(G, orientation='original'))
+                # vezmeme první detekovaný cyklus a přepíšeme na „>“ výpis
+                cyc = list(nx.find_cycle(G, orientation='original'))
+                cyc_nodes = [u for (u, _, _) in cyc] + [cyc[0][0]]
+                msg = " → ".join(label_map.get(n, str(n)) for n in cyc_nodes)
             except Exception:
-                cycles = []
-            logger.warning(f"[{selected_db}] Cycle detected in relations: {cycles}")
-            flash('A cycle was found in relations! Harris Matrix was not generated.', 'danger')
+                msg = "Unknown cycle"
+            logger.warning(f"[{selected_db}] Cycle detected in relations: {msg}")
+            flash(f"A cycle was found in relations: {msg}. Harris Matrix was not generated.", "danger")
             return redirect(url_for('su.harrismatrix'))
 
         # --- Hasse: transitive reduction ---
         H = nx.algorithms.dag.transitive_reduction(G)
+        
+        # --- VALIDÁTOR: redundantní hrany (takové, které TR odstraní) ---
+        redundant = sorted(set(G.edges()) - set(H.edges()))
+        if redundant:
+            # převeďme na čitelný výpis A > B, ukážeme max 10 ks, zbytek do logu
+            rd_labels = [_edge_str(u, v, label_map) for (u, v) in redundant]
+            shown = rd_labels[:10]
+            more = len(rd_labels) - len(shown)
+            if more > 0:
+                flash(f"Redundant relations (first 10 of {len(rd_labels)}): " + ", ".join(shown) + f", … (+{more} more).", "warning")
+            else:
+                flash("Redundant relations: " + ", ".join(shown), "warning")
+            logger.info(f"[{selected_db}] Redundant relations removed by Hasse reduction: {', '.join(rd_labels)}")
+        else:
+            logger.info(f"[{selected_db}] No redundant relations.")
+
 
         # --- layout (dot) + auto-orientace top-down ---
         try:
