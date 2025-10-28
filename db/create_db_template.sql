@@ -1,5 +1,15 @@
--- This is basix SQL script
--- basix role and privileges
+-- This is basix SQL script for making database structure
+--- ArcheoDB project; author dobo@dobo.sk
+
+
+---
+-- extensions needed
+---
+CREATE EXTENSION postgis;
+
+
+---
+-- BASIX ROLES AND PRIVILEGES
 -- making database with owner grp_dbas creating all tables under this account
 
 CREATE ROLE grp_dbas WITH CREATEDB INHERIT;
@@ -17,8 +27,6 @@ CREATE DATABASE terrain_db_template OWNER app_terrain_db ENCODING 'UTF8' IS_TEMP
 -- Connect to the template database to configure it
 \c terrain_db_template;
 
-CREATE EXTENSION postgis;
-
 -- default privileges for users
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO app_terrain_db;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO app_terrain_db;
@@ -28,79 +36,81 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO app_terrain_db;
 
 SET ROLE app_terrain_db;
 
+
+
 --###### TABLES definitions here #######
 -- #### Glossaries as tables #####
 --######################################
 
+---
+-- GLOSSARIES
+---
 
--- public.gloss_docu_typ definition
-
+-- gloss_docu_typ definition
 CREATE TABLE gloss_docu_typ (
-	docu_typ varchar(60) NOT NULL,
-	description varchar(200) NULL,
+	docu_typ VARCHAR(60) NOT NULL,
+	description VARCHAR(200) NULL,
 	CONSTRAINT gloss_docu_typ_pk PRIMARY KEY (docu_typ)
 );
 
-
--- public.gloss_object_type definition
--- glossary for archaeological objects
-
+-- gloss_object_type definition - glossary for archaeological objects
 CREATE TABLE gloss_object_type (
-	object_typ varchar(100) NOT NULL,
-	description_typ varchar(200) NULL,
+	object_typ VARCHAR(100) NOT NULL,
+	description_typ VARCHAR(200) NULL,
 	CONSTRAINT gloss_object_type_pk PRIMARY KEY (object_typ)
 );
 
 
--- public.gloss_personalia definition
-
-CREATE TABLE public.gloss_personalia (
-	mail varchar(80) NOT NULL,
-	"name" varchar(150) NOT NULL,
-	group_role varchar(40) NOT NULL,
+-- gloss personalia definition - people 
+CREATE TABLE gloss_personalia (
+	mail VARCHAR(100) NOT NULL,
+	"name" VARCHAR(150) NOT NULL,
+	group_role VARCHAR(40) NOT NULL,
 	CONSTRAINT gloss_personalia_pkey PRIMARY KEY (mail)
 );
 
 
 ------
--- ### Here tables - terrain entities
+-- ### HERE MAIN TABLES - TERRAIN ENTITIES
 ------
--- public.tab_cut definition
 
+---
+-- tab_cut definition
+---
 CREATE TABLE tab_cut (
 	id_cut int4 NOT NULL,
-	description varchar(500) NULL,
+	description TEXT NULL,
 	CONSTRAINT tab_cut_pk PRIMARY KEY (id_cut)
 );
 
-
--- public.tab_geopts definition
-
+---
+-- tab_geopts definition
+---
 CREATE TABLE tab_geopts (
 	id_pts int4 NOT NULL,
 	x float8 NULL,
 	y float8 NULL,
 	h float8 NULL,
-	code varchar(30) NULL,
-	notes varchar(200) NULL,
+	code VARCHAR(30) NULL,
+	notes TEXT NULL,
 	CONSTRAINT tab_geomeasuring_pk PRIMARY KEY (id_pts)
 );
-CREATE UNIQUE INDEX tab_geomeasuring_id_pts_idx ON public.tab_geopts USING btree (id_pts);
+CREATE UNIQUE INDEX tab_geomeasuring_id_pts_idx ON tab_geopts USING btree (id_pts);
 
-
--- public.tab_object definition
-
+---
+-- tab_object definition
+---
 CREATE TABLE tab_object (
 	id_object int4 NOT NULL,
-	object_typ varchar(100) NULL,
+	object_typ VARCHAR(100) NULL,
 	superior_object int4 NULL DEFAULT 0,
-	notes varchar(600) NULL,
+	notes TEXT NULL,
 	CONSTRAINT tab_object_pk PRIMARY KEY (id_object)
 );
 
-
--- public.tab_polygon definition
-
+---
+-- tab_polygon definition
+---
 CREATE TABLE tab_polygons (
     id SERIAL PRIMARY KEY,
     polygon_name TEXT NOT NULL,
@@ -108,219 +118,287 @@ CREATE TABLE tab_polygons (
 );
 
 
--- public.tab_sj_stratigraphy definition
-
+---
+-- tab_sj_stratigraphy definition
+---
 CREATE TABLE tab_sj_stratigraphy (
 	id_aut serial4 NOT NULL,
 	ref_sj1 int4 NULL,
-	relation char(1) NULL,
+	relation CHAR(1) NULL,
 	ref_sj2 int4 NULL,
 	CONSTRAINT relation_type_check CHECK (((relation)::text = ANY ((ARRAY['<'::character, '>'::character, '='::character])::text[]))),
 	CONSTRAINT tab_sj_stratigraphy_pk PRIMARY KEY (id_aut)
 );
 
 
--- public.tab_foto definition
+---
+-- tab_sj definition
+---
 
-CREATE TABLE tab_foto (
-	id_foto varchar(100) NOT NULL,
-	foto_typ varchar(60) NULL,
-	datum date NULL,
-	author varchar(100) NULL,
-	notes varchar(500) NULL,
-	CONSTRAINT tab_foto_pk PRIMARY KEY (id_foto),
-	CONSTRAINT tab_foto_fk FOREIGN KEY (author) REFERENCES gloss_personalia(mail)
-);
-
-
--- public.tab_sj definition
-
-CREATE TABLE public.tab_sj (
+CREATE TABLE tab_sj (
 	id_sj int4 NOT NULL,
-	sj_typ varchar(20) NULL,
-	description varchar(800) NULL,
-	interpretation varchar(400) NULL,
-	author varchar(100) NULL,
+	sj_typ VARCHAR(20) NULL,
+	description TEXT NULL,
+	interpretation TEXT NULL,
+	author VARCHAR(100) NULL,
 	recorded date NULL,
 	docu_plan bool NULL,
 	docu_vertical bool NULL,
 	ref_object int4 NULL,
 	CONSTRAINT tab_sj_pk PRIMARY KEY (id_sj)
 );
-CREATE UNIQUE INDEX tab_sj_id_sj_idx ON public.tab_sj USING btree (id_sj);
+CREATE UNIQUE INDEX tab_sj_id_sj_idx ON tab_sj USING btree (id_sj);
+-- tab_sj foreign keys
+ALTER TABLE tab_sj ADD CONSTRAINT tab_sj_fk FOREIGN KEY (author) REFERENCES gloss_personalia(mail);
 
--- public.tab_sj foreign keys
-ALTER TABLE public.tab_sj ADD CONSTRAINT tab_sj_fk FOREIGN KEY (author) REFERENCES public.gloss_personalia(mail);
-
-
-
-
--- public.tab_sj_deposit definition
-
+---
+-- tab_sj_deposit definition
+---
 CREATE TABLE tab_sj_deposit (
 	id_deposit int4 NOT NULL,
-	deposit_typ varchar(20) NULL,
-	color varchar(50) NULL,
-	boundary_visibility varchar(50) NULL,
-	"structure" varchar(80) NULL,
-	compactness varchar(50) NULL,
-	deposit_removed varchar(50) NULL,
+	deposit_typ VARCHAR(20) NULL,
+	color VARCHAR(50) NULL,
+	boundary_visibility VARCHAR(50) NULL,
+	"structure" VARCHAR(80) NULL,
+	compactness VARCHAR(50) NULL,
+	deposit_removed VARCHAR(50) NULL,
 	CONSTRAINT tab_sj_deposit_pk PRIMARY KEY (id_deposit),
 	CONSTRAINT tab_sj_deposit_fk FOREIGN KEY (id_deposit) REFERENCES tab_sj(id_sj)
 );
-CREATE UNIQUE INDEX tab_sj_deposit_id_deposit_idx ON public.tab_sj_deposit USING btree (id_deposit);
+CREATE UNIQUE INDEX tab_sj_deposit_id_deposit_idx ON tab_sj_deposit USING btree (id_deposit);
 
-
--- public.tab_sj_negativ definition
-
+---
+-- tab_sj_negativ definition
+---
 CREATE TABLE tab_sj_negativ (
 	id_negativ int4 NOT NULL,
-	negativ_typ varchar(40) NULL,
-	excav_extent varchar(40) NULL,
+	negativ_typ VARCHAR(40) NULL,
+	excav_extent VARCHAR(40) NULL,
 	ident_niveau_cut bool NULL,
-	shape_plan varchar(50) NULL,
-	shape_sides varchar(50) NULL,
-	shape_bottom varchar(50) NULL,
+	shape_plan VARCHAR(50) NULL,
+	shape_sides VARCHAR(50) NULL,
+	shape_bottom VARCHAR(50) NULL,
 	CONSTRAINT tab_sj_negativ_pk PRIMARY KEY (id_negativ),
 	CONSTRAINT tab_sj_negativ_fk FOREIGN KEY (id_negativ) REFERENCES tab_sj(id_sj)
 );
-CREATE UNIQUE INDEX tab_sj_negativ_id_negativ_idx ON public.tab_sj_negativ USING btree (id_negativ);
+CREATE UNIQUE INDEX tab_sj_negativ_id_negativ_idx ON tab_sj_negativ USING btree (id_negativ);
 
-
--- public.tab_sj_structure definition
-
+---
+-- tab_sj_structure definition
+---
 CREATE TABLE tab_sj_structure (
 	id_structure int4 NOT NULL,
-	structure_typ varchar(80) NULL,
-	construction_typ varchar(100) NULL,
-	binder varchar(60) NULL,
-	basic_material varchar(60) NULL,
+	structure_typ VARCHAR(80) NULL,
+	construction_typ VARCHAR(100) NULL,
+	binder VARCHAR(60) NULL,
+	basic_material VARCHAR(60) NULL,
 	length_m float8 NULL,
 	width_m float8 NULL,
 	height_m float8 NULL,
 	CONSTRAINT tab_sj_structure_pk PRIMARY KEY (id_structure),
 	CONSTRAINT tab_sj_structure_fk FOREIGN KEY (id_structure) REFERENCES tab_sj(id_sj)
 );
-CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON public.tab_sj_structure USING btree (id_structure);
+CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON tab_sj_structure USING btree (id_structure);
 
 
--- public.tab_sketch definition
+--========================================
+-- ### HERE MAIN TABLES - DOCU ENTITIES
+--========================================
 
-CREATE TABLE tab_sketch (
-	id_sketch varchar(100) NOT NULL,
-	sketch_typ varchar(80) NULL,
-	author varchar(100) NULL,
-	datum date NULL,
-	notes varchar(800) NULL,
-	CONSTRAINT tab_sketch_pk PRIMARY KEY (id_sketch),
-	CONSTRAINT tab_sketch_fk FOREIGN KEY (author) REFERENCES gloss_personalia(mail)
+---
+-- tab_photos definition
+---
+CREATE TABLE tab_photos (
+  id_photo         VARCHAR(150) PRIMARY KEY,                       
+  photo_typ        VARCHAR(60)  NOT NULL,
+  datum            date         NOT NULL,
+  author           VARCHAR(100) NOT NULL REFERENCES gloss_personalia(mail),
+  notes            text,
+  mime_type        text         NOT NULL,                          -- defined according content
+  file_size        bigint       NOT NULL CHECK (file_size >= 0),
+  checksum_sha256  text         NOT NULL,
+  shoot_datetime   timestamptz,
+  gps_lat          double precision,
+  gps_lon          double precision,
+  gps_alt          double precision,
+  exif_json        jsonb        DEFAULT '{}'::jsonb,
+
+  -- Validation PK and MIME:
+  CONSTRAINT tab_photos_id_format_chk
+    CHECK (id_photo ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+  CONSTRAINT tab_photos_mime_chk
+    CHECK (mime_type IN ('image/jpg','image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
+-- Indexes
+CREATE INDEX tab_photos_author_idx       ON tab_photos (author);
+CREATE INDEX tab_photos_datum_idx        ON tab_photos (datum);
+CREATE INDEX tab_photos_checksum_idx     ON tab_photos (checksum_sha256);
+CREATE INDEX tab_photos_shoot_dt_idx     ON tab_photos (shoot_datetime);
 
 
--- public.tabaid_foto_sj definition
--- this table connects fotos and SJ (stratigraphic units)
+---
+-- tab_sketches definition
+---
+CREATE TABLE tab_sketches (
+  id_sketch        VARCHAR(120) PRIMARY KEY,                      
+  sketch_typ       VARCHAR(80)  NOT NULL,
+  author           VARCHAR(100) NOT NULL REFERENCES gloss_personalia(mail),
+  datum            date,
+  notes            text,
+  mime_type        text         NOT NULL,
+  file_size        bigint       NOT NULL CHECK (file_size >= 0),
+  checksum_sha256  text         NOT NULL,
 
-CREATE TABLE tabaid_foto_sj (
-	id_aut serial4 NOT NULL,
-	ref_foto varchar(100) NULL,
-	ref_sj int4 NULL,
-	CONSTRAINT tabaid_foto_sj_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_foto_sj_fk FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto) ON DELETE CASCADE,
-	CONSTRAINT tabaid_foto_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE
+  -- PK a MIME validation:
+  CONSTRAINT tab_sketches_id_format_chk
+    CHECK (id_sketch ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+  CONSTRAINT tab_sketches_mime_chk
+    CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
+-- indexes
+CREATE INDEX tab_sketches_author_idx     ON tab_sketches (author);
+CREATE INDEX tab_sketches_datum_idx      ON tab_sketches (datum);
+CREATE INDEX tab_sketches_checksum_idx   ON tab_sketches (checksum_sha256);
 
+---
+-- tab_drawings definition
+---
 
--- public.tab_fotogram definition
-
-CREATE TABLE tab_fotogram (
-	id_fotogram varchar(80) NOT NULL,
-	fotogram_typ varchar(60) NULL,
-	ref_sketch varchar(60) NULL,
-	notes varchar(800) NULL,
-	CONSTRAINT tab_fotogram_pk PRIMARY KEY (id_fotogram),
-	CONSTRAINT tab_fotogram_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketch(id_sketch)
+CREATE TABLE tab_drawings (
+  id_drawing       VARCHAR(120) PRIMARY KEY,                       
+  author           VARCHAR(100) NOT NULL REFERENCES gloss_personalia(mail),
+  datum            date         NOT NULL,
+  notes            text,
+  mime_type        text         NOT NULL,
+  file_size        bigint       NOT NULL CHECK (file_size >= 0),
+  checksum_sha256  text         NOT NULL,
+  -- mime and PK validation:
+  CONSTRAINT tab_drawings_id_format_chk
+    CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+  CONSTRAINT tab_drawings_mime_chk
+    CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
-CREATE INDEX tab_fotogram_id_fotogram_idx ON public.tab_fotogram USING btree (id_fotogram);
+-- indexes:
+CREATE INDEX tab_drawings_author_idx     ON tab_drawings (author);
+CREATE INDEX tab_drawings_datum_idx      ON tab_drawings (datum);
+CREATE INDEX tab_drawings_checksum_idx   ON tab_drawings (checksum_sha256);
 
 
--- public.tab_sack definition
+CREATE TABLE tab_photograms (
+  id_photogram     VARCHAR(120) PRIMARY KEY,                       
+  photogram_typ    VARCHAR(60)  NOT NULL,
+  ref_sketch       VARCHAR(120) NULL REFERENCES tab_sketches(id_sketch)
+                                 ON UPDATE CASCADE ON DELETE SET NULL,
+  notes            text,
+  mime_type        text         NOT NULL,
+  file_size        bigint       NOT NULL CHECK (file_size >= 0),
+  checksum_sha256  text         NOT NULL,
+  -- mime and PK validation:
+  CONSTRAINT tab_photograms_id_format_chk
+    CHECK (id_photogram ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+  CONSTRAINT tab_photograms_mime_chk
+    CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
+);
+-- indexes:
+CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms (ref_sketch);
+CREATE INDEX tab_photograms_checksum_idx   ON tab_photograms (checksum_sha256);
+
+
+-- tab_sack definition
 -- sacks are containers for finds
 
 CREATE TABLE tab_sack (
 	id_sack int4 NOT NULL,
 	ref_sj int4 NULL,
-	"content" varchar(80) NULL,
-	description varchar(600) NULL,
+	"content" TEXT NULL,
+	description TEXT NULL,
 	"number" int4 NULL,
 	CONSTRAINT tab_sack_pk PRIMARY KEY (id_sack),
 	CONSTRAINT tab_sack_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj)
 );
 
 
--- public.tabaid_cut_fotogram definition
--- this table connects cuts and fotograms (m:n)
+--==========================================================
+-- TABAIDS - table helpers for M:N relations between tables
+--==========================================================
+
+-- tabaid_foto_sj definition
+-- this table connects fotos and SJ (stratigraphic units)
+
+CREATE TABLE tabaid_photo_sj (
+	id_aut serial4 NOT NULL,
+	ref_foto VARCHAR(100) NULL,
+	ref_sj int4 NULL,
+	CONSTRAINT tabaid_photo_sj_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_photo_sj_fk FOREIGN KEY (ref_foto) REFERENCES tab_photos(id_photo) ON DELETE CASCADE,
+	CONSTRAINT tabaid_photo_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE
+);
 
 
-CREATE TABLE tabaid_cut_fotogram (
+-- tabaid_cut_photogram definition
+-- this table connects cuts and photograms (m:n)
+
+
+CREATE TABLE tabaid_cut_photogram (
 	id_aut serial4 NOT NULL,
 	ref_cut int4 NULL,
-	ref_fotogram varchar(100) NULL,
-	CONSTRAINT tabaid_cut_fotogram_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_cut_fotogram_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_cut_fotogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON UPDATE CASCADE
+	ref_photogram VARCHAR(100) NULL,
+	CONSTRAINT tabaid_cut_photogram_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_cut_photogram_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_cut_photogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON UPDATE CASCADE
 );
 
 
--- public.tabaid_fotogram_foto definition
--- this table connects fotograms and fotos (m:n)
+-- tabaid_photogram_photo definition
+-- this table connects photograms and photos (m:n)
 
 
-CREATE TABLE tabaid_fotogram_foto (
+CREATE TABLE tabaid_photogram_photo (
 	id_aut serial4 NOT NULL,
-	ref_fotogram varchar(100) NULL,
-	ref_foto varchar(100) NULL,
-	CONSTRAINT tabaid_fotogram_foto_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_fotogram_foto_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_fotogram_foto_fk_1 FOREIGN KEY (ref_foto) REFERENCES tab_foto(id_foto) ON UPDATE CASCADE
+	ref_photogram VARCHAR(100) NULL,
+	ref_photo VARCHAR(100) NULL,
+	CONSTRAINT tabaid_photogram_photo_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_photogram_photo_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photogram_photo_fk_1 FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON UPDATE CASCADE
 );
 
 
--- public.tabaid_fotogram_sj definition
--- this table is clue between SJs and fotogramss (m:n)
+-- tabaid_photogram_sj definition
+-- this table is clue between SJs and photograms (m:n)
 
-CREATE TABLE tabaid_fotogram_sj (
+CREATE TABLE tabaid_photogram_sj (
 	id_aut serial4 NOT NULL,
-	ref_fotogram varchar(100) NULL,
+	ref_photogram VARCHAR(100) NULL,
 	ref_sj int4 NULL,
-	CONSTRAINT tabaid_fotogram_sj_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_fotogram_sj_fk FOREIGN KEY (ref_fotogram) REFERENCES tab_fotogram(id_fotogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_fotogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON UPDATE CASCADE
+	CONSTRAINT tabaid_photogram_sj_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_photogram_sj_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON UPDATE CASCADE
 );
 
--- public.tabaid_sj_cut definition
+-- tabaid_sj_cut definition
 -- this table is clue between SJs and CUTs (m:n)
 
-CREATE TABLE public.tabaid_sj_cut (
+CREATE TABLE tabaid_sj_cut (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_cut int4 NOT NULL,
 	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut)
 );
 
--- public.tabaid_sj_sketch definition
+-- tabaid_sj_sketch definition
 -- this tabaid clues SJs and Sketches (m:n)
 
-CREATE TABLE public.tabaid_sj_sketch (
+CREATE TABLE tabaid_sj_sketch (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_sketch int4 NOT NULL,
 	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut)
 );
 
--- public.tabaid_sj_polygon definition
+-- tabaid_sj_polygon definition
 -- this clues SJs and polygons (m:n)
 
-CREATE TABLE public.tabaid_sj_polygon (
+CREATE TABLE tabaid_sj_polygon (
  	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_polygon int4 NOT NULL,
@@ -340,24 +418,24 @@ CREATE TABLE public.tabaid_sj_polygon (
 --GET FUNCTIONS
 --###################
 
--- this fnc loops over all SJs and returns related fotos
-CREATE OR REPLACE FUNCTION public.fnc_get_all_sjs_and_related_foto()
- RETURNS TABLE(sj_id integer, foto_id character varying, foto_typ character varying, foto_datum date)
+-- this fnc loops over all SJs and returns related photos
+CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_photo()
+ RETURNS TABLE(sj_id INTEGER, photo_id CHARACTER VARYING, photo_typ CHARACTER VARYING, photo_datum date)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
             sj.id_sj,
-            tf.id_foto,
-            tf.foto_typ,
-            tf.datum AS foto_datum
+            tf.id_photo,
+            tf.photo_typ,
+            tf.datum AS photo_datum
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_foto_sj tafs ON sj.id_sj = tafs.ref_sj
+            tabaid_photo_sj tafs ON sj.id_sj = tafs.ref_sj
         INNER JOIN
-            public.tab_foto tf ON tafs.ref_foto = tf.id_foto
+            tab_photos tf ON tafs.ref_photo = tf.id_photo
     );
 END;
 $function$
@@ -365,23 +443,23 @@ $function$
 
 
 -- 
--- this fnc loops over all SJs and returns related fotograms
-CREATE OR REPLACE FUNCTION public.fnc_get_all_sjs_and_related_fotogram()
- RETURNS TABLE(sj_id integer, id_fotogram character varying, fotogram_typ character varying)
+-- this fnc loops over all SJs and returns related photograms
+CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_photogram()
+ RETURNS TABLE(sj_id INTEGER, id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
             sj.id_sj,
-            tf.id_fotogram,
-            tf.fotogram_typ
+            tf.id_photogram,
+            tf.photogram_typ
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_fotogram_sj tafs ON sj.id_sj = tafs.ref_sj
+            tabaid_photogram_sj tafs ON sj.id_sj = tafs.ref_sj
         INNER JOIN
-            public.tab_fotogram tf ON tafs.ref_fotogram = tf.id_fotogram
+            tab_photograms tf ON tafs.ref_photogram = tf.id_photogram
     );
 END;
 $function$
@@ -389,8 +467,8 @@ $function$
 
 --
 -- this fnc loops over all SJs and returns related sketches
-CREATE OR REPLACE FUNCTION public.fnc_get_all_sjs_and_related_sketch()
- RETURNS TABLE(sj_id integer, id_sketch character varying, sketch_typ character varying, datum date)
+CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_sketch()
+ RETURNS TABLE(sj_id INTEGER, id_sketch CHARACTER VARYING, sketch_typ CHARACTER VARYING, datum date)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -401,19 +479,19 @@ BEGIN
             ts.sketch_typ,
             ts.datum AS sketch_datum
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_sj_sketch tass ON sj.id_sj = tass.ref_sj
+            tabaid_sj_sketch tass ON sj.id_sj = tass.ref_sj
         INNER JOIN
-            public.tab_sketch ts ON tass.ref_sketch = ts.id_sketch
+            tab_sketches ts ON tass.ref_sketch = ts.id_sketch
     );
 END;
 $function$
 ;
 
 -- this function requires the ID of cut and lists all SJs cut by this cut
-CREATE OR REPLACE FUNCTION public.fnc_get_cut_and_related_sjs(choose_cut integer)
- RETURNS TABLE(id_cut integer, id_sj integer, docu_plan boolean, docu_vertical boolean)
+CREATE OR REPLACE FUNCTION fnc_get_cut_and_related_sjs(choose_cut INTEGER)
+ RETURNS TABLE(id_cut INTEGER, id_sj INTEGER, docu_plan BOOLEAN, docu_vertical BOOLEAN)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -424,11 +502,11 @@ BEGIN
             tsj.docu_plan,
 	    tsj.docu_vertical
         FROM
-            public.tab_cut tc
+            tab_cut tc
         INNER JOIN
-            public.tabaid_sj_cut tasc ON tc.id_cut = tasc.ref_cut
+            tabaid_sj_cut tasc ON tc.id_cut = tasc.ref_cut
         INNER JOIN
-            public.tab_sj tsj ON tasc.ref_sj = tsj.id_sj
+            tab_sj tsj ON tasc.ref_sj = tsj.id_sj
 	WHERE tc.id_cut = choose_cut
     );
 END;
@@ -436,8 +514,8 @@ $function$
 ;
 
 -- this function takes ID of SJ and list all cuts cutting this SJ 
-CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_cuts(choose_sj integer)
- RETURNS TABLE(sj_id integer, id_cut integer, description character varying)
+CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_cuts(choose_sj INTEGER)
+ RETURNS TABLE(sj_id INTEGER, id_cut INTEGER, description CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -447,58 +525,58 @@ BEGIN
             tc.id_cut,
             tc.description
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_sj_cut tasc ON sj.id_sj = tasc.ref_sj
+            tabaid_sj_cut tasc ON sj.id_sj = tasc.ref_sj
         INNER JOIN
-            public.tab_cut tc ON tasc.ref_cut = tc.id_cut
+            tab_cut tc ON tasc.ref_cut = tc.id_cut
 	WHERE sj.id_sj = choose_sj
     );
 END;
 $function$
 ;
 
--- this function takes SJ id and returns list of all related fotos
-CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_foto(choose_sj integer)
- RETURNS TABLE(sj_id integer, foto_id character varying, foto_typ character varying, foto_datum date)
+-- this function takes SJ id and returns list of all related photos
+CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_photo(choose_sj INTEGER)
+ RETURNS TABLE(sj_id INTEGER, photo_id CHARACTER VARYING, photo_typ CHARACTER VARYING, photo_datum DATE)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
             sj.id_sj,
-            tf.id_foto,
-            tf.foto_typ,
-            tf.datum AS foto_datum
+            tf.id_photo,
+            tf.photo_typ,
+            tf.datum AS photo_datum
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_foto_sj tafs ON sj.id_sj = tafs.ref_sj
+            tabaid_photo_sj tafs ON sj.id_sj = tafs.ref_sj
         INNER JOIN
-            public.tab_foto tf ON tafs.ref_foto = tf.id_foto
+            tab_photos tf ON tafs.ref_photo = tf.id_photo
 	WHERE sj.id_sj = choose_sj
     );
 END;
 $function$
 ;
 
--- this function requires SJ id and returns list of referenced fotograms
-CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_fotogram(strat_j integer)
- RETURNS TABLE(sj_id integer, id_fotogram character varying, fotogram_typ character varying)
+-- this function requires SJ id and returns list of referenced photograms
+CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_photogram(strat_j INTEGER)
+ RETURNS TABLE(sj_id INTEGER, id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
             sj.id_sj,
-            tf.id_fotogram,
-            tf.fotogram_typ
+            tf.id_photogram,
+            tf.photogram_typ
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_fotogram_sj tafs ON sj.id_sj = tafs.ref_sj
+            tabaid_photogram_sj tafs ON sj.id_sj = tafs.ref_sj
         INNER JOIN
-            public.tab_fotogram tf ON tafs.ref_fotogram = tf.id_fotogram
+            tab_photograms tf ON tafs.ref_photogram = tf.id_photogram
 	WHERE sj.id_sj = strat_j
     );
 END;
@@ -506,8 +584,8 @@ $function$
 ;
 
 -- this function use SJ is as an argument and prints all sketches associated with
-CREATE OR REPLACE FUNCTION public.fnc_get_sj_and_related_sketch(strat_j integer)
- RETURNS TABLE(sj_id integer, id_sketch character varying, sketch_typ character varying, datum date)
+CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_sketch(strat_j INTEGER)
+ RETURNS TABLE(sj_id INTEGER, id_sketch CHARACTER VARYING, sketch_typ CHARACTER VARYING, datum DATE)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -518,11 +596,11 @@ BEGIN
             ts.sketch_typ,
             ts.datum AS sketch_datum
         FROM
-            public.tab_sj sj
+            tab_sj sj
         INNER JOIN
-            public.tabaid_sj_sketch tass ON sj.id_sj = tass.ref_sj
+            tabaid_sj_sketch tass ON sj.id_sj = tass.ref_sj
         INNER JOIN
-            public.tab_sketch ts ON tass.ref_sketch = ts.id_sketch
+            tab_sketches ts ON tass.ref_sketch = ts.id_sketch
 	WHERE sj.id_sj = strat_j
     );
 END;
@@ -531,7 +609,7 @@ $function$
 
 
 -- similar as 1st function but this uses loop
-CREATE OR REPLACE FUNCTION public.fnc_get_all_sjs_and_associated_photos()
+CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_associated_photos()
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
@@ -544,9 +622,9 @@ BEGIN
         FROM tab_sj
     ) LOOP
         FOR photo_info IN (
-            SELECT tf.id_foto || ' (' || tf.foto_typ || ')' AS photo_description
-            FROM tabaid_foto_sj tafs
-            JOIN tab_foto tf ON tafs.ref_foto = tf.id_foto
+            SELECT tf.id_photo || ' (' || tf.photo_typ || ')' AS photo_description
+            FROM tabaid_photo_sj tafs
+            JOIN tab_photos tf ON tafs.ref_photo = tf.id_photo
             WHERE tafs.ref_sj = sj_record.id_sj
         ) LOOP
             RAISE NOTICE 'For SJ %, Associated Photo: %', sj_record.id_sj, photo_info;
@@ -557,8 +635,8 @@ $function$
 ;
 
 -- this function lists all objects/features and prints associated sjs
-CREATE OR REPLACE FUNCTION public.fnc_get_all_objects_sjs()
- RETURNS TABLE(objekt integer, typ_objektu character varying, strat_j integer, interpretace character varying)
+CREATE OR REPLACE FUNCTION fnc_get_all_objects_sjs()
+ RETURNS TABLE(objekt INTEGER, typ_objektu CHARACTER VARYING, strat_j INTEGER, interpretace CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -570,43 +648,43 @@ END;
 $function$
 ;
 
--- this function takes foto ID and prints all fotograms associated
-CREATE OR REPLACE FUNCTION public.fnc_get_fotograms_by_photo(fotopattern character varying)
- RETURNS TABLE(id_fotogram character varying, fotogram_typ character varying, ref_sketch character varying)
+-- this function takes foto ID and prints all photograms associated
+CREATE OR REPLACE FUNCTION fnc_get_photograms_by_photo(fotopattern CHARACTER VARYING)
+ RETURNS TABLE(id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING, ref_sketch CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 		RETURN QUERY
-		SELECT fg.id_fotogram, fg.fotogram_typ, fg.ref_sketch
-		FROM tab_fotogram fg
-		INNER JOIN tabaid_fotogram_foto tff ON fg.id_fotogram = tff.ref_fotogram
-		INNER JOIN tab_foto fo ON tff.ref_foto = fo.id_foto
-		WHERE fo.id_foto ILIKE fotopattern;
+		SELECT fg.id_photogram, fg.photogram_typ, fg.ref_sketch
+		FROM tab_photograms fg
+		INNER JOIN tabaid_photogram_photo tff ON fg.id_photogram = tff.ref_photogram
+		INNER JOIN tab_photos fo ON tff.ref_photo = fo.id_photo
+		WHERE fo.id_photo ILIKE fotopattern;
 
 	END;
    $function$
 ;
 
--- this func takes fotogram ID and lists all fotos associated
-CREATE OR REPLACE FUNCTION public.fnc_get_fotos_by_fotogram(fotogramm character varying)
- RETURNS TABLE(id_foto character varying, foto_typ character varying, notes character varying)
+-- this func takes photogram ID and lists all photos associated
+CREATE OR REPLACE FUNCTION fnc_get_photos_by_photogram(fotogramm CHARACTER VARYING)
+ RETURNS TABLE(id_photo CHARACTER VARYING, photo_typ CHARACTER VARYING, notes text)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 		RETURN QUERY
-		SELECT fo.id_foto, fo.typ, fo.notes
-		FROM tab_foto fo
-		INNER JOIN tabaid_fotogram_foto tff ON fo.id_foto = tff.ref_foto
-		INNER JOIN tab_fotogram tf ON tff.ref_fotogram = tf.id_fotogram
-		WHERE tf.id_fotogram ILIKE fotogramm;
+		SELECT fo.id_photo, fo.typ, fo.notes
+		FROM tab_photos fo
+		INNER JOIN tabaid_photogram_photo tff ON fo.id_photo = tff.ref_photo
+		INNER JOIN tab_photograms tf ON tff.ref_photogram = tf.id_photogram
+		WHERE tf.id_photogram ILIKE fotogramm;
 
 	END;
    $function$
 ;
 
 -- this function takes object/feature as argument and prints all SJs it consists of
-CREATE OR REPLACE FUNCTION public.fnc_get_sj_by_object(objekt integer)
- RETURNS TABLE(strat_j_id integer, interpretace character varying)
+CREATE OR REPLACE FUNCTION fnc_get_sj_by_object(objekt INTEGER)
+ RETURNS TABLE(strat_j_id INTEGER, interpretace CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
@@ -624,16 +702,16 @@ $function$
 -- this function loops over all SJs and prints all
 -- graphical documentation related to it. It uses
 -- 3 functions defined above
-CREATE OR REPLACE FUNCTION public.superfnc_get_all_sjs_and_related_docu_entities()
+CREATE OR REPLACE FUNCTION superfnc_get_all_sjs_and_related_docu_entities()
  RETURNS TABLE(output_text text)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    sj_id integer;
+    sj_id INTEGER;
     record_row record;
-    loop_sj_id integer; -- Separate variable for sj_id
+    loop_sj_id INTEGER; -- Separate variable for sj_id
 BEGIN
-    FOR sj_id IN (SELECT DISTINCT id_sj FROM public.tab_sj) LOOP
+    FOR sj_id IN (SELECT DISTINCT id_sj FROM tab_sj) LOOP
         loop_sj_id := sj_id; -- Assign sj_id to a separate variable
 
         -- Initialize the output text for this sj_id
@@ -641,19 +719,19 @@ BEGIN
 
         -- Call the function to retrieve fotos
         FOR record_row IN
-            SELECT * FROM public.fnc_get_all_sjs_and_related_foto() AS f WHERE f.sj_id = loop_sj_id LOOP
-            output_text := output_text || CHR(10) || '- Fotos: ' || record_row.foto_id || ', ' || record_row.foto_typ || ', ' || record_row.foto_datum;
+            SELECT * FROM fnc_get_all_sjs_and_related_photo() AS f WHERE f.sj_id = loop_sj_id LOOP
+            output_text := output_text || CHR(10) || '- Photos: ' || record_row.photo_id || ', ' || record_row.photo_typ || ', ' || record_row.photo_datum;
         END LOOP;
 
-        -- Call the function to retrieve fotograms
+        -- Call the function to retrieve photograms
         FOR record_row IN
-            SELECT * FROM public.fnc_get_all_sjs_and_related_fotogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
-            output_text := output_text || CHR(10) || '- Fotograms: ' || record_row.id_fotogram || ', ' || record_row.fotogram_typ;
+            SELECT * FROM fnc_get_all_sjs_and_related_photogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
+            output_text := output_text || CHR(10) || '- Photograms: ' || record_row.id_photogram || ', ' || record_row.photogram_typ;
         END LOOP;
 
         -- Call the function to retrieve sketches
         FOR record_row IN
-            SELECT * FROM public.fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
+            SELECT * FROM fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
             output_text := output_text || CHR(10) || '- Sketches: ' || record_row.id_sketch || ', ' || record_row.sketch_typ || ', ' || record_row.datum;
         END LOOP;
 
@@ -667,12 +745,12 @@ $function$
 -- another SUPERFUNCTION
 -- this superfunction works same as previous but not for all SJs
 -- but only for one particular (as an argument)
-CREATE OR REPLACE FUNCTION public.superfnc_get_sj_and_related_docu_entities(target_sj_id integer)
+CREATE OR REPLACE FUNCTION superfnc_get_sj_and_related_docu_entities(target_sj_id INTEGER)
  RETURNS TABLE(output_text text)
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    loop_sj_id integer; -- Separate variable for sj_id
+    loop_sj_id INTEGER; -- Separate variable for sj_id
     record_row record;
 BEGIN
     -- Initialize the output text for the specified sj_id
@@ -682,19 +760,19 @@ BEGIN
 
     -- Call the function to retrieve fotos
     FOR record_row IN
-        SELECT * FROM public.fnc_get_all_sjs_and_related_foto() AS f WHERE f.sj_id = loop_sj_id LOOP
-        output_text := output_text || CHR(10) || '- Fotos: ' || record_row.foto_id || ', ' || record_row.foto_typ || ', ' || record_row.foto_datum;
+        SELECT * FROM fnc_get_all_sjs_and_related_photo() AS f WHERE f.sj_id = loop_sj_id LOOP
+        output_text := output_text || CHR(10) || '- Photos: ' || record_row.photo_id || ', ' || record_row.photo_typ || ', ' || record_row.photo_datum;
     END LOOP;
 
-    -- Call the function to retrieve fotograms
+    -- Call the function to retrieve photograms
     FOR record_row IN
-        SELECT * FROM public.fnc_get_all_sjs_and_related_fotogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
-        output_text := output_text || CHR(10) || '- Fotograms: ' || record_row.id_fotogram || ', ' || record_row.fotogram_typ;
+        SELECT * FROM fnc_get_all_sjs_and_related_photogram() AS fg WHERE fg.sj_id = loop_sj_id LOOP
+        output_text := output_text || CHR(10) || '- Photograms: ' || record_row.id_photogram || ', ' || record_row.photogram_typ;
     END LOOP;
 
     -- Call the function to retrieve sketches
     FOR record_row IN
-        SELECT * FROM public.fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
+        SELECT * FROM fnc_get_all_sjs_and_related_sketch() AS s WHERE s.sj_id = loop_sj_id LOOP
         output_text := output_text || CHR(10) || '- Sketches: ' || record_row.id_sketch || ', ' || record_row.sketch_typ || ', ' || record_row.datum;
     END LOOP;
 
@@ -713,7 +791,7 @@ $function$
 
 
 -- this function checks if all objects are created by SJs (has reference)
-CREATE OR REPLACE FUNCTION public.fnc_check_objects_have_sj()
+CREATE OR REPLACE FUNCTION fnc_check_objects_have_sj()
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
@@ -722,12 +800,12 @@ DECLARE
     missing_objects TEXT;  -- String to store the IDs of missing objects
 BEGIN
     -- Get the total count of objects
-    SELECT COUNT(*) INTO object_count FROM public.tab_object;
+    SELECT COUNT(*) INTO object_count FROM tab_object;
 
     -- Collect the IDs of objects without corresponding sj_id in tab_sj
     SELECT string_agg(tab_object.id_object::TEXT, E'\n') INTO missing_objects
-    FROM public.tab_object
-    LEFT JOIN public.tab_sj ON tab_object.id_object = tab_sj.ref_object
+    FROM tab_object
+    LEFT JOIN tab_sj ON tab_object.id_object = tab_sj.ref_object
     WHERE tab_sj.id_sj IS NULL;
 
     -- Check if all objects have corresponding sj_id values
@@ -741,41 +819,41 @@ $function$
 ;
 
 
--- this function checks if all SJs have at least one foto
-CREATE OR REPLACE FUNCTION public.fnc_check_all_sjs_has_foto()
+-- this function checks if all SJs have at least one photo
+CREATE OR REPLACE FUNCTION fnc_check_all_sjs_has_photo()
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 DECLARE
     sj_id INT;
 BEGIN
-    -- Check if there are SJ records without corresponding foto records
+    -- Check if there are SU records without corresponding photo records
     IF EXISTS (
         SELECT 1
         FROM tab_sj sj
         WHERE NOT EXISTS (
             SELECT 1
-            FROM tabaid_foto_sj foto
+            FROM tabaid_photo_sj foto
             WHERE foto.ref_sj = sj.id_sj
         )
     ) THEN
         -- Print SJ records without foto records
         RAISE NOTICE 'Following SJs have no foto entry:';
         FOR sj_id IN (SELECT id_sj FROM tab_sj sj WHERE NOT EXISTS (
-            SELECT 1 FROM tabaid_foto_sj foto WHERE foto.ref_sj = sj.id_sj
+            SELECT 1 FROM tabaid_photo_sj foto WHERE foto.ref_sj = sj.id_sj
         )) LOOP
             RAISE NOTICE '%', sj_id;
         END LOOP;
     ELSE
         -- All SJ records have corresponding foto records
-        RAISE NOTICE 'Check OK, all fotos have appropriate fotorecord';
+        RAISE NOTICE 'Check OK, all SUs have appropriate fotorecord';
     END IF;
 END;
 $function$
 ;
 
 -- this function checks if SJs have or not sketches
-CREATE OR REPLACE FUNCTION public.fnc_check_all_sjs_has_sketch()
+CREATE OR REPLACE FUNCTION fnc_check_all_sjs_has_sketch()
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
