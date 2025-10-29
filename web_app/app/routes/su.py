@@ -32,6 +32,14 @@ from app.queries import (
     get_sj_with_object_refs,
 )
 
+from app.utils import (
+    save_to_uploads, cleanup_upload, make_pk, validate_pk, validate_mime,
+    validate_extension, detect_mime, final_paths, move_into_place,
+    make_thumbnail, sha256_file, extract_exif, delete_media_files
+)
+from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_SJ
+
+
 
 su_bp = Blueprint('su', __name__)
 
@@ -219,6 +227,160 @@ def add_su():
         except Exception: pass
 
 
+#    Upload 1..N files for specific SU and creating M:N relation into tabaid_*.
+#    Multipart is expected: input name="files" (multiple) + business filed according
+#    MEDIA_TABLES[media_type]["extra_cols"] in utils.
+@su_bp.post("/su/<int:sj_id>/upload/<media_type>")
+@require_selected_db
+def upload_su_media(sj_id, media_type):
+    selected_db = session['selected_db']
+    if media_type not in MEDIA_TABLES:
+        flash("Invalid media type.", "danger")
+        return redirect(request.referrer or url_for('su.add_su'))
+
+    files = request.files.getlist("files")
+    if not files:
+        flash("No files provided.", "warning")
+        return redirect(request.referrer or url_for('su.add_su'))
+
+    meta_cols = MEDIA_TABLES[media_type]["extra_cols"]
+    ok, failed = 0, []
+
+    for f in files:
+        tmp_path = None
+        try:
+            # 1) temporary storing
+            tmp_path, tmp_size = save_to_uploads(Config.UPLOAD_FOLDER, f)
+
+            # 2) MIME/EXT
+            mime = detect_mime(tmp_path)
+            validate_mime(mime, Config.ALLOWED_MIME)
+
+            pk_name = make_pk(selected_db, f.filename)  # e.g. "456_IMG_25.jpg"
+            validate_pk(pk_name)
+            ext = pk_name.rsplit(".", 1)[-1]
+            validate_extension(ext, Config.ALLOWED_EXTENSIONS)
+
+            # 3) final storage + collision
+            media_dir = Config.MEDIA_DIRS[media_type]
+            final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
+            if os.path.exists(final_path):
+                raise ValueError(f"File already exists: {pk_name}")
+
+            # 4) moving + checksum + thumb
+            move_into_place(tmp_path, final_path); tmp_path = None
+            checksum = sha256_file(final_path)
+            made_thumb = make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
+
+            # 5) EXIF (only photos of JPEG/TIFF)
+            shoot_dt = gps_lat = gps_lon = gps_alt = None
+            exif_json = {}
+            if media_type == "photos" and mime in ("image/jpeg", "image/tiff"):
+                sdt, la, lo, al, exif = extract_exif(final_path)
+                shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = sdt, la, lo, al, exif
+
+            # 6) INSERT into tab_<type> + link do tabaid_*
+            t = MEDIA_TABLES[media_type]
+            table, id_col = t["table"], t["id_col"]
+
+            # values of columns according meta_cols (could be NULL)
+            vals = [request.form.get(k) or None for k in meta_cols]
+
+            conn = get_terrain_connection(selected_db)
+            cur = conn.cursor()
+            try:
+                if media_type == "photos":
+                    cur.execute(
+                        f"""INSERT INTO {table}
+                            ({id_col}, {", ".join(meta_cols)},
+                             mime_type, file_size, checksum_sha256,
+                             shoot_datetime, gps_lat, gps_lon, gps_alt, exif_json)
+                           VALUES (%s, {", ".join(['%s']*len(meta_cols))}, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                        [pk_name, *vals, mime, os.path.getsize(final_path), checksum,
+                         shoot_dt, gps_lat, gps_lon, gps_alt, exif_json]
+                    )
+                else:
+                    cur.execute(
+                        f"""INSERT INTO {table}
+                            ({id_col}, {", ".join(meta_cols)},
+                             mime_type, file_size, checksum_sha256)
+                           VALUES (%s, {", ".join(['%s']*len(meta_cols))}, %s, %s, %s)""",
+                        [pk_name, *vals, mime, os.path.getsize(final_path), checksum]
+                    )
+
+                link = LINK_TABLES_SJ[media_type]
+                cur.execute(
+                    f"INSERT INTO {link['table']} ({link['fk_sj']}, {link['fk_media']}) VALUES (%s, %s)",
+                    (sj_id, pk_name)
+                )
+
+                conn.commit()
+                ok += 1
+            except Exception as e:
+                conn.rollback()
+                # garbage collector FS if DB fails
+                delete_media_files(final_path, thumb_path)
+                raise
+            finally:
+                try: cur.close()
+                except Exception: pass
+                try: conn.close()
+                except Exception: pass
+
+        except Exception as e:
+            failed.append(f"{f.filename}: {e}")
+        finally:
+            if tmp_path:
+                cleanup_upload(tmp_path)
+
+    if failed:
+        flash(f"Uploaded {ok} file(s), {len(failed)} failed: " + "; ".join(failed), "warning" if ok else "danger")
+    else:
+        flash(f"Uploaded {ok} file(s).", "success")
+
+    return redirect(request.referrer or url_for('su.add_su'))
+
+
+@su_bp.post("/su/<int:sj_id>/unlink/<media_type>/<pk_name>")
+@require_selected_db
+def unlink_su_media(sj_id, media_type, pk_name):
+    """
+    Zruší pouze M:N vazbu SU ↔ médium (soubor a záznam v tab_<type> zůstávají).
+    """
+    selected_db = session['selected_db']
+    if media_type not in LINK_TABLES_SJ:
+        flash("Invalid media type.", "danger")
+        return redirect(request.referrer or url_for('su.add_su'))
+
+    link = LINK_TABLES_SJ[media_type]
+    conn = get_terrain_connection(selected_db)
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"DELETE FROM {link['table']} WHERE {link['fk_sj']}=%s AND {link['fk_media']}=%s",
+            (sj_id, pk_name)
+        )
+        conn.commit()
+        flash("Link removed.", "success" if cur.rowcount else "warning")
+    except Exception as e:
+        conn.rollback()
+        flash(f"Unlink failed: {e}", "danger")
+    finally:
+        try: cur.close()
+        except Exception: pass
+        try: conn.close()
+        except Exception: pass
+
+    return redirect(request.referrer or url_for('su.add_su'))
+
+
+
+
+
+####################################################################### to samostatne routy harismatrix?
+
+
+
 # --- Harris Matrix (summary + generator) ---
 @su_bp.route('/harrismatrix', methods=['GET', 'POST'])
 @require_selected_db
@@ -348,10 +510,10 @@ def generate_harrismatrix():
             elif rel == '<':
                 G.add_edge(v, u)
 
-        # acykličnost
+        # anticycling
         if not nx.is_directed_acyclic_graph(G):
             try:
-                # vezmeme první detekovaný cyklus a přepíšeme na „>“ výpis
+                # taking first detected cycle and rewrite to „>“ list
                 cyc = list(nx.find_cycle(G, orientation='original'))
                 cyc_nodes = [u for (u, _, _) in cyc] + [cyc[0][0]]
                 msg = " → ".join(label_map.get(n, str(n)) for n in cyc_nodes)
@@ -364,10 +526,10 @@ def generate_harrismatrix():
         # --- Hasse: transitive reduction ---
         H = nx.algorithms.dag.transitive_reduction(G)
         
-        # --- VALIDÁTOR: redundantní hrany (takové, které TR odstraní) ---
+        # --- VALIDATOR: reduntant lines (those removed by TR) ---
         redundant = sorted(set(G.edges()) - set(H.edges()))
         if redundant:
-            # převeďme na čitelný výpis A > B, ukážeme max 10 ks, zbytek do logu
+            # translate to readable A > B, showing max 10 pieces, rest to log
             rd_labels = [_edge_str(u, v, label_map) for (u, v) in redundant]
             shown = rd_labels[:10]
             more = len(rd_labels) - len(shown)
@@ -380,7 +542,7 @@ def generate_harrismatrix():
             logger.info(f"[{selected_db}] No redundant relations.")
 
 
-        # --- layout (dot) + auto-orientace top-down ---
+        # --- layout (dot) + auto-orientation top-down ---
         try:
             pos = nx.drawing.nx_pydot.graphviz_layout(H, prog='dot')
         except Exception as e:
@@ -393,17 +555,17 @@ def generate_harrismatrix():
         if tops and bottoms:
             top_mean_y = sum(pos[n][1] for n in tops) / len(tops)
             bottom_mean_y = sum(pos[n][1] for n in bottoms) / len(bottoms)
-            # chceme top nahoře → pokud je níže, převrátíme svisle
+            # we want top on top → if down, flip vertically
             if top_mean_y < bottom_mean_y:
                 ymin = min(y for (_, y) in pos.values())
                 ymax = max(y for (_, y) in pos.values())
                 for n, (x, y) in list(pos.items()):
                     pos[n] = (x, (ymax + ymin) - y)
 
-        # --- barvy uzlů podle typu ---
+        # --- colors of nodes according type---
         color_map = {
             'deposit':   deposit_color,
-            'negativ':   negative_color,   # DB má "negativ"
+            'negativ':   negative_color,   # there is "negativ" in DB
             'negative':  negative_color,
             'structure': structure_color,
         }
@@ -412,7 +574,7 @@ def generate_harrismatrix():
         plt.figure(figsize=(12, 10))
         ax = plt.gca()
 
-        # --- (volitelně) kreslení obálek objektů ---
+        # --- (optional) drawing envelopes of objects ---
         if draw_objects:
             try:
                 with conn.cursor() as cur:
