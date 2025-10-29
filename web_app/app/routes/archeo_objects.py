@@ -8,8 +8,8 @@ from weasyprint import HTML
 
 from app.logger import logger
 from app.database import get_terrain_connection
-from app.utils import require_selected_db
-from config import Config  # (nepoužito nyní, ale nevadí mít)
+from app.utils.decorators import require_selected_db
+#from config import Config  # (nepoužito nyní, ale nevadí mít)
 
 archeo_objects_bp = Blueprint('archeo_objects', __name__)
 

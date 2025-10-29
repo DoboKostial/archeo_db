@@ -19,7 +19,7 @@ from app.queries import (
     get_full_user_data,
     get_random_citation,
 )
-from app.utils import send_password_reset_email, send_password_change_email
+from app.utils.auth import send_password_reset_email, send_password_change_email
 
 auth_bp = Blueprint('auth', __name__)
 

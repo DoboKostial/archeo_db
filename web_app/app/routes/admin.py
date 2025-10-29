@@ -1,10 +1,5 @@
 # web_app/app/routes/admin.py
-import os
-import re
-import shutil
-import subprocess
-import jwt
-import psycopg2
+import os, re, shutil, subprocess, jwt, psycopg2
 from zipfile import ZipFile
 
 from flask import Blueprint, request, render_template, redirect, url_for, flash, send_file
@@ -13,20 +8,13 @@ from werkzeug.security import generate_password_hash
 from config import Config
 from app.logger import logger
 from app.database import get_auth_connection, create_database_backup
-from app.queries import (
-    get_user_role,
-    get_terrain_db_list,
-    get_terrain_db_sizes,
-)
+from app.queries import get_user_role, get_terrain_db_list, get_terrain_db_sizes
 from psycopg2 import sql
-from app.utils import (
-    generate_random_password,
-    send_new_account_email,
-    sync_single_user_to_all_terrain_dbs,
-    sync_single_db,
-    update_geometry_srid,
-    archeolog_required,   
-)
+
+from app.utils.auth import generate_random_password, send_new_account_email
+from app.utils.admin import sync_single_user_to_all_terrain_dbs, sync_single_db
+from app.utils.geom_utils import update_geometry_srid
+from app.utils.decorators import archeolog_required
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -363,7 +351,7 @@ def create_database():
 
         # Folder structure for content data + thumbs
         db_dir = os.path.join(Config.DATA_DIR, dbname)
-        subfolders = ['photos', 'drawings', 'sketches', 'harrismatrix']
+        subfolders = ['photos', 'drawings', 'sketches', 'photograms', 'harrismatrix']
         os.makedirs(db_dir, exist_ok=True)
 
         for folder in subfolders:

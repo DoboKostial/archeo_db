@@ -9,7 +9,8 @@ from PIL import Image
 
 from app.logger import logger
 from app.database import get_terrain_connection
-from app.utils import require_selected_db, get_photo_dirs
+from app.utils.admin import get_photo_dirs
+from app.utils.decorators import require_selected_db
 
 terr_photo_bp = Blueprint('terr_photo', __name__)
 

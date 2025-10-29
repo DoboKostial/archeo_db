@@ -18,7 +18,8 @@ from flask import (
 from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
-from app.utils import require_selected_db, float_or_none, get_hmatrix_dirs
+from app.utils.decorators import require_selected_db, float_or_none
+from app.utils.admin import get_hmatrix_dirs
 from app.queries import (
     count_sj_by_type,            # returns (sql, params)
     count_sj_by_type_all,        # returns SQL string

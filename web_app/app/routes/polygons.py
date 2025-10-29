@@ -10,7 +10,8 @@ from flask import (
 
 from app.logger import logger
 from app.database import get_terrain_connection
-from app.utils import require_selected_db, process_polygon_upload
+from app.utils.decorators import require_selected_db
+from app.utils.geom_utils import process_polygon_upload
 from app.queries import get_polygons_list, insert_polygon_sql
 
 polygons_bp = Blueprint('polygons', __name__)
