@@ -225,7 +225,7 @@ CREATE TABLE tab_photos (
 
   -- Validation PK and MIME:
   CONSTRAINT tab_photos_id_format_chk
-    CHECK (id_photo ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+    CHECK (id_photo    ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
   CONSTRAINT tab_photos_mime_chk
     CHECK (mime_type IN ('image/jpg','image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
@@ -251,7 +251,7 @@ CREATE TABLE tab_sketches (
 
   -- PK a MIME validation:
   CONSTRAINT tab_sketches_id_format_chk
-    CHECK (id_sketch ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+    CHECK (id_sketch ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
   CONSTRAINT tab_sketches_mime_chk
     CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
@@ -274,7 +274,7 @@ CREATE TABLE tab_drawings (
   checksum_sha256  text         NOT NULL,
   -- mime and PK validation:
   CONSTRAINT tab_drawings_id_format_chk
-    CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+    CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
   CONSTRAINT tab_drawings_mime_chk
     CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
@@ -295,7 +295,7 @@ CREATE TABLE tab_photograms (
   checksum_sha256  text         NOT NULL,
   -- mime and PK validation:
   CONSTRAINT tab_photograms_id_format_chk
-    CHECK (id_photogram ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'),
+    CHECK (id_photogram ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
   CONSTRAINT tab_photograms_mime_chk
     CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
@@ -322,82 +322,82 @@ CREATE TABLE tab_sack (
 -- TABAIDS - table helpers for M:N relations between tables
 --==========================================================
 
--- tabaid_foto_sj definition
--- this table connects fotos and SJ (stratigraphic units)
-
+-- tabaid_photo_sj definition
+-- this table connects photos and SJ (stratigraphic units)
 CREATE TABLE tabaid_photo_sj (
 	id_aut serial4 NOT NULL,
-	ref_foto VARCHAR(100) NULL,
-	ref_sj int4 NULL,
+	ref_photo VARCHAR(100) NOT NULL,
+	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_photo_sj_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_photo_sj_fk FOREIGN KEY (ref_foto) REFERENCES tab_photos(id_photo) ON DELETE CASCADE,
-	CONSTRAINT tabaid_photo_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE
+	CONSTRAINT tabaid_photo_sj_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photo_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+    CREATE UNIQUE INDEX tabaid_photo_sj_unique_idx ON tabaid_photo_sj(ref_sj, ref_photo),
+    CREATE INDEX tabaid_photo_sj_ref_photo_idx ON tabaid_photo_sj(ref_photo)
 );
 
 
 -- tabaid_cut_photogram definition
 -- this table connects cuts and photograms (m:n)
-
-
 CREATE TABLE tabaid_cut_photogram (
 	id_aut serial4 NOT NULL,
-	ref_cut int4 NULL,
-	ref_photogram VARCHAR(100) NULL,
+	ref_cut int4 NOT NULL,
+	ref_photogram VARCHAR(100) NOT NULL,
 	CONSTRAINT tabaid_cut_photogram_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_cut_photogram_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_cut_photogram_fk_1 FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON UPDATE CASCADE
+	CONSTRAINT tabaid_cut_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) OON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_cut_photogram_fk_cut FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
 );
-
 
 -- tabaid_photogram_photo definition
 -- this table connects photograms and photos (m:n)
-
-
 CREATE TABLE tabaid_photogram_photo (
 	id_aut serial4 NOT NULL,
-	ref_photogram VARCHAR(100) NULL,
-	ref_photo VARCHAR(100) NULL,
+	ref_photogram VARCHAR(100) NOT NULL,
+	ref_photo VARCHAR(100) NOT NULL,
 	CONSTRAINT tabaid_photogram_photo_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_photogram_photo_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_photogram_photo_fk_1 FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON UPDATE CASCADE
-);
+	CONSTRAINT tabaid_photogram_photo_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photogram_photo_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+ );
 
 
 -- tabaid_photogram_sj definition
 -- this table is clue between SJs and photograms (m:n)
-
 CREATE TABLE tabaid_photogram_sj (
 	id_aut serial4 NOT NULL,
-	ref_photogram VARCHAR(100) NULL,
-	ref_sj int4 NULL,
+	ref_photogram VARCHAR(100) NOT NULL,
+	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_photogram_sj_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_photogram_sj_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE,
-	CONSTRAINT tabaid_photogram_sj_fk_1 FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON UPDATE CASCADE
+	CONSTRAINT tabaid_photogram_sj_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photogram_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- tabaid_sj_cut definition
 -- this table is clue between SJs and CUTs (m:n)
-
 CREATE TABLE tabaid_sj_cut (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_cut int4 NOT NULL,
 	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut)
+    CONSTRAINT tabaid_sj_cut_fk_sj FOREIGN KEY (ref_cut) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT tabaid_sj_cut_fk_cut FOREIGN KEY (ref_sj) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
 );
+    
 
 -- tabaid_sj_sketch definition
 -- this tabaid clues SJs and Sketches (m:n)
-
 CREATE TABLE tabaid_sj_sketch (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
-	ref_sketch int4 NOT NULL,
+	ref_sketch varchar NOT NULL,
 	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut)
+    CONSTRAINT tabaid_sj_sketch_fk_sketch FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT tabaid_sj_sketch_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+    CREATE UNIQUE INDEX tabaid_sj_sketch_unique ON tabaid_sj_sketch(ref_sj, ref_sketch),
+    CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch)
 );
+
 
 -- tabaid_sj_polygon definition
 -- this clues SJs and polygons (m:n)
-
 CREATE TABLE tabaid_sj_polygon (
  	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
