@@ -323,16 +323,29 @@ CREATE TABLE tab_sack (
 --==========================================================
 
 -- tabaid_photo_sj definition
--- this table connects photos and SJ (stratigraphic units)
+-- this table connects photos and SUs (stratigraphic units)
 CREATE TABLE tabaid_photo_sj (
 	id_aut serial4 NOT NULL,
-	ref_photo VARCHAR(100) NOT NULL,
+	ref_photo VARCHAR(120) NOT NULL,
 	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_photo_sj_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_photo_sj_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT tabaid_photo_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
     CREATE UNIQUE INDEX tabaid_photo_sj_unique_idx ON tabaid_photo_sj(ref_sj, ref_photo),
     CREATE INDEX tabaid_photo_sj_ref_photo_idx ON tabaid_photo_sj(ref_photo)
+);
+
+-- tabaid_sj_drawings definition
+-- this table connects drawings and SUs (stratigraphic units)
+CREATE TABLE tabaid_sj_drawings (
+	id_aut serial4 NOT NULL,
+	ref_drawing VARCHAR(120) NOT NULL,
+	ref_sj int4 NOT NULL,
+	CONSTRAINT tabaid_sj_drawings_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_sj_drawings_fk_drawing FOREIGN KEY (ref_drawing) REFERENCES tab_drawings(id_drawing) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_sj_drawings_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+    CREATE UNIQUE INDEX tabaid_sj_drawings_unique_idx ON tabaid_sj_drawings(ref_sj, ref_drawing),
+    CREATE INDEX tabaid_sj_drawings_ref_drawing_idx ON tabaid_sj_drawings(ref_drawing)
 );
 
 
