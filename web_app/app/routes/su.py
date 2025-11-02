@@ -1,6 +1,7 @@
 # web_app/app/routes/su.py
 import os
 from datetime import datetime
+from psycopg2.extras import Json
 
 import jwt
 import networkx as nx
@@ -227,9 +228,9 @@ def add_su():
         except Exception: pass
 
 
-#    Upload 1..N files for specific SU and creating M:N relation into tabaid_*.
-#    Multipart is expected: input name="files" (multiple) + business filed according
-#    MEDIA_TABLES[media_type]["extra_cols"] in utils.
+# Upload 1..N files for specific SU and creating M:N relation into tabaid_*.
+# Multipart is expected: input name="files" (multiple) + business filed according
+# MEDIA_TABLES[media_type]["extra_cols"] in utils.
 @su_bp.post("/su/<int:sj_id>/upload/<media_type>")
 @require_selected_db
 def upload_su_media(sj_id, media_type):
@@ -252,10 +253,7 @@ def upload_su_media(sj_id, media_type):
             # 1) temporary storing
             tmp_path, tmp_size = save_to_uploads(Config.UPLOAD_FOLDER, f)
 
-            # 2) MIME/EXT
-            mime = detect_mime(tmp_path)
-            validate_mime(mime, Config.ALLOWED_MIME)
-
+            # 2) extension
             pk_name = make_pk(selected_db, f.filename)  # e.g. "456_IMG_25.jpg"
             validate_pk(pk_name)
             ext = pk_name.rsplit(".", 1)[-1]
@@ -267,8 +265,10 @@ def upload_su_media(sj_id, media_type):
             if os.path.exists(final_path):
                 raise ValueError(f"File already exists: {pk_name}")
 
-            # 4) moving + checksum + thumb
+            # 4) moving + checksum + thumb + mime validation
             move_into_place(tmp_path, final_path); tmp_path = None
+            mime = detect_mime(final_path)
+            validate_mime(mime, Config.ALLOWED_MIME)
             checksum = sha256_file(final_path)
             made_thumb = make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
 
@@ -297,7 +297,7 @@ def upload_su_media(sj_id, media_type):
                              shoot_datetime, gps_lat, gps_lon, gps_alt, exif_json)
                            VALUES (%s, {", ".join(['%s']*len(meta_cols))}, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         [pk_name, *vals, mime, os.path.getsize(final_path), checksum,
-                         shoot_dt, gps_lat, gps_lon, gps_alt, exif_json]
+                         shoot_dt, gps_lat, gps_lon, gps_alt, Json(exif_json)]
                     )
                 else:
                     cur.execute(
