@@ -114,7 +114,7 @@ CREATE TABLE tab_object (
 CREATE TABLE tab_polygons (
     id SERIAL PRIMARY KEY,
     polygon_name TEXT NOT NULL,
-    geom geometry(Polygon, 4326) -- or another EPSG, but 4326 (WGS 84) is standard
+    geom geometry(Polygon, 4326) -- or another EPSG, but 4326 (WGS 84) is standard; this will be overwriten during specific DB creation
 );
 
 
@@ -273,10 +273,8 @@ CREATE TABLE tab_drawings (
   file_size        bigint       NOT NULL CHECK (file_size >= 0),
   checksum_sha256  text         NOT NULL,
   -- mime and PK validation:
-  CONSTRAINT tab_drawings_id_format_chk
-    CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
-  CONSTRAINT tab_drawings_mime_chk
-    CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
+  CONSTRAINT tab_drawings_id_format_chk CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
+  CONSTRAINT tab_drawings_mime_chk CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
 -- indexes:
 CREATE INDEX tab_drawings_author_idx     ON tab_drawings (author);
@@ -330,11 +328,12 @@ CREATE TABLE tabaid_photo_sj (
 	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_photo_sj_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_photo_sj_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_photo_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
-    CREATE UNIQUE INDEX tabaid_photo_sj_unique_idx ON tabaid_photo_sj(ref_sj, ref_photo),
-    CREATE INDEX tabaid_photo_sj_ref_photo_idx ON tabaid_photo_sj(ref_photo)
-);
+	CONSTRAINT tabaid_photo_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
+    );
+CREATE UNIQUE INDEX tabaid_photo_sj_unique_idx ON tabaid_photo_sj(ref_sj, ref_photo);
+CREATE INDEX tabaid_photo_sj_ref_photo_idx ON tabaid_photo_sj(ref_photo);
 
+   
 -- tabaid_sj_drawings definition
 -- this table connects drawings and SUs (stratigraphic units)
 CREATE TABLE tabaid_sj_drawings (
@@ -343,10 +342,10 @@ CREATE TABLE tabaid_sj_drawings (
 	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_sj_drawings_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_sj_drawings_fk_drawing FOREIGN KEY (ref_drawing) REFERENCES tab_drawings(id_drawing) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_sj_drawings_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
-    CREATE UNIQUE INDEX tabaid_sj_drawings_unique_idx ON tabaid_sj_drawings(ref_sj, ref_drawing),
-    CREATE INDEX tabaid_sj_drawings_ref_drawing_idx ON tabaid_sj_drawings(ref_drawing)
+	CONSTRAINT tabaid_sj_drawings_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX tabaid_sj_drawings_unique_idx ON tabaid_sj_drawings(ref_sj, ref_drawing);
+CREATE INDEX tabaid_sj_drawings_ref_drawing_idx ON tabaid_sj_drawings(ref_drawing);
 
 
 -- tabaid_cut_photogram definition
@@ -356,7 +355,7 @@ CREATE TABLE tabaid_cut_photogram (
 	ref_cut int4 NOT NULL,
 	ref_photogram VARCHAR(100) NOT NULL,
 	CONSTRAINT tabaid_cut_photogram_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_cut_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) OON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_cut_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT tabaid_cut_photogram_fk_cut FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -368,7 +367,7 @@ CREATE TABLE tabaid_photogram_photo (
 	ref_photo VARCHAR(100) NOT NULL,
 	CONSTRAINT tabaid_photogram_photo_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_photogram_photo_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_photogram_photo_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_photogram_photo_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE
  );
 
 
@@ -389,7 +388,7 @@ CREATE TABLE tabaid_sj_cut (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_cut int4 NOT NULL,
-	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut)
+	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut),
     CONSTRAINT tabaid_sj_cut_fk_sj FOREIGN KEY (ref_cut) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT tabaid_sj_cut_fk_cut FOREIGN KEY (ref_sj) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -401,12 +400,12 @@ CREATE TABLE tabaid_sj_sketch (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
 	ref_sketch varchar NOT NULL,
-	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut)
+	CONSTRAINT tabaid_sj_sketch_pk PRIMARY KEY (id_aut),
     CONSTRAINT tabaid_sj_sketch_fk_sketch FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT tabaid_sj_sketch_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
-    CREATE UNIQUE INDEX tabaid_sj_sketch_unique ON tabaid_sj_sketch(ref_sj, ref_sketch),
-    CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch)
+    CONSTRAINT tabaid_sj_sketch_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX tabaid_sj_sketch_unique ON tabaid_sj_sketch(ref_sj, ref_sketch);
+CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch);
 
 
 -- tabaid_sj_polygon definition
