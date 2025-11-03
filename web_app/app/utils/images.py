@@ -1,5 +1,6 @@
 # app/utils/images.py
 # handlers for image manipulation
+# units test for this are in web_app/tests/tests_images.py
 
 import os
 import re
