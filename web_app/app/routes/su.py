@@ -278,7 +278,8 @@ def upload_su_media(sj_id, media_type):
             if media_type == "photos" and mime in ("image/jpeg", "image/tiff"):
                 sdt, la, lo, al, exif = extract_exif(final_path)
                 shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = sdt, la, lo, al, exif
-
+            logger.info(f"EXIF parsed: dt={shoot_dt}, lat={gps_lat}, lon={gps_lon}, alt={gps_alt}, mime={mime}")
+            
             # 6) INSERT into tab_<type> + link do tabaid_*
             t = MEDIA_TABLES[media_type]
             table, id_col = t["table"], t["id_col"]
