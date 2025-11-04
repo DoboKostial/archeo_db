@@ -121,7 +121,17 @@ CREATE TABLE tab_polygons (
     polygon_name TEXT NOT NULL,
     geom geometry(Polygon) -- SRID is not defined; this will be overwriten during specific DB creation
 );
-
+-- this is table for storing info of what points are measured for polygon
+-- can not perform referential integrity with tab_geopts, so integrity is done by application means
+CREATE TABLE IF NOT EXISTS tab_polygon_geopts_binding (
+  id          serial PRIMARY KEY,
+  ref_polygon int  NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  pts_from    int  NOT NULL,
+  pts_to      int  NOT NULL,
+  CHECK (pts_from <= pts_to)
+);
+CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_idx
+  ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
 
 ---
 -- tab_sj_stratigraphy definition
