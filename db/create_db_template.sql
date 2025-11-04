@@ -5,7 +5,7 @@
 ---
 -- extensions needed
 ---
-CREATE EXTENSION postgis;
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 
 ---
@@ -33,6 +33,8 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO app_terrain_db;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON FUNCTIONS TO app_terrain_db;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TYPES TO app_terrain_db;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO app_terrain_db;
+
+CREATE EXTENSION IF NOT EXISTS postgis;
 
 SET ROLE app_terrain_db;
 
@@ -87,15 +89,18 @@ CREATE TABLE tab_cut (
 -- tab_geopts definition
 ---
 CREATE TABLE tab_geopts (
-	id_pts int4 NOT NULL,
-	x float8 NULL,
-	y float8 NULL,
-	h float8 NULL,
-	code VARCHAR(30) NULL,
-	notes TEXT NULL,
-	CONSTRAINT tab_geomeasuring_pk PRIMARY KEY (id_pts)
+  id_pts   int4    PRIMARY KEY,
+  x        double precision NOT NULL,   -- more precise than numeric
+  y        double precision NOT NULL,
+  h        double precision NOT NULL,
+  code     text,
+  notes    text,
+  pts_geom geometry(Point)              -- bez SRID; set_project_srid will define this
 );
-CREATE UNIQUE INDEX tab_geomeasuring_id_pts_idx ON tab_geopts USING btree (id_pts);
+
+CREATE UNIQUE INDEX tab_geopts_id_pts_idx ON tab_geopts (id_pts);
+CREATE INDEX tab_geopts_geom_gix ON tab_geopts USING GIST (pts_geom) WHERE pts_geom IS NOT NULL;
+
 
 ---
 -- tab_object definition
@@ -114,7 +119,7 @@ CREATE TABLE tab_object (
 CREATE TABLE tab_polygons (
     id SERIAL PRIMARY KEY,
     polygon_name TEXT NOT NULL,
-    geom geometry(Polygon, 4326) -- or another EPSG, but 4326 (WGS 84) is standard; this will be overwriten during specific DB creation
+    geom geometry(Polygon) -- SRID is not defined; this will be overwriten during specific DB creation
 );
 
 
@@ -209,31 +214,31 @@ CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON tab_sj_structure USING 
 -- tab_photos definition
 ---
 CREATE TABLE tab_photos (
-  id_photo         VARCHAR(150) PRIMARY KEY,                       
-  photo_typ        VARCHAR(60)  NOT NULL,
-  datum            date         NOT NULL,
-  author           VARCHAR(100) NOT NULL REFERENCES gloss_personalia(mail),
-  notes            text,
-  mime_type        text         NOT NULL,                          -- defined according content
-  file_size        bigint       NOT NULL CHECK (file_size >= 0),
-  checksum_sha256  text         NOT NULL,
-  shoot_datetime   timestamptz,
-  gps_lat          double precision,
-  gps_lon          double precision,
-  gps_alt          double precision,
+  id_photo        varchar(150) PRIMARY KEY,
+  photo_typ       varchar(60)  NOT NULL,
+  datum           date         NOT NULL,
+  author          varchar(100) NOT NULL REFERENCES gloss_personalia(mail),
+  notes           text,
+  mime_type       text         NOT NULL,
+  file_size       bigint       NOT NULL CHECK (file_size >= 0),
+  checksum_sha256 text         NOT NULL,
+  shoot_datetime  timestamptz,
+  gps_lat         double precision,
+  gps_lon         double precision,
+  gps_alt         double precision,
   exif_json        jsonb        DEFAULT '{}'::jsonb,
-
+  photo_centroid  geometry(Point)   -- SRID not defined ("empty"); after creating new DB will be changed by update_geometry_srid()
   -- Validation PK and MIME:
-  CONSTRAINT tab_photos_id_format_chk
-    CHECK (id_photo    ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
-  CONSTRAINT tab_photos_mime_chk
-    CHECK (mime_type IN ('image/jpg','image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
+  CONSTRAINT tab_photos_id_format_chk CHECK (id_photo ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
+  CONSTRAINT tab_photos_mime_chk CHECK (mime_type IN ('image/jpg','image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
--- Indexes
-CREATE INDEX tab_photos_author_idx       ON tab_photos (author);
-CREATE INDEX tab_photos_datum_idx        ON tab_photos (datum);
-CREATE INDEX tab_photos_checksum_idx     ON tab_photos (checksum_sha256);
-CREATE INDEX tab_photos_shoot_dt_idx     ON tab_photos (shoot_datetime);
+CREATE INDEX tab_photos_author_idx ON tab_photos (author);
+CREATE INDEX tab_photos_datum_idx ON tab_photos (datum);
+CREATE INDEX tab_photos_checksum_idx ON tab_photos (checksum_sha256);
+CREATE INDEX tab_photos_shoot_dt_idx ON tab_photos (shoot_datetime);
+-- index only for not null geometries
+CREATE INDEX tab_photos_centroid_gix ON tab_photos USING GIST (photo_centroid) WHERE photo_centroid IS NOT NULL;
+
 
 
 ---
@@ -420,10 +425,165 @@ CREATE TABLE tabaid_sj_polygon (
 
 -- #################################
 -- #### FUNCTIONS ###
--- there are 2 types of functions:
--- 1. check functions - checking the logical consistency of data - 'fnc_check...'
--- 2. getions - retrieving data from database (main purpose of database) - 'fnc_get...'
+-- there are 3 types of functions:
+-- 1. General functions (overwrite SRID in whole DB etc...)
+-- 2. check functions - checking the logical consistency of data - 'fnc_check...'
+-- 3. getions - retrieving data from database (main purpose of database) - 'fnc_get...'
 -- #################################
+
+
+-- #################################
+-- GENERAL SYSTEM FUNCTIONS
+-- #################################
+
+-- This function (inhibited by trigger) overwrites all SRIDs to all geometry columns in schema (default: current_schema()).
+-- geography columns ignored (geography is „always 4326“).
+CREATE OR REPLACE FUNCTION set_project_srid(target_srid integer, in_schema text DEFAULT current_schema())
+RETURNS void
+LANGUAGE plpgsql AS
+$$
+DECLARE
+  r record;
+  cur_srid int;
+BEGIN
+  IF target_srid IS NULL OR target_srid <= 0 THEN
+    RAISE EXCEPTION 'Invalid target_srid: %', target_srid;
+  END IF;
+
+  FOR r IN
+    SELECT
+      f_table_schema  AS sch,
+      f_table_name    AS tbl,
+      f_geometry_column AS col
+    FROM geometry_columns
+    WHERE f_table_schema = in_schema
+  LOOP
+    -- zkus přečíst aktuální SRID (může vrátit 0/NULL u špatně typovaných sloupců)
+    BEGIN
+      cur_srid := Find_SRID(r.sch::text, r.tbl::text, r.col::text);
+    EXCEPTION WHEN OTHERS THEN
+      cur_srid := NULL;
+    END;
+
+    -- pokud už sedí, přeskoč
+    IF cur_srid = target_srid THEN
+      CONTINUE;
+    END IF;
+
+    -- Přepni SRID sloupce i metadat (bez dotyku dat)
+    BEGIN
+      PERFORM UpdateGeometrySRID(r.sch::text, r.tbl::text, r.col::text, target_srid);
+      RAISE NOTICE 'SRID updated: %.%.% → EPSG %', r.sch, r.tbl, r.col, target_srid;
+    EXCEPTION WHEN OTHERS THEN
+      -- nechceme shodit celou akci; jen zaloguj
+      RAISE NOTICE 'SRID update failed for %.%.%: %', r.sch, r.tbl, r.col, SQLERRM;
+    END;
+  END LOOP;
+END
+$$;
+
+
+
+-- #################################
+-- TRIGGERS
+-- #################################
+
+
+-- This trigger updates tab_photos - calculates geometry coords for column photo_centroid
+-- according SRID defined dynamically
+CREATE OR REPLACE FUNCTION tab_photos_set_centroid()
+RETURNS trigger
+LANGUAGE plpgsql AS
+$$
+DECLARE
+  v_epsg int;
+BEGIN
+  -- If without GPS → centroid NULL
+  IF NEW.gps_lat IS NULL OR NEW.gps_lon IS NULL THEN
+    NEW.photo_centroid := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- Check for values, if more than WGS limits → NULL
+  IF NEW.gps_lat < -90 OR NEW.gps_lat > 90
+     OR NEW.gps_lon < -180 OR NEW.gps_lon > 180 THEN
+    NEW.photo_centroid := NULL;
+    RETURN NEW;
+  END IF;
+
+  -- SRID target: retype to text
+  v_epsg := Find_SRID(TG_TABLE_SCHEMA::text, TG_TABLE_NAME::text, 'photo_centroid'::text);
+
+ 
+  IF v_epsg IS NULL OR v_epsg <= 0 THEN
+    NEW.photo_centroid := NULL;
+    RETURN NEW;
+  END IF;
+
+  NEW.photo_centroid :=
+    ST_Transform(
+      ST_SetSRID(ST_MakePoint(NEW.gps_lon, NEW.gps_lat), 4326),
+      v_epsg
+    );
+
+  RETURN NEW;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    NEW.photo_centroid := NULL;
+    RETURN NEW;
+END
+$$;
+-- ensure there is only one trigger
+DROP TRIGGER IF EXISTS trg_tab_photos_set_centroid ON tab_photos;
+CREATE TRIGGER trg_tab_photos_set_centroid
+BEFORE INSERT OR UPDATE OF gps_lat, gps_lon
+ON tab_photos
+FOR EACH ROW
+EXECUTE FUNCTION tab_photos_set_centroid();
+
+
+
+-- This trigger updates tab_geopts - calculates geometry coords for columns X,Y,h
+-- according SRID defined dynamically
+CREATE OR REPLACE FUNCTION tab_geopts_set_geom()
+RETURNS trigger
+LANGUAGE plpgsql AS
+$$
+DECLARE
+  v_epsg int;
+BEGIN
+  IF NEW.x IS NULL OR NEW.y IS NULL THEN
+    NEW.pts_geom := NULL;
+    RETURN NEW;
+  END IF;
+
+  v_epsg := Find_SRID(TG_TABLE_SCHEMA::text, TG_TABLE_NAME::text, 'pts_geom'::text);
+  IF v_epsg IS NULL OR v_epsg <= 0 THEN
+    NEW.pts_geom := NULL;
+    RETURN NEW;
+  END IF;
+
+  NEW.pts_geom :=
+    ST_SetSRID(ST_MakePoint(NEW.x, NEW.y), v_epsg);
+
+  RETURN NEW;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    NEW.pts_geom := NULL;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS trg_tab_geopts_set_geom ON tab_geopts;
+CREATE TRIGGER trg_tab_geopts_set_geom
+BEFORE INSERT OR UPDATE OF x, y
+ON tab_geopts
+FOR EACH ROW
+EXECUTE FUNCTION tab_geopts_set_geom();
+
+
 
 
 --###################
