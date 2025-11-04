@@ -423,6 +423,65 @@ CREATE TABLE tabaid_sj_polygon (
 );
 
 
+-- POLYGONS <-> PHOTOS
+CREATE TABLE IF NOT EXISTS tabaid_polygon_photos (
+  id_aut      serial PRIMARY KEY,
+  ref_polygon int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo   varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_polygon_photos_idx ON tabaid_polygon_photos(ref_polygon, ref_photo);
+
+-- POLYGONS <-> SKETCHES
+CREATE TABLE IF NOT EXISTS tabaid_polygon_sketches (
+  id_aut      serial PRIMARY KEY,
+  ref_polygon int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_sketch  varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_polygon_sketches_idx ON tabaid_polygon_sketches(ref_polygon, ref_sketch);
+
+-- POLYGONS <-> PHOTOGRAMS
+CREATE TABLE IF NOT EXISTS tabaid_polygon_photograms (
+  id_aut        serial PRIMARY KEY,
+  ref_polygon   int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_polygon_photograms_idx ON tabaid_polygon_photograms(ref_polygon, ref_photogram);
+
+
+-- CUTS <-> PHOTOS
+CREATE TABLE IF NOT EXISTS tabaid_cut_photos (
+  id_aut   serial PRIMARY KEY,
+  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_cut_photos_idx ON tabaid_cut_photos(ref_cut, ref_photo);
+
+-- CUTS <-> SKETCHES
+CREATE TABLE IF NOT EXISTS tabaid_cut_sketches (
+  id_aut   serial PRIMARY KEY,
+  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_sketch varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_cut_sketches_idx ON tabaid_cut_sketches(ref_cut, ref_sketch);
+
+-- CUTS <-> PHOTOGRAMS
+CREATE TABLE IF NOT EXISTS tabaid_cut_photograms (
+  id_aut   serial PRIMARY KEY,
+  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_cut_photograms_idx ON tabaid_cut_photograms(ref_cut, ref_photogram);
+
+-- CUTS <-> DRAWINGS
+CREATE TABLE IF NOT EXISTS tabaid_cut_drawings (
+  id_aut    serial PRIMARY KEY,
+  ref_cut   int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_drawing varchar(120) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_cut_drawings_idx ON tabaid_cut_drawings(ref_cut, ref_drawing);
+
+
+
 -- #################################
 -- #### FUNCTIONS ###
 -- there are 3 types of functions:
