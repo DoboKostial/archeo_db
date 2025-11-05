@@ -122,7 +122,8 @@ CREATE TABLE tab_polygons (
     geom geometry(Polygon) -- SRID is not defined; this will be overwriten during specific DB creation
 );
 -- this is table for storing info of what points are measured for polygon
--- can not perform referential integrity with tab_geopts, so integrity is done by application means
+-- can not perform referential integrity with tab_geopts (point from total station usually come at the end),
+-- so integrity is done by application means
 CREATE TABLE IF NOT EXISTS tab_polygon_geopts_binding (
   id          serial PRIMARY KEY,
   ref_polygon int  NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -547,6 +548,97 @@ BEGIN
       -- nechceme shodit celou akci; jen zaloguj
       RAISE NOTICE 'SRID update failed for %.%.%: %', r.sch, r.tbl, r.col, SQLERRM;
     END;
+  END LOOP;
+END
+$$;
+
+
+-- This PL/PGSQL function is for excavation polygons and namely constructs polygon from geomesuring points:
+-- - collects points from tab_geopts in range
+-- - sorts by id_pts
+-- - closes line (adds startpoint to end)
+-- - unifies SRID to project
+-- - creates POLYGON and saves to tab_polygons.geom.
+CREATE OR REPLACE FUNCTION rebuild_polygon_geom_from_geopts(p_polygon int)
+RETURNS void
+LANGUAGE plpgsql AS
+$$
+DECLARE
+  v_schema  text := current_schema();
+  v_epsg    int;
+  v_line    geometry;
+  v_poly    geometry;
+  v_count   int;
+BEGIN
+  -- target SRID
+  v_epsg := Find_SRID(v_schema::text, 'tab_polygons'::text, 'geom'::text);
+  IF v_epsg IS NULL OR v_epsg <= 0 THEN
+    RAISE EXCEPTION 'Cannot resolve SRID for %.tab_polygons.geom', v_schema;
+  END IF;
+
+  -- poskládej JEDNU linii ze všech dávek (globálně podle id_pts)
+  WITH ranges AS (
+    SELECT pts_from, pts_to
+    FROM tab_polygon_geopts_binding
+    WHERE ref_polygon = p_polygon
+  ),
+  pts AS (
+    SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
+    FROM ranges r
+    JOIN tab_geopts g
+      ON g.id_pts BETWEEN r.pts_from AND r.pts_to
+    WHERE g.pts_geom IS NOT NULL
+    ORDER BY g.id_pts
+  )
+  SELECT
+    CASE
+      WHEN COUNT(*) >= 2 THEN
+        ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
+      ELSE NULL
+    END
+  INTO v_line
+  FROM pts;
+
+  IF v_line IS NULL THEN
+    UPDATE tab_polygons SET geom = NULL WHERE id = p_polygon;
+    RAISE NOTICE 'Not enough points to build line (polygon %).', p_polygon;
+    RETURN;
+  END IF;
+
+  -- na cílový SRID (pro jistotu)
+  IF ST_SRID(v_line) IS DISTINCT FROM v_epsg THEN
+    v_line := ST_Transform(v_line, v_epsg);
+  END IF;
+
+  -- uzavři + očisti
+  IF NOT ST_Equals(ST_StartPoint(v_line), ST_EndPoint(v_line)) THEN
+    v_line := ST_AddPoint(v_line, ST_StartPoint(v_line));
+  END IF;
+  v_line := ST_RemoveRepeatedPoints(v_line, 0.0000001);
+
+  -- polygon
+  v_poly := ST_MakeValid(ST_MakePolygon(v_line));
+
+  IF ST_IsEmpty(v_poly) OR GeometryType(v_poly) <> 'ST_Polygon' THEN
+    -- držíme tvé pravidlo: žádný multipolygon ani díry – když to nevyjde, necháme NULL
+    UPDATE tab_polygons SET geom = NULL WHERE id = p_polygon;
+    RAISE NOTICE 'Built geometry not a single Polygon or empty (polygon %).', p_polygon;
+  ELSE
+    UPDATE tab_polygons SET geom = v_poly WHERE id = p_polygon;
+  END IF;
+END
+$$;
+
+
+-- This function is optional - rebuilds the geometry of all polygons 
+CREATE OR REPLACE FUNCTION rebuild_all_polygons_from_geopts()
+RETURNS void
+LANGUAGE plpgsql AS
+$$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT DISTINCT ref_polygon FROM tab_polygon_geopts_binding LOOP
+    PERFORM rebuild_polygon_geom_from_geopts(r.ref_polygon);
   END LOOP;
 END
 $$;
