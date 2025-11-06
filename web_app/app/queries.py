@@ -195,38 +195,6 @@ def fetch_stratigraphy_relations(conn):
         return cur.fetchall()
 
 
-def get_polygons_list():
-    return """
-        SELECT polygon_name, ST_NPoints(geom), ST_SRID(geom)
-        FROM tab_polygons
-        ORDER BY polygon_name;
-    """
-
-
-def insert_polygon_sql(polygon_name, points, source_epsg):
-    """
-    Returns parametrized SQL.
-    points: list[(x, y)] (numbers), source_epsg: int
-    """
-    # inserting WKT as a parameter value
-    # we asssume: x,y are already floats (see parsing CSV in utils.process_polygon_upload)
-    wkt_linestring = "LINESTRING(" + ", ".join(f"{float(x)} {float(y)}" for x, y in points) + ")"
-    sql_text = """
-        INSERT INTO tab_polygons (polygon_name, geom)
-        VALUES (
-            %s,
-            ST_Transform(
-                ST_SetSRID(
-                    ST_GeomFromText(%s),
-                    %s
-                ),
-                4326
-            )
-        );
-    """
-    params = (polygon_name, wkt_linestring, int(source_epsg))
-    return sql_text, params
-
 
 # --- Harris / SU & Objects queries ---
 
@@ -247,4 +215,274 @@ def get_all_objects(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT id_object, object_typ, superior_object FROM tab_object;")
         return cur.fetchall()
+    
+
+
+# Here queries for polygons handling
+# app/queries/polygons.py
+# Centralized SQL helpers for polygons & their media bindings.
+# Keep ALL raw SQL here so routes stay clean and testable.
+
+# --------------------------
+# Listing / reading polygons
+# --------------------------
+
+def get_polygons_list():
+    """
+    Returns (id, polygon_name, number_of_points, srid) for all polygons.
+    `ST_SRID(geom)` may be NULL if geom is not yet built.
+    """
+    return """
+        SELECT
+            p.id,
+            p.polygon_name,
+            COALESCE(ST_NPoints(p.geom), 0) AS npoints,
+            ST_SRID(p.geom)                 AS srid
+        FROM tab_polygons AS p
+        ORDER BY p.polygon_name;
+    """
+
+
+# ----------------------------------------------------
+# CSV/TXT upload -> direct insert of a polygon geometry
+# ----------------------------------------------------
+
+def insert_polygon_sql(polygon_name, points, source_epsg):
+    """
+    Your original helper (kept compatible):
+    Builds a single INSERT with the points inlined as ST_MakePoint(x,y).
+    NOTE: It currently transforms to 4326; you later normalize SRID in DB
+    via set_project_srid/update_geometry_srid, so this is OK.
+    """
+    return f"""
+        INSERT INTO tab_polygons (polygon_name, geom)
+        VALUES (
+            %s,
+            ST_Transform(
+                ST_SetSRID(
+                    ST_MakePolygon(
+                        ST_MakeLine(ARRAY[
+                            {','.join([f"ST_MakePoint({x}, {y})" for x, y in points])}
+                        ])
+                    ),
+                    {int(source_epsg)}
+                ),
+                4326
+            )
+        );
+    """
+
+
+# ----------------------------------------------------
+# Manual polygon creation (ID + name + ranges + rebuild)
+# ----------------------------------------------------
+
+def insert_polygon_manual_sql():
+    """
+    Insert a 'skeleton' polygon by explicit ID and name; geometry stays NULL.
+    Params: (id, polygon_name)
+    """
+    return """
+        INSERT INTO tab_polygons (id, polygon_name, geom)
+        VALUES (%s, %s, NULL);
+    """
+
+
+def insert_binding_sql():
+    """
+    Insert one range (FROM..TO) for a polygon into tab_polygon_geopts_binding.
+    Params: (ref_polygon, pts_from, pts_to)
+    """
+    return """
+        INSERT INTO tab_polygon_geopts_binding (ref_polygon, pts_from, pts_to)
+        VALUES (%s, %s, %s);
+    """
+
+
+def rebuild_geom_sql():
+    """
+    Calls the DB-side function that rebuilds polygon geometry from tab_geopts
+    and ranges stored in tab_polygon_geopts_binding.
+    Params: (polygon_id,)
+    """
+    return "SELECT rebuild_polygon_geom_from_geopts(%s);"
+
+
+# -----------------------
+# Authors (for <select>)
+# -----------------------
+
+def list_authors_sql():
+    """
+    Returns authors' emails for dropdowns.
+    """
+    return "SELECT mail FROM gloss_personalia ORDER BY mail;"
+
+
+# -------------------------
+# Shapefile export helpers
+# -------------------------
+
+def find_polygons_srid_sql():
+    """
+    Returns the SRID of tab_polygons.geom for the current schema.
+    """
+    return "SELECT Find_SRID(current_schema(), 'tab_polygons', 'geom');"
+
+
+def srtext_by_srid_sql():
+    """
+    Returns SR-Text (WKT) from spatial_ref_sys for a given SRID.
+    Params: (srid,)
+    """
+    return "SELECT srtext FROM spatial_ref_sys WHERE srid = %s;"
+
+
+def polygons_geojson_sql():
+    """
+    Returns (polygon_name, ST_AsGeoJSON(geom)) for all polygons with non-NULL geom.
+    """
+    return """
+        SELECT polygon_name, ST_AsGeoJSON(geom)
+        FROM tab_polygons
+        WHERE geom IS NOT NULL;
+    """
+
+
+# ------------------------------------
+# Media: Photos / Sketches / Photograms
+# ------------------------------------
+# Expected tables/columns (based on our earlier DDL discussion):
+#
+# tab_photos(
+#   id_photo VARCHAR PRIMARY KEY,
+#   photo_typ TEXT NOT NULL,
+#   datum DATE NOT NULL,
+#   author VARCHAR NOT NULL REFERENCES gloss_personalia(mail),
+#   notes TEXT,
+#   mime_type TEXT NOT NULL,
+#   file_size BIGINT NOT NULL,
+#   checksum_sha256 TEXT NOT NULL,
+#   shoot_datetime TIMESTAMPTZ NULL,
+#   gps_lat DOUBLE PRECISION NULL,
+#   gps_lon DOUBLE PRECISION NULL,
+#   gps_alt DOUBLE PRECISION NULL,
+#   exif_json JSONB NULL
+# )
+#
+# tabaid_polygon_photos(ref_polygon INT REFERENCES tab_polygons(id), ref_photo VARCHAR REFERENCES tab_photos(id_photo))
+#
+# tab_sketches(
+#   id_sketch VARCHAR PRIMARY KEY,
+#   sketch_typ TEXT NOT NULL,
+#   author VARCHAR NOT NULL REFERENCES gloss_personalia(mail),
+#   datum DATE NOT NULL,
+#   notes TEXT,
+#   mime_type TEXT NOT NULL,
+#   file_size BIGINT NOT NULL,
+#   checksum_sha256 TEXT NOT NULL
+# )
+#
+# tabaid_polygon_sketches(ref_polygon INT REFERENCES tab_polygons(id), ref_sketch VARCHAR REFERENCES tab_sketches(id_sketch))
+#
+# tab_photograms(
+#   id_photogram VARCHAR PRIMARY KEY,
+#   photogram_typ TEXT NOT NULL,
+#   ref_sketch VARCHAR NULL REFERENCES tab_sketches(id_sketch),
+#   notes TEXT,
+#   mime_type TEXT NOT NULL,
+#   file_size BIGINT NOT NULL,
+#   checksum_sha256 TEXT NOT NULL
+# )
+#
+# tabaid_polygon_photograms(ref_polygon INT REFERENCES tab_polygons(id), ref_photogram VARCHAR REFERENCES tab_photograms(id_photogram))
+
+
+def insert_photo_sql():
+    """
+    Insert one photo metadata row.
+    Params:
+      (id_photo, photo_typ, datum, author, notes,
+       mime_type, file_size, checksum_sha256,
+       shoot_datetime, gps_lat, gps_lon, gps_alt, exif_json)
+    """
+    return """
+        INSERT INTO tab_photos (
+            id_photo, photo_typ, datum, author, notes,
+            mime_type, file_size, checksum_sha256,
+            shoot_datetime, gps_lat, gps_lon, gps_alt, exif_json
+        )
+        VALUES (
+            %s, %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s, %s, %s
+        );
+    """
+
+
+def bind_photo_to_polygon_sql():
+    """
+    Bind an existing photo to a polygon (M:N).
+    Params: (ref_polygon, ref_photo)
+    """
+    return """
+        INSERT INTO tabaid_polygon_photos (ref_polygon, ref_photo)
+        VALUES (%s, %s);
+    """
+
+
+def insert_sketch_sql():
+    """
+    Insert one sketch metadata row.
+    Params:
+      (id_sketch, sketch_typ, author, datum, notes,
+       mime_type, file_size, checksum_sha256)
+    """
+    return """
+        INSERT INTO tab_sketches (
+            id_sketch, sketch_typ, author, datum, notes,
+            mime_type, file_size, checksum_sha256
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+    """
+
+
+def bind_sketch_to_polygon_sql():
+    """
+    Bind an existing sketch to a polygon (M:N).
+    Params: (ref_polygon, ref_sketch)
+    """
+    return """
+        INSERT INTO tabaid_polygon_sketches (ref_polygon, ref_sketch)
+        VALUES (%s, %s);
+    """
+
+
+def insert_photogram_sql():
+    """
+    Insert one photogram metadata row.
+    Params:
+      (id_photogram, photogram_typ, notes,
+       mime_type, file_size, checksum_sha256)
+    Note: ref_sketch is optional and managed elsewhere if needed.
+    """
+    return """
+        INSERT INTO tab_photograms (
+            id_photogram, photogram_typ, notes,
+            mime_type, file_size, checksum_sha256
+        )
+        VALUES (%s, %s, %s, %s, %s, %s);
+    """
+
+
+def bind_photogram_to_polygon_sql():
+    """
+    Bind an existing photogram to a polygon (M:N).
+    Params: (ref_polygon, ref_photogram)
+    """
+    return """
+        INSERT INTO tabaid_polygon_photograms (ref_polygon, ref_photogram)
+        VALUES (%s, %s);
+    """
+
 
