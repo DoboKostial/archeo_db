@@ -1,4 +1,7 @@
+{# app/templates/polygons.html #}
 {% extends "base.html" %}
+
+{% block title %}Polygons{% endblock %}
 
 {% block content %}
 <div class="alert alert-info" role="alert">
@@ -6,6 +9,59 @@
 </div>
 
 <div class="container mt-4">
+
+    <!-- A) Manual polygon creation (by geodetic point ranges) -->
+    <h2>Create polygon manually (by ranges of geodetic points)</h2>
+    <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Polygon ID</label>
+                <input type="number" class="form-control" name="id_polygon" required>
+            </div>
+            <div class="col-md-9">
+                <label class="form-label">Polygon name (description)</label>
+                <input type="text" class="form-control" name="polygon_name" required>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h5>Ranges (FROM–TO)</h5>
+            <p class="text-muted mb-2">
+                Add one or more continuous ranges of measured point IDs (inclusive). All ranges will be merged,
+                ordered by <code>id_pts</code>, and used to build a single closed boundary.
+            </p>
+
+            <div id="ranges-container">
+                <div class="row g-3 align-items-end range-row">
+                    <div class="col-md-3">
+                        <label class="form-label">FROM</label>
+                        <input type="number" class="form-control" name="range_from[]" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">TO</label>
+                        <input type="number" class="form-control" name="range_to[]" required>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="button" class="btn btn-outline-secondary" onclick="addRangeRow()">+ Add range</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 mb-5">
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </form>
+
+    <!-- Visual divider -->
+    <div class="position-relative my-4">
+        <hr>
+        <div class="position-absolute top-50 start-50 translate-middle bg-body px-3 text-muted small">
+            OR UPLOAD FROM TOTALSTATION TEXTFILE
+        </div>
+    </div>
+
+    {# ======= Your existing content (unchanged) ======= #}
 
     <h2>Existing polygons</h2>
     {% if polygons %}
@@ -55,4 +111,26 @@
     <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success">Download SHP</a>
 
 </div>
+
+<script>
+function addRangeRow() {
+  const container = document.getElementById('ranges-container');
+  const row = document.createElement('div');
+  row.className = 'row g-3 align-items-end range-row mt-2';
+  row.innerHTML = `
+    <div class="col-md-3">
+      <label class="form-label">FROM</label>
+      <input type="number" class="form-control" name="range_from[]" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">TO</label>
+      <input type="number" class="form-control" name="range_to[]" required>
+    </div>
+    <div class="col-md-3">
+      <button type="button" class="btn btn-outline-danger" onclick="this.closest('.range-row').remove()">Remove</button>
+    </div>
+  `;
+  container.appendChild(row);
+}
+</script>
 {% endblock %}
