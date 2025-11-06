@@ -1,114 +1,258 @@
 {# app/templates/polygons.html #}
 {% extends "base.html" %}
-
 {% block title %}Polygons{% endblock %}
 
 {% block content %}
 <div class="alert alert-info" role="alert">
-    You are working with database <strong>{{ selected_db }}</strong>.
+  You are working with database <strong>{{ selected_db }}</strong>.
 </div>
 
-<div class="container mt-4">
+<div class="container mt-3">
 
-    <!-- A) Manual polygon creation (by geodetic point ranges) -->
-    <h2>Create polygon manually (by ranges of geodetic points)</h2>
-    <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Polygon ID</label>
-                <input type="number" class="form-control" name="id_polygon" required>
+  <!-- Row 1: two top panels (manual / TXT) -->
+  <div class="row g-3">
+    <!-- Manual create -->
+    <div class="col-md-6">
+      <div class="p-3 rounded-3 border bg-light">
+        <h4 class="mb-3">Manual polygon (by geodetic point ranges)</h4>
+        <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">Polygon ID</label>
+              <input type="number" class="form-control" name="id_polygon" required>
             </div>
-            <div class="col-md-9">
-                <label class="form-label">Polygon name (description)</label>
-                <input type="text" class="form-control" name="polygon_name" required>
+            <div class="col-md-8">
+              <label class="form-label">Polygon name</label>
+              <input type="text" class="form-control" name="polygon_name" required>
             </div>
-        </div>
+          </div>
 
-        <div class="mt-4">
-            <h5>Ranges (FROM–TO)</h5>
-            <p class="text-muted mb-2">
-                Add one or more continuous ranges of measured point IDs (inclusive). All ranges will be merged,
-                ordered by <code>id_pts</code>, and used to build a single closed boundary.
-            </p>
+          <div class="mt-3">
+            <div class="d-flex align-items-center mb-2">
+              <h6 class="mb-0 me-2">Ranges (FROM–TO)</h6>
+              <small class="text-muted">(add one or more continuous ranges)</small>
+            </div>
 
             <div id="ranges-container">
-                <div class="row g-3 align-items-end range-row">
-                    <div class="col-md-3">
-                        <label class="form-label">FROM</label>
-                        <input type="number" class="form-control" name="range_from[]" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">TO</label>
-                        <input type="number" class="form-control" name="range_to[]" required>
-                    </div>
-                    <div class="col-md-3">
-                        <button type="button" class="btn btn-outline-secondary" onclick="addRangeRow()">+ Add range</button>
-                    </div>
+              <div class="row g-2 align-items-end range-row">
+                <div class="col-5">
+                  <label class="form-label">FROM</label>
+                  <input type="number" class="form-control" name="range_from[]" required>
                 </div>
+                <div class="col-5">
+                  <label class="form-label">TO</label>
+                  <input type="number" class="form-control" name="range_to[]" required>
+                </div>
+                <div class="col-2">
+                  <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow()">+</button>
+                </div>
+              </div>
             </div>
-        </div>
+          </div>
 
-        <div class="mt-4 mb-5">
-            <button type="submit" class="btn btn-primary">Save</button>
-        </div>
-    </form>
-
-    <!-- Visual divider -->
-    <div class="position-relative my-4">
-        <hr>
-        <div class="position-absolute top-50 start-50 translate-middle bg-body px-3 text-muted small">
-            OR UPLOAD FROM TOTALSTATION TEXTFILE
-        </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-primary">Save & Rebuild</button>
+          </div>
+        </form>
+      </div>
     </div>
 
-    {# ======= Your existing content (unchanged) ======= #}
-
-    <h2>Existing polygons</h2>
-    {% if polygons %}
-    <table class="table table-bordered">
-        <thead>
-            <tr>
-                <th>Polygon name</th>
-                <th>Number of points</th>
-                <th>EPSG</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for polygon in polygons %}
-            <tr>
-                <td>{{ polygon.name }}</td>
-                <td>{{ polygon.points }}</td>
-                <td>{{ polygon.epsg }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p>No polygons stored yet.</p>
-    {% endif %}
-
-    <hr>
-
-    <h2>Upload new polygon CSV</h2>
-    <form action="{{ url_for('polygons.upload_polygons') }}" method="post" enctype="multipart/form-data">
-        <div class="form-group">
-            <label for="file">Select CSV file:</label>
-            <input type="file" name="file" class="form-control" accept=".csv" required>
-        </div>
-        <div class="form-group">
-            <label for="epsg">Select EPSG coordinate system:</label>
+    <!-- Upload from TXT/CSV -->
+    <div class="col-md-6">
+      <div class="p-3 rounded-3 border bg-light">
+        <h4 class="mb-3">Import polygon(s) from TXT/CSV</h4>
+        <form action="{{ url_for('polygons.upload_polygons') }}" method="post" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label">Select TXT/CSV file</label>
+            <input type="file" name="file" class="form-control" accept=".csv,.txt" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Source EPSG</label>
             <select name="epsg" class="form-control" required>
-                <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
-                <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
+              <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
+              <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
+              <option value="4326">WGS 84 (EPSG:4326)</option>
             </select>
+          </div>
+          <button type="submit" class="btn btn-primary">Upload & Save</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: bottom-left list + bottom-right media uploads -->
+  <div class="row g-3 mt-2">
+    <!-- Existing polygons + actions -->
+    <div class="col-md-6">
+      <div class="p-3 rounded-3 border">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h4 class="mb-0">Existing polygons</h4>
+          <div class="btn-group">
+            <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
+              <button type="submit" class="btn btn-outline-warning btn-sm">Rebuild geometry (all)</button>
+            </form>
+            <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success btn-sm">Export SHP</a>
+          </div>
         </div>
-        <button type="submit" class="btn btn-primary mt-2">Upload File</button>
-    </form>
 
-    <hr>
+        {% if polygons and polygons|length %}
+          <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:90px;">ID</th>
+                <th>Name</th>
+                <th class="text-end" style="width:120px;"># points</th>
+                <th class="text-end" style="width:90px;">SRID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in polygons %}
+              <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.name }}</td>
+                <td class="text-end">{{ p.points }}</td>
+                <td class="text-end">{{ p.srid }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted mb-0">No polygons stored yet.</p>
+        {% endif %}
+      </div>
+    </div>
 
-    <h2>Download all polygons</h2>
-    <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success">Download SHP</a>
+    <!-- Media uploads for polygon -->
+    <div class="col-md-6">
+      <div class="p-3 rounded-3 border">
+        <h4 class="mb-3">Attach media to polygon</h4>
+
+        <div class="row g-3">
+          <!-- Photos -->
+          <div class="col-12">
+            <div class="p-3 border rounded-3 bg-body-tertiary">
+              <h6 class="mb-2">Photos</h6>
+              <form method="post" action="{{ url_for('polygons.upload_polygon_photos') }}" enctype="multipart/form-data">
+                <div class="row g-2">
+                  <div class="col-md-3">
+                    <label class="form-label">Polygon ID</label>
+                    <input type="number" class="form-control" name="ref_polygon" required>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Type</label>
+                    <input type="text" class="form-control" name="photo_typ" placeholder="e.g. oblique">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-control" name="datum">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Author</label>
+                    <select class="form-select" name="author">
+                      {% for email in authors %}
+                        <option value="{{ email }}">{{ email }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Notes</label>
+                  <input type="text" class="form-control" name="notes">
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Files</label>
+                  <input type="file" class="form-control" name="files[]" multiple
+                         accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+                </div>
+                <div class="mt-2">
+                  <button type="submit" class="btn btn-primary btn-sm">Upload photos</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Sketches -->
+          <div class="col-12">
+            <div class="p-3 border rounded-3 bg-body-tertiary">
+              <h6 class="mb-2">Sketches</h6>
+              <form method="post" action="{{ url_for('polygons.upload_polygon_sketches') }}" enctype="multipart/form-data">
+                <div class="row g-2">
+                  <div class="col-md-3">
+                    <label class="form-label">Polygon ID</label>
+                    <input type="number" class="form-control" name="ref_polygon" required>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Type</label>
+                    <input type="text" class="form-control" name="sketch_typ">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-control" name="datum">
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label">Author</label>
+                    <select class="form-select" name="author">
+                      {% for email in authors %}
+                        <option value="{{ email }}">{{ email }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Notes</label>
+                  <input type="text" class="form-control" name="notes">
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Files</label>
+                  <input type="file" class="form-control" name="files[]" multiple
+                         accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+                </div>
+                <div class="mt-2">
+                  <button type="submit" class="btn btn-primary btn-sm">Upload sketches</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Photograms -->
+          <div class="col-12">
+            <div class="p-3 border rounded-3 bg-body-tertiary">
+              <h6 class="mb-2">Photograms</h6>
+              <form method="post" action="{{ url_for('polygons.upload_polygon_photograms') }}" enctype="multipart/form-data">
+                <div class="row g-2">
+                  <div class="col-md-3">
+                    <label class="form-label">Polygon ID</label>
+                    <input type="number" class="form-control" name="ref_polygon" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Type</label>
+                    <input type="text" class="form-control" name="photogram_typ">
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label">Linked sketch (optional)</label>
+                    <input type="text" class="form-control" name="ref_sketch" placeholder="id_sketch">
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Notes</label>
+                  <input type="text" class="form-control" name="notes">
+                </div>
+                <div class="mt-2">
+                  <label class="form-label">Files</label>
+                  <input type="file" class="form-control" name="files[]" multiple
+                         accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+                </div>
+                <div class="mt-2">
+                  <button type="submit" class="btn btn-primary btn-sm">Upload photograms</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -116,17 +260,17 @@
 function addRangeRow() {
   const container = document.getElementById('ranges-container');
   const row = document.createElement('div');
-  row.className = 'row g-3 align-items-end range-row mt-2';
+  row.className = 'row g-2 align-items-end range-row mt-2';
   row.innerHTML = `
-    <div class="col-md-3">
+    <div class="col-5">
       <label class="form-label">FROM</label>
       <input type="number" class="form-control" name="range_from[]" required>
     </div>
-    <div class="col-md-3">
+    <div class="col-5">
       <label class="form-label">TO</label>
       <input type="number" class="form-control" name="range_to[]" required>
     </div>
-    <div class="col-md-3">
+    <div class="col-2">
       <button type="button" class="btn btn-outline-danger" onclick="this.closest('.range-row').remove()">Remove</button>
     </div>
   `;
