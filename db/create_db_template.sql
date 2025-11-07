@@ -116,11 +116,28 @@ CREATE TABLE tab_object (
 ---
 -- tab_polygon definition
 ---
-CREATE TABLE tab_polygons (
-    id SERIAL PRIMARY KEY,
-    polygon_name TEXT NOT NULL,
-    geom geometry(Polygon) -- SRID is not defined; this will be overwriten during specific DB creation
+
+CREATE TYPE allocation_reason AS ENUM (
+  'physical_separation',      -- polygons are physically divided
+  'research_phase',           -- polygons are reason of phases/temporary flow of excavation
+  'horizontal_stratigraphy',  -- horizontal stratigraphy forces to divide to polygons
+  'other'                     -- other (define in notes)
 );
+
+-- Polygons of excavation definition (3D surfaces)
+CREATE TABLE tab_polygons (
+  polygon_name      text PRIMARY KEY,
+  parent_name       text NULL REFERENCES tab_polygons(polygon_name) ON DELETE RESTRICT,
+  allocation_reason allocation_reason NOT NULL,
+  geom_top          geometry(PolygonZ),   -- upper surface (3D polygon, XYZ, SRID will be added after DB creation)
+  geom_bottom       geometry(PolygonZ),   -- lower surface (3D polygon, XYZ, SRID will be added after DB creation)
+  notes             text
+);
+CREATE INDEX tab_polygons_parent_idx ON tab_polygons (parent_name);
+CREATE INDEX tab_polygons_top_gix    ON tab_polygons USING gist (geom_top);
+CREATE INDEX tab_polygons_bot_gix    ON tab_polygons USING gist (geom_bottom);
+
+
 -- this is table for storing info of what points are measured for polygon
 -- can not perform referential integrity with tab_geopts (point from total station usually come at the end),
 -- so integrity is done by application means
@@ -506,7 +523,7 @@ CREATE INDEX IF NOT EXISTS tabaid_cut_drawings_idx ON tabaid_cut_drawings(ref_cu
 -- GENERAL SYSTEM FUNCTIONS
 -- #################################
 
--- This function (inhibited by trigger) overwrites all SRIDs to all geometry columns in schema (default: current_schema()).
+-- This function overwrites all SRIDs to all geometry columns in schema (default: current_schema()).
 -- geography columns ignored (geography is „always 4326“).
 CREATE OR REPLACE FUNCTION set_project_srid(target_srid integer, in_schema text DEFAULT current_schema())
 RETURNS void
@@ -515,6 +532,7 @@ $$
 DECLARE
   r record;
   cur_srid int;
+  q text;
 BEGIN
   IF target_srid IS NULL OR target_srid <= 0 THEN
     RAISE EXCEPTION 'Invalid target_srid: %', target_srid;
@@ -522,35 +540,52 @@ BEGIN
 
   FOR r IN
     SELECT
-      f_table_schema  AS sch,
-      f_table_name    AS tbl,
-      f_geometry_column AS col
-    FROM geometry_columns
-    WHERE f_table_schema = in_schema
+      n.nspname                              AS sch,
+      c.relname                              AS tbl,
+      a.attname                              AS col,
+      postgis_typmod_type(a.atttypmod)       AS base_type,
+      postgis_typmod_srid(a.atttypmod)       AS cur_srid
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid
+    JOIN pg_type t ON t.oid = a.atttypid
+    WHERE n.nspname = in_schema
+      AND c.relkind = 'r'
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+      AND t.typname = 'geometry'
   LOOP
-    -- zkus přečíst aktuální SRID (může vrátit 0/NULL u špatně typovaných sloupců)
-    BEGIN
-      cur_srid := Find_SRID(r.sch::text, r.tbl::text, r.col::text);
-    EXCEPTION WHEN OTHERS THEN
-      cur_srid := NULL;
-    END;
+    cur_srid := r.cur_srid;
 
-    -- pokud už sedí, přeskoč
+    -- if is already assigned just left as is
     IF cur_srid = target_srid THEN
       CONTINUE;
     END IF;
 
-    -- Přepni SRID sloupce i metadat (bez dotyku dat)
     BEGIN
-      PERFORM UpdateGeometrySRID(r.sch::text, r.tbl::text, r.col::text, target_srid);
+      -- changes only SRID in typmode; data are not transformed
+      q := format(
+        'ALTER TABLE %I.%I ALTER COLUMN %I
+           TYPE geometry(%s, %s)
+           USING ST_SetSRID(%1$I, %s)',
+        r.sch, r.tbl, r.col,
+        r.base_type,
+        target_srid,
+        target_srid
+      );
+      EXECUTE q;
+
+      -- logging/notice
       RAISE NOTICE 'SRID updated: %.%.% → EPSG %', r.sch, r.tbl, r.col, target_srid;
+
     EXCEPTION WHEN OTHERS THEN
-      -- nechceme shodit celou akci; jen zaloguj
+      -- will not fail the whole action, only writes to log
       RAISE NOTICE 'SRID update failed for %.%.%: %', r.sch, r.tbl, r.col, SQLERRM;
     END;
   END LOOP;
 END
 $$;
+
 
 
 -- This PL/PGSQL function is for excavation polygons and namely constructs polygon from geomesuring points:
