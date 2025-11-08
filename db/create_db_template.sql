@@ -125,31 +125,49 @@ CREATE TYPE allocation_reason AS ENUM (
 );
 
 -- Polygons of excavation definition (3D surfaces)
-CREATE TABLE tab_polygons (
+CREATE TABLE IF NOT EXISTS tab_polygons (
   polygon_name      text PRIMARY KEY,
   parent_name       text NULL REFERENCES tab_polygons(polygon_name) ON DELETE RESTRICT,
   allocation_reason allocation_reason NOT NULL,
-  geom_top          geometry(PolygonZ),   -- upper surface (3D polygon, XYZ, SRID will be added after DB creation)
-  geom_bottom       geometry(PolygonZ),   -- lower surface (3D polygon, XYZ, SRID will be added after DB creation)
+  geom_top          geometry(PolygonZ),   -- top edge polygon (3D polygon)
+  geom_bottom       geometry(PolygonZ),   -- bottom edge polygon (3D polygon)
   notes             text
 );
-CREATE INDEX tab_polygons_parent_idx ON tab_polygons (parent_name);
-CREATE INDEX tab_polygons_top_gix    ON tab_polygons USING gist (geom_top);
-CREATE INDEX tab_polygons_bot_gix    ON tab_polygons USING gist (geom_bottom);
+CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_top_idx ON tab_polygon_geopts_binding_top(ref_polygon, pts_from, pts_to);
+CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_bottom_idx ON tab_polygon_geopts_binding_bottom(ref_polygon, pts_from, pts_to);
 
 
 -- this is table for storing info of what points are measured for polygon
--- can not perform referential integrity with tab_geopts (point from total station usually come at the end),
+-- can not perform referential integrity with tab_geopts (point from total station usually come at the end of excavation),
 -- so integrity is done by application means
-CREATE TABLE IF NOT EXISTS tab_polygon_geopts_binding (
-  id          serial PRIMARY KEY,
-  ref_polygon int  NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  pts_from    int  NOT NULL,
-  pts_to      int  NOT NULL,
-  CHECK (pts_from <= pts_to)
+-- here upper/top polygon points
+CREATE TABLE tab_polygon_geopts_binding_top (
+  id           serial PRIMARY KEY,
+  ref_polygon  text NOT NULL
+                 REFERENCES tab_polygons(polygon_name)
+                 ON UPDATE CASCADE ON DELETE CASCADE,
+  pts_from     int  NOT NULL,
+  pts_to       int  NOT NULL,
+  CHECK (pts_from <= pts_to),
+  -- to avoid 2x the same
+  UNIQUE (ref_polygon, pts_from, pts_to)
 );
-CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_idx
-  ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
+CREATE INDEX tab_polygon_geopts_binding_top_idx ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
+
+-- here bottom/lower polygon points
+CREATE TABLE tab_polygon_geopts_binding_bottom (
+  id           serial PRIMARY KEY,
+  ref_polygon  text NOT NULL
+                 REFERENCES tab_polygons(polygon_name)
+                 ON UPDATE CASCADE ON DELETE CASCADE,
+  pts_from     int  NOT NULL,
+  pts_to       int  NOT NULL,
+  CHECK (pts_from <= pts_to),
+  -- to avoid 2x the same
+  UNIQUE (ref_polygon, pts_from, pts_to)
+);
+CREATE INDEX tab_polygon_geopts_binding_bottom_idx ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
+
 
 ---
 -- tab_sj_stratigraphy definition
@@ -443,37 +461,48 @@ CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch);
 
 -- tabaid_sj_polygon definition
 -- this clues SJs and polygons (m:n)
+DROP TABLE IF EXISTS tabaid_sj_polygon CASCADE;
 CREATE TABLE tabaid_sj_polygon (
- 	id_aut serial4 NOT NULL,
-	ref_sj int4 NOT NULL,
-	ref_polygon int4 NOT NULL,
-	CONSTRAINT tabaid_sj_polygon_pk PRIMARY KEY (id_aut)
+  ref_sj       int  NOT NULL REFERENCES tab_sj(id_sj) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
+  PRIMARY KEY (ref_sj, ref_polygon)
 );
+-- pomocný index pro jednostranné dotazy
+CREATE INDEX tabaid_sj_polygon_polygon_idx ON tabaid_sj_polygon(ref_polygon);
 
+-----------------------------------------------------------------------
 
--- POLYGONS <-> PHOTOS
-CREATE TABLE IF NOT EXISTS tabaid_polygon_photos (
-  id_aut      serial PRIMARY KEY,
-  ref_polygon int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photo   varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE
+-- 3) M:N POLYGONS <-> PHOTOS
+DROP TABLE IF EXISTS tabaid_polygon_photos CASCADE;
+CREATE TABLE tabaid_polygon_photos (
+  ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo    varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
+  PRIMARY KEY (ref_polygon, ref_photo)
 );
-CREATE INDEX IF NOT EXISTS tabaid_polygon_photos_idx ON tabaid_polygon_photos(ref_polygon, ref_photo);
+-- (volitelně) reverzní index pro dotazy z fotky na polygony
+CREATE INDEX tabaid_polygon_photos_photo_idx ON tabaid_polygon_photos(ref_photo);
 
--- POLYGONS <-> SKETCHES
-CREATE TABLE IF NOT EXISTS tabaid_polygon_sketches (
-  id_aut      serial PRIMARY KEY,
-  ref_polygon int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_sketch  varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS tabaid_polygon_sketches_idx ON tabaid_polygon_sketches(ref_polygon, ref_sketch);
+-----------------------------------------------------------------------
 
--- POLYGONS <-> PHOTOGRAMS
-CREATE TABLE IF NOT EXISTS tabaid_polygon_photograms (
-  id_aut        serial PRIMARY KEY,
-  ref_polygon   int    NOT NULL REFERENCES tab_polygons(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE
+-- 4) M:N POLYGONS <-> SKETCHES
+DROP TABLE IF EXISTS tabaid_polygon_sketches CASCADE;
+CREATE TABLE tabaid_polygon_sketches (
+  ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_sketch   varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE,
+  PRIMARY KEY (ref_polygon, ref_sketch)
 );
-CREATE INDEX IF NOT EXISTS tabaid_polygon_photograms_idx ON tabaid_polygon_photograms(ref_polygon, ref_photogram);
+CREATE INDEX tabaid_polygon_sketches_sketch_idx ON tabaid_polygon_sketches(ref_sketch);
+
+-----------------------------------------------------------------------
+
+-- 5) M:N POLYGONS <-> PHOTOGRAMS
+DROP TABLE IF EXISTS tabaid_polygon_photograms CASCADE;
+CREATE TABLE tabaid_polygon_photograms (
+  ref_polygon   text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE,
+  PRIMARY KEY (ref_polygon, ref_photogram)
+);
+CREATE INDEX tabaid_polygon_photograms_photogram_idx ON tabaid_polygon_photograms(ref_photogram);
 
 
 -- CUTS <-> PHOTOS
