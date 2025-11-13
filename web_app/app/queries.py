@@ -274,38 +274,72 @@ def insert_polygon_sql(polygon_name, points, source_epsg):
 
 
 # ----------------------------------------------------
-# Manual polygon creation (ID + name + ranges + rebuild)
+# Polygons: SQL helpers (manual create + bindings + rebuild)
 # ----------------------------------------------------
 
 def insert_polygon_manual_sql():
     """
-    Insert a 'skeleton' polygon by explicit ID and name; geometry stays NULL.
-    Params: (id, polygon_name)
+    Insert/Upsert polygon metadata (no geometries). 'parent_name' optional.
+    Params: (polygon_name, parent_name, allocation_reason, notes)
     """
     return """
-        INSERT INTO tab_polygons (id, polygon_name, geom)
-        VALUES (%s, %s, NULL);
+        INSERT INTO tab_polygons (polygon_name, parent_name, allocation_reason, notes)
+        VALUES (%s, NULLIF(%s,''), %s, NULLIF(%s,''))
+        ON CONFLICT (polygon_name)
+        DO UPDATE SET
+            parent_name = EXCLUDED.parent_name,
+            allocation_reason = EXCLUDED.allocation_reason,
+            notes = EXCLUDED.notes;
     """
 
+def delete_bindings_top_sql():
+    """Delete all TOP bindings for a polygon. Params: (polygon_name,)"""
+    return "DELETE FROM tab_polygon_geopts_binding_top WHERE ref_polygon=%s;"
 
-def insert_binding_sql():
+def delete_bindings_bottom_sql():
+    """Delete all BOTTOM bindings for a polygon. Params: (polygon_name,)"""
+    return "DELETE FROM tab_polygon_geopts_binding_bottom WHERE ref_polygon=%s;"
+
+def insert_binding_top_sql():
     """
-    Insert one range (FROM..TO) for a polygon into tab_polygon_geopts_binding.
+    Insert one TOP range (FROM..TO) for a polygon.
     Params: (ref_polygon, pts_from, pts_to)
     """
     return """
-        INSERT INTO tab_polygon_geopts_binding (ref_polygon, pts_from, pts_to)
-        VALUES (%s, %s, %s);
+        INSERT INTO tab_polygon_geopts_binding_top (ref_polygon, pts_from, pts_to)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (ref_polygon, pts_from, pts_to) DO NOTHING;
     """
 
+def insert_binding_bottom_sql():
+    """
+    Insert one BOTTOM range (FROM..TO) for a polygon.
+    Params: (ref_polygon, pts_from, pts_to)
+    """
+    return """
+        INSERT INTO tab_polygon_geopts_binding_bottom (ref_polygon, pts_from, pts_to)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (ref_polygon, pts_from, pts_to) DO NOTHING;
+    """
 
 def rebuild_geom_sql():
     """
-    Calls the DB-side function that rebuilds polygon geometry from tab_geopts
-    and ranges stored in tab_polygon_geopts_binding.
-    Params: (polygon_id,)
+    Rebuilds both geom_top and geom_bottom from geodetic points for given polygon.
+    Params: (polygon_name,)
     """
-    return "SELECT rebuild_polygon_geom_from_geopts(%s);"
+    return "SELECT rebuild_polygon_geoms_from_geopts(%s);"
+
+def select_polygons_with_bindings_sql():
+    """Select polygon names that have any TOP/BOTTOM bindings."""
+    return """
+        SELECT DISTINCT ref_polygon
+        FROM (
+          SELECT ref_polygon FROM tab_polygon_geopts_binding_top
+          UNION
+          SELECT ref_polygon FROM tab_polygon_geopts_binding_bottom
+        ) s
+        ORDER BY ref_polygon;
+    """
 
 
 # -----------------------
