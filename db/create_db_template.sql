@@ -623,75 +623,116 @@ $$;
 -- - closes line (adds startpoint to end)
 -- - unifies SRID to project
 -- - creates POLYGON and saves to tab_polygons.geom.
-CREATE OR REPLACE FUNCTION rebuild_polygon_geom_from_geopts(p_polygon int)
+CREATE OR REPLACE FUNCTION rebuild_polygon_geom_from_geopts(p_polygon_name text)
 RETURNS void
 LANGUAGE plpgsql AS
 $$
 DECLARE
-  v_schema  text := current_schema();
-  v_epsg    int;
-  v_line    geometry;
-  v_poly    geometry;
-  v_count   int;
+  v_line  geometry;
+  v_poly  geometry;
+
+  PROCEDURE build_and_update(side_table text, target_col text)
+  LANGUAGE plpgsql
+  AS $proc$
+  DECLARE
+    q text;
+    v_reason text;
+    v_poly_try geometry;
+  BEGIN
+    -- collect points from ranges and sort them ascending according id_pts
+    q := format($SQL$
+      WITH ranges AS (
+        SELECT pts_from, pts_to
+        FROM %I
+        WHERE ref_polygon = $1
+      ),
+      pts AS (
+        SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
+        FROM ranges r
+        JOIN tab_geopts g
+          ON g.id_pts BETWEEN r.pts_from AND r.pts_to
+        WHERE g.pts_geom IS NOT NULL
+        ORDER BY g.id_pts
+      )
+      SELECT CASE
+               WHEN COUNT(*) >= 3
+                 THEN ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
+               ELSE NULL
+             END
+      FROM pts
+    $SQL$, side_table);
+
+    EXECUTE q INTO v_line USING p_polygon_name;
+
+    IF v_line IS NULL THEN
+      EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
+      USING p_polygon_name;
+      RAISE NOTICE 'Not enough points to build polygon (% for %).', target_col, p_polygon_name;
+      RETURN;
+    END IF;
+
+    -- close the polyline
+    IF NOT ST_Equals(ST_StartPoint(v_line), ST_EndPoint(v_line)) THEN
+      v_line := ST_AddPoint(v_line, ST_StartPoint(v_line));
+    END IF;
+
+    -- remove duplicities
+    v_line := ST_RemoveRepeatedPoints(v_line, 1e-7);
+
+    -- GUARD 1: there must be 3 nodes at least (after closing)
+    IF ST_NumDistinctPoints(v_line) < 3 THEN
+      EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
+      USING p_polygon_name;
+      RAISE NOTICE 'Too few distinct vertices after closing (% for %).', target_col, p_polygon_name;
+      RETURN;
+    END IF;
+
+    -- GUARD 2: lines cannot overlap (except closing)
+    IF NOT ST_IsSimple(v_line) THEN
+      EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
+      USING p_polygon_name;
+      RAISE NOTICE 'Self-intersection detected in line (% for %).', target_col, p_polygon_name;
+      RETURN;
+    END IF;
+
+    -- GUARD 3: enforce 3D (if points are 2D)
+    v_line := ST_Force3D(v_line);
+
+    -- try polygon without "autocorrection" – we want notice why is invalid
+    v_poly_try := ST_MakePolygon(v_line);
+
+    -- GUARD 42: polygon has to be valid
+    IF NOT ST_IsValid(v_poly_try) THEN
+      v_reason := ST_IsValidReason(v_poly_try);
+      EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
+      USING p_polygon_name;
+      RAISE NOTICE 'Invalid polygon (% for %): %', target_col, p_polygon_name, v_reason;
+      RETURN;
+    END IF;
+
+    -- enfoece polygon 3D and save
+    v_poly := ST_Force3D(v_poly_try);
+
+    -- final check: this has to be single Polygon
+    IF ST_IsEmpty(v_poly) OR GeometryType(v_poly) <> 'ST_Polygon' THEN
+      EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
+      USING p_polygon_name;
+      RAISE NOTICE 'Built geometry is empty or not a single Polygon (% for %).', target_col, p_polygon_name;
+      RETURN;
+    END IF;
+
+    EXECUTE format('UPDATE tab_polygons SET %I = $1 WHERE polygon_name = $2', target_col)
+    USING v_poly, p_polygon_name;
+  END;
+  $proc$;
 BEGIN
-  -- target SRID
-  v_epsg := Find_SRID(v_schema::text, 'tab_polygons'::text, 'geom'::text);
-  IF v_epsg IS NULL OR v_epsg <= 0 THEN
-    RAISE EXCEPTION 'Cannot resolve SRID for %.tab_polygons.geom', v_schema;
-  END IF;
-
-  -- poskládej JEDNU linii ze všech dávek (globálně podle id_pts)
-  WITH ranges AS (
-    SELECT pts_from, pts_to
-    FROM tab_polygon_geopts_binding
-    WHERE ref_polygon = p_polygon
-  ),
-  pts AS (
-    SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
-    FROM ranges r
-    JOIN tab_geopts g
-      ON g.id_pts BETWEEN r.pts_from AND r.pts_to
-    WHERE g.pts_geom IS NOT NULL
-    ORDER BY g.id_pts
-  )
-  SELECT
-    CASE
-      WHEN COUNT(*) >= 2 THEN
-        ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
-      ELSE NULL
-    END
-  INTO v_line
-  FROM pts;
-
-  IF v_line IS NULL THEN
-    UPDATE tab_polygons SET geom = NULL WHERE id = p_polygon;
-    RAISE NOTICE 'Not enough points to build line (polygon %).', p_polygon;
-    RETURN;
-  END IF;
-
-  -- na cílový SRID (pro jistotu)
-  IF ST_SRID(v_line) IS DISTINCT FROM v_epsg THEN
-    v_line := ST_Transform(v_line, v_epsg);
-  END IF;
-
-  -- uzavři + očisti
-  IF NOT ST_Equals(ST_StartPoint(v_line), ST_EndPoint(v_line)) THEN
-    v_line := ST_AddPoint(v_line, ST_StartPoint(v_line));
-  END IF;
-  v_line := ST_RemoveRepeatedPoints(v_line, 0.0000001);
-
-  -- polygon
-  v_poly := ST_MakeValid(ST_MakePolygon(v_line));
-
-  IF ST_IsEmpty(v_poly) OR GeometryType(v_poly) <> 'ST_Polygon' THEN
-    -- držíme tvé pravidlo: žádný multipolygon ani díry – když to nevyjde, necháme NULL
-    UPDATE tab_polygons SET geom = NULL WHERE id = p_polygon;
-    RAISE NOTICE 'Built geometry not a single Polygon or empty (polygon %).', p_polygon;
-  ELSE
-    UPDATE tab_polygons SET geom = v_poly WHERE id = p_polygon;
-  END IF;
+  -- top line of polygon
+  CALL build_and_update('tab_polygon_geopts_binding_top', 'geom_top');
+  -- bottom line of polygon
+  CALL build_and_update('tab_polygon_geopts_binding_bottom', 'geom_bottom');
 END
 $$;
+
 
 
 -- This function is optional - rebuilds the geometry of all polygons 
