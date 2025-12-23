@@ -461,7 +461,6 @@ CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch);
 
 -- tabaid_sj_polygon definition
 -- this clues SJs and polygons (m:n)
-DROP TABLE IF EXISTS tabaid_sj_polygon CASCADE;
 CREATE TABLE tabaid_sj_polygon (
   ref_sj       int  NOT NULL REFERENCES tab_sj(id_sj) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -473,7 +472,6 @@ CREATE INDEX tabaid_sj_polygon_polygon_idx ON tabaid_sj_polygon(ref_polygon);
 -----------------------------------------------------------------------
 
 -- 3) M:N POLYGONS <-> PHOTOS
-DROP TABLE IF EXISTS tabaid_polygon_photos CASCADE;
 CREATE TABLE tabaid_polygon_photos (
   ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_photo    varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -485,7 +483,6 @@ CREATE INDEX tabaid_polygon_photos_photo_idx ON tabaid_polygon_photos(ref_photo)
 -----------------------------------------------------------------------
 
 -- 4) M:N POLYGONS <-> SKETCHES
-DROP TABLE IF EXISTS tabaid_polygon_sketches CASCADE;
 CREATE TABLE tabaid_polygon_sketches (
   ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_sketch   varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -496,7 +493,6 @@ CREATE INDEX tabaid_polygon_sketches_sketch_idx ON tabaid_polygon_sketches(ref_s
 -----------------------------------------------------------------------
 
 -- 5) M:N POLYGONS <-> PHOTOGRAMS
-DROP TABLE IF EXISTS tabaid_polygon_photograms CASCADE;
 CREATE TABLE tabaid_polygon_photograms (
   ref_polygon   text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE,
