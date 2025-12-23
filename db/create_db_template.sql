@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS tab_polygons (
   geom_bottom       geometry(PolygonZ),   -- bottom edge polygon (3D polygon)
   notes             text
 );
+ALTER TABLE tab_polygons ADD CONSTRAINT tab_polygons_parent_not_self CHECK (parent_name IS NULL OR parent_name <> polygon_name);
 CREATE INDEX IF NOT EXISTS tab_polygons_geom_top_gix ON tab_polygons USING GIST (geom_top);
 CREATE INDEX IF NOT EXISTS tab_polygons_geom_bottom_gix ON tab_polygons USING GIST (geom_bottom);
 
@@ -548,15 +549,19 @@ CREATE INDEX IF NOT EXISTS tabaid_cut_drawings_idx ON tabaid_cut_drawings(ref_cu
 -- GENERAL SYSTEM FUNCTIONS
 -- #################################
 
--- This function overwrites all SRIDs to all geometry columns in schema (default: current_schema()).
--- geography columns ignored (geography is „always 4326“).
-CREATE OR REPLACE FUNCTION set_project_srid(target_srid integer, in_schema text DEFAULT current_schema())
+-- This function overwrites SRID typmod for all geometry columns in a schema
+-- (default: current_schema()) by retyping the column and applying ST_SetSRID()
+-- to existing values. It does NOT transform coordinates, it only assigns SRID.
+-- Geography columns are ignored (geography is always 4326).
+CREATE OR REPLACE FUNCTION set_project_srid(
+  target_srid integer,
+  in_schema text DEFAULT current_schema()
+)
 RETURNS void
 LANGUAGE plpgsql AS
 $$
 DECLARE
   r record;
-  cur_srid int;
   q text;
 BEGIN
   IF target_srid IS NULL OR target_srid <= 0 THEN
@@ -565,11 +570,12 @@ BEGIN
 
   FOR r IN
     SELECT
-      n.nspname                              AS sch,
-      c.relname                              AS tbl,
-      a.attname                              AS col,
-      postgis_typmod_type(a.atttypmod)       AS base_type,
-      postgis_typmod_srid(a.atttypmod)       AS cur_srid
+      n.nspname                                AS sch,
+      c.relname                                AS tbl,
+      a.attname                                AS col,
+      postgis_typmod_type(a.atttypmod)         AS base_type,   -- e.g. 'POLYGON'
+      postgis_typmod_dims(a.atttypmod)         AS dims,        -- 2,3,4...
+      postgis_typmod_srid(a.atttypmod)         AS cur_srid
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_attribute a ON a.attrelid = c.oid
@@ -580,31 +586,38 @@ BEGIN
       AND NOT a.attisdropped
       AND t.typname = 'geometry'
   LOOP
-    cur_srid := r.cur_srid;
-
-    -- if is already assigned just left as is
-    IF cur_srid = target_srid THEN
+    -- If already assigned, keep as is
+    IF r.cur_srid = target_srid THEN
       CONTINUE;
     END IF;
 
     BEGIN
-      -- changes only SRID in typmode; data are not transformed
+      -- Retype column to geometry(<type>[Z/M/ZM], <target_srid>) while preserving dimensions.
+      -- Then assign SRID to existing values (no coordinate transformation).
       q := format(
-        'ALTER TABLE %I.%I ALTER COLUMN %I
-           TYPE geometry(%s, %s)
-           USING ST_SetSRID(%1$I, %s)',
+        'ALTER TABLE %I.%I
+           ALTER COLUMN %I
+           TYPE geometry(%s%s, %s)
+           USING ST_SetSRID(%I, %s)',
         r.sch, r.tbl, r.col,
         r.base_type,
+        CASE
+          WHEN r.dims = 2 THEN ''   -- 2D
+          WHEN r.dims = 3 THEN 'Z'  -- 3D
+          WHEN r.dims = 4 THEN 'ZM' -- 4D
+          ELSE ''                   -- fallback
+        END,
         target_srid,
+        r.col,
         target_srid
       );
+
       EXECUTE q;
 
-      -- logging/notice
       RAISE NOTICE 'SRID updated: %.%.% → EPSG %', r.sch, r.tbl, r.col, target_srid;
 
     EXCEPTION WHEN OTHERS THEN
-      -- will not fail the whole action, only writes to log
+      -- Do not fail whole run; just report
       RAISE NOTICE 'SRID update failed for %.%.%: %', r.sch, r.tbl, r.col, SQLERRM;
     END;
   END LOOP;
