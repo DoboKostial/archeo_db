@@ -454,6 +454,31 @@ def polygons_geojson_top_bottom_sql():
         ORDER BY polygon_name;
     """
 
+# parent a children are important when deleting polygons - children are "reparented" to grandfather
+def get_polygon_parent_sql():
+    """Get parent_name for polygon. Params: (polygon_name,)"""
+    return """
+        SELECT parent_name
+        FROM tab_polygons
+        WHERE polygon_name = %s;
+    """
+
+def reparent_children_sql():
+    """
+    Re-parent direct children of a polygon to a new parent (possibly NULL).
+    Params: (new_parent_name, old_parent_name)
+    """
+    return """
+        UPDATE tab_polygons
+        SET parent_name = %s
+        WHERE parent_name = %s;
+    """
+
+
+def delete_polygon_sql():
+    """Delete polygon by name. Params: (polygon_name,)"""
+    return "DELETE FROM tab_polygons WHERE polygon_name = %s;"
+
 
 # -----------------------
 # Authors (for <select>)

@@ -261,11 +261,12 @@
                 <th>Name</th>
                 <th style="width:120px;">Parent</th>
                 <th style="width:220px;">Allocation</th>
-                <th class="text-center" style="width:90px;">TOP</th>
-                <th class="text-center" style="width:110px;">BOTTOM</th>
-                <th class="text-end" style="width:110px;"># points</th>
+                <th class="text-center" style="width:80px;">TOP</th>
+                <th class="text-center" style="width:80px;">BOTTOM</th>
+                <th class="text-end" style="width:110px;"># POINTS</th>
                 <th class="text-end" style="width:90px;">SRID</th>
-                <th class="text-end" style="width:190px;">Seeing is believing</th>
+                <th class="text-end" style="width:180px;">Seeing is believing</th>
+                <th class="text-end" style="width:50px;">DELETE</th>
               </tr>
             </thead>
             <tbody>
@@ -319,6 +320,16 @@
                   data-bs-target="#polygonMapModal"
                   data-polygon-name="{{ p.name }}">
                   Show
+                  </button>
+                </td>
+
+                <td class="text-end">
+                  <button type="button"
+                  class="btn btn-sm btn-outline-danger"
+                  data-bs-toggle="modal"
+                  data-bs-target="#deletePolygonModal"
+                  data-polygon-name="{{ p.name }}">
+                  Delete
                   </button>
                 </td>
 
@@ -572,6 +583,52 @@ function addRangeRow() {
     </div>
   </div>
 </div>
+
+
+<!-- Delete polygon confirm modal -->
+<div class="modal fade" id="deletePolygonModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete polygon</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <form method="POST" action="{{ url_for('polygons.delete_polygon') }}">
+        <div class="modal-body">
+          <input type="hidden" name="polygon_name" id="deletePolygonName">
+
+          <p class="mb-0">
+            Do you really want to delete polygon
+            <strong id="deletePolygonLabel"></strong>?
+          </p>
+          <small class="text-muted">
+            This deletes only the selected polygon. Its children will be re-linked to the deleted polygon’s parent.
+          </small>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Fill delete modal with polygon name
+  const deleteModalEl = document.getElementById('deletePolygonModal');
+  deleteModalEl.addEventListener('shown.bs.modal', (event) => {
+    const btn = event.relatedTarget;
+    const name = btn.getAttribute('data-polygon-name') || '';
+    document.getElementById('deletePolygonName').value = name;
+    document.getElementById('deletePolygonLabel').textContent = name;
+  });
+</script>
+
+
 
 <script>
   // Leaflet map + layers

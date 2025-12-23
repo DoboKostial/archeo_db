@@ -24,8 +24,8 @@ from config import Config
 from app.queries import (
     insert_polygon_manual_sql, delete_bindings_top_sql, delete_bindings_bottom_sql,
     insert_binding_top_sql, insert_binding_bottom_sql, rebuild_geom_sql, select_polygons_with_bindings_sql,
-    srtext_by_srid_sql, polygons_geojson_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
-    polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql
+    srtext_by_srid_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
+    polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql, get_polygon_parent_sql, reparent_children_sql, delete_polygon_sql
 )
 
 
@@ -323,6 +323,57 @@ def polygon_geojson():
             conn.close()
         except Exception:
             pass
+
+
+@polygons_bp.route('/polygons/delete', methods=['POST'])
+@require_selected_db
+def delete_polygon():
+    selected_db = session.get('selected_db')
+    polygon_name = (request.form.get('polygon_name') or '').strip()
+
+    if not polygon_name:
+        flash("Missing polygon name.", "warning")
+        return redirect(url_for('polygons.polygons'))
+
+    conn = get_terrain_connection(selected_db)
+    conn.autocommit = False
+
+    try:
+        with conn.cursor() as cur:
+            # 1) read parent of the polygon we are deleting
+            cur.execute(get_polygon_parent_sql(), (polygon_name,))
+            row = cur.fetchone()
+            if not row:
+                flash(f'Polygon "{polygon_name}" not found.', "warning")
+                conn.rollback()
+                return redirect(url_for('polygons.polygons'))
+
+            parent_of_deleted = row[0]  # may be NULL
+
+            # 2) re-parent direct children to the deleted polygon's parent (or NULL)
+            cur.execute(reparent_children_sql(), (parent_of_deleted, polygon_name))
+
+            # 3) delete polygon (bindings will cascade)
+            cur.execute(delete_polygon_sql(), (polygon_name,))
+
+        conn.commit()
+        flash(f'Polygon "{polygon_name}" deleted. Children were re-linked to its parent.', "success")
+        logger.info(
+            f'[{selected_db}] polygon "{polygon_name}" deleted; children reparented to {parent_of_deleted!r}'
+        )
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f'[{selected_db}] polygon delete error: {e}')
+        flash(f'Error while deleting polygon: {e}', "danger")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    return redirect(url_for('polygons.polygons'))
+
 
 
 
