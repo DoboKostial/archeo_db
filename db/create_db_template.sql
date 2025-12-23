@@ -133,8 +133,8 @@ CREATE TABLE IF NOT EXISTS tab_polygons (
   geom_bottom       geometry(PolygonZ),   -- bottom edge polygon (3D polygon)
   notes             text
 );
-CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_top_idx ON tab_polygon_geopts_binding_top(ref_polygon, pts_from, pts_to);
-CREATE INDEX IF NOT EXISTS tab_polygon_geopts_binding_bottom_idx ON tab_polygon_geopts_binding_bottom(ref_polygon, pts_from, pts_to);
+CREATE INDEX IF NOT EXISTS tab_polygons_geom_top_gix ON tab_polygons USING GIST (geom_top);
+CREATE INDEX IF NOT EXISTS tab_polygons_geom_bottom_gix ON tab_polygons USING GIST (geom_bottom);
 
 
 -- this is table for storing info of what points are measured for polygon
