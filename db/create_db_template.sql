@@ -152,7 +152,7 @@ CREATE TABLE tab_polygon_geopts_binding_top (
   -- to avoid 2x the same
   UNIQUE (ref_polygon, pts_from, pts_to)
 );
-CREATE INDEX tab_polygon_geopts_binding_top_idx ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
+CREATE INDEX tab_polygon_geopts_binding_top_idx ON tab_polygon_geopts_binding_top(ref_polygon, pts_from, pts_to);
 
 -- here bottom/lower polygon points
 CREATE TABLE tab_polygon_geopts_binding_bottom (
@@ -166,7 +166,7 @@ CREATE TABLE tab_polygon_geopts_binding_bottom (
   -- to avoid 2x the same
   UNIQUE (ref_polygon, pts_from, pts_to)
 );
-CREATE INDEX tab_polygon_geopts_binding_bottom_idx ON tab_polygon_geopts_binding(ref_polygon, pts_from, pts_to);
+CREATE INDEX tab_polygon_geopts_binding_bottom_idx ON tab_polygon_geopts_binding_bottom(ref_polygon, pts_from, pts_to);
 
 
 ---
@@ -625,20 +625,22 @@ $$;
 -- - creates POLYGON and saves to tab_polygons.geom.
 CREATE OR REPLACE FUNCTION rebuild_polygon_geom_from_geopts(p_polygon_name text)
 RETURNS void
-LANGUAGE plpgsql AS
-$$
+LANGUAGE plpgsql
+AS $$
 DECLARE
-  v_line  geometry;
-  v_poly  geometry;
-
-  PROCEDURE build_and_update(side_table text, target_col text)
-  LANGUAGE plpgsql
-  AS $proc$
-  DECLARE
-    q text;
-    v_reason text;
-    v_poly_try geometry;
-  BEGIN
+  v_line     geometry;
+  v_poly     geometry;
+  v_poly_try geometry;
+  v_reason   text;
+  q          text;
+  side_table text;
+  target_col text;
+BEGIN
+  FOR side_table, target_col IN
+    VALUES
+      ('tab_polygon_geopts_binding_top',    'geom_top'),
+      ('tab_polygon_geopts_binding_bottom', 'geom_bottom')
+  LOOP
     -- collect points from ranges and sort them ascending according id_pts
     q := format($SQL$
       WITH ranges AS (
@@ -668,7 +670,7 @@ DECLARE
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
       USING p_polygon_name;
       RAISE NOTICE 'Not enough points to build polygon (% for %).', target_col, p_polygon_name;
-      RETURN;
+      CONTINUE;
     END IF;
 
     -- close the polyline
@@ -676,60 +678,54 @@ DECLARE
       v_line := ST_AddPoint(v_line, ST_StartPoint(v_line));
     END IF;
 
-    -- remove duplicities
+    -- remove duplicities (consecutive)
     v_line := ST_RemoveRepeatedPoints(v_line, 1e-7);
 
-    -- GUARD 1: there must be 3 nodes at least (after closing)
-    IF ST_NumDistinctPoints(v_line) < 3 THEN
+    -- GUARD 1: must have at least 4 points in closed ring (3 distinct + closing point)
+    IF ST_NPoints(v_line) < 4 THEN
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
       USING p_polygon_name;
-      RAISE NOTICE 'Too few distinct vertices after closing (% for %).', target_col, p_polygon_name;
-      RETURN;
+      RAISE NOTICE 'Too few vertices after closing (% for %).', target_col, p_polygon_name;
+      CONTINUE;
     END IF;
 
-    -- GUARD 2: lines cannot overlap (except closing)
+    -- GUARD 2: line cannot self-intersect
     IF NOT ST_IsSimple(v_line) THEN
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
       USING p_polygon_name;
       RAISE NOTICE 'Self-intersection detected in line (% for %).', target_col, p_polygon_name;
-      RETURN;
+      CONTINUE;
     END IF;
 
-    -- GUARD 3: enforce 3D (if points are 2D)
+    -- enforce 3D (if points are 2D)
     v_line := ST_Force3D(v_line);
 
-    -- try polygon without "autocorrection" – we want notice why is invalid
+    -- build polygon (no autocorrection)
     v_poly_try := ST_MakePolygon(v_line);
 
-    -- GUARD 42: polygon has to be valid
+    -- GUARD 3: polygon must be valid
     IF NOT ST_IsValid(v_poly_try) THEN
       v_reason := ST_IsValidReason(v_poly_try);
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
       USING p_polygon_name;
       RAISE NOTICE 'Invalid polygon (% for %): %', target_col, p_polygon_name, v_reason;
-      RETURN;
+      CONTINUE;
     END IF;
 
-    -- enfoece polygon 3D and save
     v_poly := ST_Force3D(v_poly_try);
 
-    -- final check: this has to be single Polygon
-    IF ST_IsEmpty(v_poly) OR GeometryType(v_poly) <> 'ST_Polygon' THEN
+    -- final check: must be a single polygon
+    IF ST_IsEmpty(v_poly) OR ST_GeometryType(v_poly) <> 'ST_Polygon' THEN
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
       USING p_polygon_name;
       RAISE NOTICE 'Built geometry is empty or not a single Polygon (% for %).', target_col, p_polygon_name;
-      RETURN;
+      CONTINUE;
     END IF;
 
+    -- save
     EXECUTE format('UPDATE tab_polygons SET %I = $1 WHERE polygon_name = $2', target_col)
     USING v_poly, p_polygon_name;
-  END;
-  $proc$;
-BEGIN
-  -- top line of polygon
-  CALL build_and_update('tab_polygon_geopts_binding_top', 'geom_top');
-  -- bottom line of polygon
-  CALL build_and_update('tab_polygon_geopts_binding_bottom', 'geom_bottom');
+  END LOOP;
 END
 $$;
 
