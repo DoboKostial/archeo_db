@@ -1,14 +1,14 @@
 # app/routes/polygons.py
 # logic for archeological polygons
 
-# app/routes/polygons.py
 from io import BytesIO
 import json
 import zipfile
+import shapefile  # pyshp
 
 from flask import (
     Blueprint, request, render_template, redirect, url_for,
-    flash, session, send_file
+    flash, session, send_file, jsonify
 )
 
 from app.logger import logger
@@ -22,10 +22,12 @@ from config import Config
 
 # SQLs from app/queries.py
 from app.queries import (
-    get_polygons_list, insert_polygon_sql,
-    insert_polygon_manual_sql, insert_binding_sql, rebuild_geom_sql,
-    list_authors_sql, find_polygons_srid_sql, srtext_by_srid_sql, polygons_geojson_sql
+    insert_polygon_manual_sql, delete_bindings_top_sql, delete_bindings_bottom_sql,
+    insert_binding_top_sql, insert_binding_bottom_sql, rebuild_geom_sql, select_polygons_with_bindings_sql,
+    srtext_by_srid_sql, polygons_geojson_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
+    polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql
 )
+
 
 polygons_bp = Blueprint('polygons', __name__)
 
@@ -54,7 +56,7 @@ def polygons():
         with conn.cursor() as cur:
             cur.execute(get_polygons_list())
             polys = [
-                {'id': row[0], 'name': row[1], 'points': row[2], 'srid': row[3]}
+                {"id": row[0], "name": row[1], "points": row[2], "srid": row[3], "parent": row[4], "allocation_reason": row[5], "has_top": row[6], "has_bottom": row[7]}
                 for row in cur.fetchall()
             ]
             cur.execute(list_authors_sql())
@@ -68,96 +70,260 @@ def polygons():
     return render_template('polygons.html', polygons=polys, selected_db=selected_db, authors=authors)
 
 
-# ---------- MANUAL CREATE (ID + name + ranges) ----------
+# ---------- MANUAL POLYGON CREATE (ID + name + ranges) ----------
+
+def _prep_ranges(arr_from, arr_to):
+    """Validate and normalize ranges; returns list[(int from, int to)]."""
+    out = []
+    for f, t in zip(arr_from, arr_to):
+        f = (f or "").strip()
+        t = (t or "").strip()
+        if not f and not t:
+            continue
+        if not f or not t:
+            raise ValueError("Each range row must have BOTH FROM and TO.")
+        f_i = int(f); t_i = int(t)
+        if f_i > t_i:
+            raise ValueError(f"Invalid range: {f_i} > {t_i}.")
+        out.append((f_i, t_i))
+    return out
+
+
+# ---------- MANUAL POLYGON CREATE (name + allocation + TOP/BOTTOM ranges) ----------
 @polygons_bp.route('/polygons/new-manual', methods=['POST'])
 @require_selected_db
 def new_polygon_manual():
     selected_db = session.get('selected_db')
 
-    polygon_id_raw = request.form.get('id_polygon', '').strip()
-    polygon_name   = request.form.get('polygon_name', '').strip()
-    ranges_from    = request.form.getlist('range_from[]')
-    ranges_to      = request.form.getlist('range_to[]')
+    polygon_name = (request.form.get('polygon_name') or '').strip()
+    parent_name  = (request.form.get('parent_name') or '').strip()
+    allocation   = (request.form.get('allocation_reason') or '').strip()  # ENUM allocation_reason
+    notes        = (request.form.get('notes') or '').strip()
+
+    # TOP ranges
+    top_from = request.form.getlist('top_range_from[]')
+    top_to   = request.form.getlist('top_range_to[]')
+
+    # BOTTOM ranges
+    bot_from = request.form.getlist('bottom_range_from[]')
+    bot_to   = request.form.getlist('bottom_range_to[]')
 
     try:
-        if not polygon_id_raw or not polygon_name:
-            raise ValueError("Polygon ID and name are required.")
-        try:
-            polygon_id = int(polygon_id_raw)
-        except Exception:
-            raise ValueError("Polygon ID must be integer.")
+        if not polygon_name:
+            raise ValueError("Polygon name is required.")
+        if not allocation:
+            raise ValueError("Allocation reason is required.")
 
-        prepared_ranges = []
-        for f, t in zip(ranges_from, ranges_to):
-            f = (f or "").strip()
-            t = (t or "").strip()
-            if not f and not t:
-                continue
-            if not f or not t:
-                raise ValueError("Each range must have BOTH FROM and TO.")
-            f_i = int(f); t_i = int(t)
-            if f_i > t_i:
-                raise ValueError(f"Invalid range: {f_i} > {t_i}.")
-            prepared_ranges.append((f_i, t_i))
-        if not prepared_ranges:
-            raise ValueError("Provide at least one range of points.")
+        allowed_alloc = {
+            "physical_separation",
+            "research_phase",
+            "horizontal_stratigraphy",
+            "other",
+        }
+        if allocation not in allowed_alloc:
+            raise ValueError("Invalid allocation reason.")
+
+        if parent_name and parent_name == polygon_name:
+            raise ValueError("Parent polygon cannot be the same as polygon name.")
+
+        top_ranges = _prep_ranges(top_from, top_to)
+        bot_ranges = _prep_ranges(bot_from, bot_to)
+
+        if not top_ranges and not bot_ranges:
+            raise ValueError("Provide at least one TOP or BOTTOM range of points.")
 
         conn = get_terrain_connection(selected_db)
         conn.autocommit = False
         try:
             with conn.cursor() as cur:
-                # polygon skeleton
-                cur.execute(insert_polygon_manual_sql(), (polygon_id, polygon_name))
-                # bindings
-                for f_i, t_i in prepared_ranges:
-                    cur.execute(insert_binding_sql(), (polygon_id, f_i, t_i))
-                # rebuild
-                cur.execute(rebuild_geom_sql(), (polygon_id,))
+                # 1) Insert/Upsert polygon metadata
+                cur.execute(insert_polygon_manual_sql(), (polygon_name, parent_name, allocation, notes))
+
+                # 2) Replace bindings idempotently (clear then insert)
+                cur.execute(delete_bindings_top_sql(), (polygon_name,))
+                cur.execute(delete_bindings_bottom_sql(), (polygon_name,))
+
+                for f_i, t_i in top_ranges:
+                    cur.execute(insert_binding_top_sql(), (polygon_name, f_i, t_i))
+                for f_i, t_i in bot_ranges:
+                    cur.execute(insert_binding_bottom_sql(), (polygon_name, f_i, t_i))
+
+                # 3) Rebuild geom_top / geom_bottom from tab_geopts
+                cur.execute(rebuild_geom_sql(), (polygon_name,))
+
             conn.commit()
-            flash(f"Polygon #{polygon_id} saved and geometry rebuilt.", "success")
-            logger.info(f"[{selected_db}] polygon {polygon_id} created manually with {len(prepared_ranges)} ranges.")
+            flash(f'Polygon “{polygon_name}” saved and geometry rebuilt.', 'success')
+            logger.info(
+                f'[{selected_db}] polygon "{polygon_name}" saved: '
+                f'{len(top_ranges)} TOP range(s), {len(bot_ranges)} BOTTOM range(s), allocation={allocation}.'
+            )
         except Exception as e:
             conn.rollback()
-            logger.error(f"[{selected_db}] manual polygon create error: {e}")
-            flash(f"Error while saving polygon: {e}", "danger")
+            logger.error(f'[{selected_db}] manual polygon create error: {e}')
+            flash(f'Error while saving polygon: {e}', 'danger')
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
     except ValueError as ve:
-        flash(str(ve), "warning")
+        flash(str(ve), 'warning')
     except Exception as e:
-        flash(f"Unexpected error: {e}", "danger")
+        flash(f'Unexpected error: {e}', 'danger')
 
     return redirect(url_for('polygons.polygons'))
 
 
-# ---------- TXT/CSV UPLOAD ----------
+
+# ---------- TXT/CSV UPLOAD (geopts + bindings + rebuild) ----------
 @polygons_bp.route('/upload-polygons', methods=['POST'])
 @require_selected_db
 def upload_polygons():
     selected_db = session.get('selected_db')
+
     file = request.files.get('file')
     epsg = request.form.get('epsg')
+    side = (request.form.get('side') or '').strip().lower()  # 'top' | 'bottom'
 
-    if not file or not epsg:
-        flash('You must select a file and an EPSG code.', 'danger')
+    parent_name = (request.form.get('parent_name') or '').strip()
+    allocation  = (request.form.get('allocation_reason') or '').strip()
+    notes       = (request.form.get('notes') or '').strip()
+
+    if not file or not epsg or side not in {"top", "bottom"}:
+        flash('You must select a file, EPSG and side (TOP/BOTTOM).', 'danger')
         return redirect(url_for('polygons.polygons'))
 
+    allowed_alloc = {
+        "physical_separation",
+        "research_phase",
+        "horizontal_stratigraphy",
+        "other",
+    }
+    if allocation not in allowed_alloc:
+        flash('Invalid allocation reason.', 'warning')
+        return redirect(url_for('polygons.polygons'))
+
+    epsg_code = int(epsg)
+
     conn = get_terrain_connection(selected_db)
+    conn.autocommit = False
+
     try:
-        uploaded_polygons, epsg_code = process_polygon_upload(file, epsg)
+        # Parse file -> per polygon: points + consecutive ranges based on id_pts
+        # { polygon_name: {"points": [(id_pts,x,y,h,code),...], "ranges":[(from,to),...] } }
+        parsed = process_polygon_upload(file)
+
+        if not parsed:
+            flash('No valid rows found in file.', 'warning')
+            return redirect(url_for('polygons.polygons'))
+
         with conn.cursor() as cur:
-            for polygon_name, points in uploaded_polygons.items():
-                sql_text = insert_polygon_sql(polygon_name, points, epsg_code)
-                cur.execute(sql_text, (polygon_name,))
+            # Determine project SRID from tab_geopts.pts_geom typmod (after set_project_srid)
+            cur.execute(find_geopts_srid_sql())
+            target_srid = (cur.fetchone() or [None])[0]
+            if not target_srid or int(target_srid) <= 0:
+                # fallback: if typmod SRID is still unknown, we will just "assign" source coords
+                target_srid = epsg_code
+
+            # Choose binding SQL by side
+            if side == "top":
+                delete_bindings_sql = delete_bindings_top_sql()
+                insert_binding_sql = insert_binding_top_sql()
+            else:
+                delete_bindings_sql = delete_bindings_bottom_sql()
+                insert_binding_sql = insert_binding_bottom_sql()
+
+            polygons_done = 0
+            points_done = 0
+            ranges_done = 0
+
+            for polygon_name, data in parsed.items():
+                points = data["points"]
+                ranges = data["ranges"]
+
+                if not polygon_name:
+                    continue
+
+                # Upsert polygon metadata (allocation is required by DDL)
+                cur.execute(insert_polygon_manual_sql(), (polygon_name, parent_name, allocation, notes))
+
+                # Upsert points into tab_geopts (transform XY from source EPSG to target SRID)
+                for (id_pts, x, y, h, code) in points:
+                    cur.execute(
+                        upsert_geopt_sql(),
+                        (x, y, h, epsg_code, int(target_srid), id_pts, h, code)
+                    )
+                    points_done += 1
+
+
+                # Replace bindings for given side (idempotent)
+                cur.execute(delete_bindings_sql, (polygon_name,))
+                for f_i, t_i in ranges:
+                    cur.execute(insert_binding_sql, (polygon_name, f_i, t_i))
+                    ranges_done += 1
+
+                # Rebuild both geom_top/geom_bottom (function handles missing side gracefully)
+                cur.execute(rebuild_geom_sql(), (polygon_name,))
+                polygons_done += 1
+
         conn.commit()
-        logger.info(f"[{selected_db}] uploaded {len(uploaded_polygons)} polygon(s) (EPSG {epsg_code}).")
-        flash('Polygon(s) were uploaded successfully.', 'success')
+        logger.info(
+            f"[{selected_db}] upload-polygons: polygons={polygons_done}, points={points_done}, "
+            f"ranges={ranges_done}, source_epsg={epsg_code}, side={side}, target_srid={target_srid}"
+        )
+        flash(f"Uploaded {polygons_done} polygon(s); inserted/updated {points_done} point(s).", 'success')
+
     except Exception as e:
         conn.rollback()
         logger.error(f"[{selected_db}] polygon upload error: {e}")
         flash(f'Error while uploading polygons: {str(e)}', 'danger')
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return redirect(url_for('polygons.polygons'))
+
+# making GeoJSON for export to leaflet (showing geometry in modal window)
+
+@polygons_bp.route('/polygons/geojson', methods=['GET'])
+@require_selected_db
+def polygon_geojson():
+    selected_db = session.get('selected_db')
+    name = (request.args.get('name') or '').strip()
+
+    if not name:
+        return jsonify({"error": "Missing polygon name"}), 400
+
+    conn = get_terrain_connection(selected_db)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(polygon_geoms_geojson_sql(), (name,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "Polygon not found"}), 404
+
+            top_gj, bottom_gj = row[0], row[1]
+
+        # return JSON objects (GeoJSON), not strings
+        payload = {
+            "name": name,
+            "top": json.loads(top_gj) if top_gj else None,
+            "bottom": json.loads(bottom_gj) if bottom_gj else None,
+        }
+        return jsonify(payload)
+
+    except Exception as e:
+        logger.error(f"[{selected_db}] polygon_geojson error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 
 
 # ---------- REBUILD ALL POLYGONS GEOMETRY ----------
@@ -169,16 +335,14 @@ def rebuild_all_polygons():
     rebuilt = 0
     try:
         with conn.cursor() as cur:
-            # only polygons that have at least one binding
-            cur.execute("""
-                SELECT DISTINCT ref_polygon
-                FROM tab_polygon_geopts_binding
-                ORDER BY ref_polygon
-            """)
-            ids = [r[0] for r in cur.fetchall()]
-            for pid in ids:
-                cur.execute(rebuild_geom_sql(), (pid,))
+            # polygons that have at least one TOP/BOTTOM binding
+            cur.execute(select_polygons_with_bindings_sql())
+            names = [r[0] for r in cur.fetchall()]
+
+            for polygon_name in names:
+                cur.execute(rebuild_geom_sql(), (polygon_name,))
                 rebuilt += 1
+
         conn.commit()
         flash(f"Geometry rebuilt for {rebuilt} polygon(s).", "success")
         logger.info(f"[{selected_db}] rebuilt geometry for {rebuilt} polygons.")
@@ -187,8 +351,13 @@ def rebuild_all_polygons():
         logger.error(f"[{selected_db}] rebuild-all error: {e}")
         flash(f"Error during geometry rebuild: {e}", "danger")
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
+
     return redirect(url_for('polygons.polygons'))
+
 
 
 # ---------- SHP EXPORT ----------
@@ -201,41 +370,57 @@ def download_polygons():
     try:
         with conn.cursor() as cur:
             cur.execute(find_polygons_srid_sql())
-            srid = cur.fetchone()[0]
-            cur.execute(srtext_by_srid_sql(), (srid,))
-            prj_wkt = (cur.fetchone() or [''])[0] or ''
-            cur.execute(polygons_geojson_sql())
-            results = cur.fetchall()
+            srid_row = cur.fetchone()
+            srid = srid_row[0] if srid_row else None
 
-        # build SHP in-memory
-        shp_io = BytesIO(); shx_io = BytesIO(); dbf_io = BytesIO()
-        import shapefile  # pyshp
-        with shapefile.Writer(
-            shp=shp_io, shx=shx_io, dbf=dbf_io, shapeType=shapefile.POLYGON
-        ) as shp:
+            prj_wkt = ''
+            if srid:
+                cur.execute(srtext_by_srid_sql(), (srid,))
+                prj_wkt = (cur.fetchone() or [''])[0] or ''
+
+            cur.execute(polygons_geojson_top_bottom_sql())
+            results = cur.fetchall()  # (name, top_gj, bottom_gj)
+
+        # Build SHP in-memory
+        shp_io = BytesIO()
+        shx_io = BytesIO()
+        dbf_io = BytesIO()
+
+        
+        with shapefile.Writer(shp=shp_io, shx=shx_io, dbf=dbf_io, shapeType=shapefile.POLYGON) as shp:
             shp.field('name', 'C', size=254)
+            shp.field('side', 'C', size=10)  # 'top' | 'bottom'
 
-            for name, gjson in results:
-                gj = json.loads(gjson)
-                gtype = gj['type']
-                if gtype == 'Polygon':
-                    polys = [gj['coordinates']]
-                elif gtype == 'MultiPolygon':
-                    polys = gj['coordinates']
-                else:
-                    continue
-                for rings in polys:
-                    parts = []
-                    for ring in rings:
-                        pts = [(float(x), float(y)) for x, y in ring]
-                        parts.append(pts)
-                    shp.poly(parts)
-                    shp.record(name)
+            for name, top_gj, bottom_gj in results:
+                # helper to write one geojson polygon/multipolygon
+                def _write_geojson(gj_str, side):
+                    if not gj_str:
+                        return
+                    gj = json.loads(gj_str)
+                    gtype = gj.get('type')
 
-        # zip outputs (+ .prj)
+                    if gtype == 'Polygon':
+                        polys = [gj['coordinates']]
+                    elif gtype == 'MultiPolygon':
+                        polys = gj['coordinates']
+                    else:
+                        return
+
+                    for rings in polys:
+                        parts = []
+                        for ring in rings:
+                            pts = [(float(x), float(y)) for x, y in ring]
+                            parts.append(pts)
+                        shp.poly(parts)
+                        shp.record(name, side)
+
+                _write_geojson(top_gj, 'top')
+                _write_geojson(bottom_gj, 'bottom')
+
+        # Zip outputs (+ .prj)
         zip_io = BytesIO()
         with zipfile.ZipFile(zip_io, 'w') as zipf:
-            base = f"{selected_db}"
+            base = f"{selected_db}_polygons"
             zipf.writestr(f"{base}.shp", shp_io.getvalue())
             zipf.writestr(f"{base}.shx", shx_io.getvalue())
             zipf.writestr(f"{base}.dbf", dbf_io.getvalue())
@@ -255,7 +440,11 @@ def download_polygons():
         flash(f'Error while generating SHP: {str(e)}', 'danger')
         return redirect(url_for('polygons.polygons'))
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
+
 
 
 # ---------- MEDIA UPLOAD (photos/sketches/photograms) ----------

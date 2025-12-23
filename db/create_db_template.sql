@@ -632,7 +632,7 @@ $$;
 -- - closes line (adds startpoint to end)
 -- - unifies SRID to project
 -- - creates POLYGON and saves to tab_polygons.geom.
-CREATE OR REPLACE FUNCTION rebuild_polygon_geom_from_geopts(p_polygon_name text)
+CREATE OR REPLACE FUNCTION rebuild_polygon_geoms_from_geopts(p_polygon_name text)
 RETURNS void
 LANGUAGE plpgsql
 AS $$

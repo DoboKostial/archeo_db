@@ -1,0 +1,21 @@
+<p>
+  Upload imports measured points from a TXT/CSV file into <code>tab_geopts</code>, creates bindings (ranges)
+  for the selected side (TOP or BOTTOM) and rebuilds polygon geometry.
+</p>
+
+<p class="mb-2"><strong>Expected file format</strong></p>
+<pre class="mb-3">id_pts,x,y,h,code,polygon_name
+1,-544022.67,-1144012.81,556.1,VP,sonda1
+2,-544016.67,-1144022.81,567.1,VP,sonda1</pre>
+
+<ul>
+  <li><strong>polygon_name</strong> is taken from the last column (e.g., <code>sonda1</code>).</li>
+  <li><strong>Source EPSG</strong> is used to transform XY into the project SRID.</li>
+  <li><strong>Imported side</strong> decides whether ranges are saved to TOP or BOTTOM bindings.</li>
+</ul>
+
+<p class="mb-2"><strong>Notes</strong></p>
+<ul class="mb-0">
+  <li>Bindings are created automatically from consecutive <code>id_pts</code> blocks in the file.</li>
+  <li>If the same <code>id_pts</code> already exists in <code>tab_geopts</code>, it is updated.</li>
+</ul>

@@ -66,7 +66,7 @@ def upload_foto():
                         for sj in selected_sjs:
                             cur.execute(
                                 """
-                                INSERT INTO tabaid_foto_sj (ref_foto, ref_sj)
+                                INSERT INTO tabaid_photo_sj (ref_photo, ref_sj)
                                 VALUES (%s, %s)
                                 """,
                                 (filename, sj)

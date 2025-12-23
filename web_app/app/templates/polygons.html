@@ -11,116 +11,329 @@
 
   <!-- Row 1: two top panels (manual / TXT) -->
   <div class="row g-3">
-    <!-- Manual create -->
-    <div class="col-md-6">
-      <div class="p-3 rounded-3 border bg-light">
-        <h4 class="mb-3">Manual polygon (by geodetic point ranges)</h4>
-        <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
-          <div class="row g-2">
-            <div class="col-md-4">
-              <label class="form-label">Polygon ID</label>
-              <input type="number" class="form-control" name="id_polygon" required>
-            </div>
-            <div class="col-md-8">
-              <label class="form-label">Polygon name</label>
-              <input type="text" class="form-control" name="polygon_name" required>
-            </div>
-          </div>
+  
+  <!-- Manual create -->
+<div class="col-md-6">
+  <div class="p-3 rounded-3 border bg-light">
+    <h4 class="mb-3 d-flex align-items-center gap-2">
+  Manual polygon (by geodetic point ranges)
+  <button type="button"
+          class="btn btn-sm btn-outline-secondary"
+          data-bs-toggle="modal"
+          data-bs-target="#helpManualPolygon"
+          title="Help">
+    ?
+  </button>
+</h4>
 
-          <div class="mt-3">
-            <div class="d-flex align-items-center mb-2">
-              <h6 class="mb-0 me-2">Ranges (FROM–TO)</h6>
-              <small class="text-muted">(add one or more continuous ranges)</small>
-            </div>
+    <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
+      <!-- Polygon metadata -->
+      <div class="row g-2">
+        <div class="col-md-8">
+          <label class="form-label">Polygon name</label>
+          <input type="text" class="form-control" name="polygon_name" required>
+        </div>
 
-            <div id="ranges-container">
-              <div class="row g-2 align-items-end range-row">
-                <div class="col-5">
-                  <label class="form-label">FROM</label>
-                  <input type="number" class="form-control" name="range_from[]" required>
-                </div>
-                <div class="col-5">
-                  <label class="form-label">TO</label>
-                  <input type="number" class="form-control" name="range_to[]" required>
-                </div>
-                <div class="col-2">
-                  <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow()">+</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-3">
-            <button type="submit" class="btn btn-primary">Save & Rebuild</button>
-          </div>
-        </form>
+        <div class="col-md-4">
+          <label class="form-label">Parent polygon</label>
+          <input type="text" class="form-control" name="parent_name" list="parent-polygons" placeholder="optional">
+          <datalist id="parent-polygons">
+            {% for a in polygons %}
+              <option value="{{ a.name }}"></option>
+            {% endfor %}
+          </datalist>
+        </div>
       </div>
-    </div>
 
-    <!-- Upload from TXT/CSV -->
-    <div class="col-md-6">
-      <div class="p-3 rounded-3 border bg-light">
-        <h4 class="mb-3">Import polygon(s) from TXT/CSV</h4>
-        <form action="{{ url_for('polygons.upload_polygons') }}" method="post" enctype="multipart/form-data">
-          <div class="mb-3">
-            <label class="form-label">Select TXT/CSV file</label>
-            <input type="file" name="file" class="form-control" accept=".csv,.txt" required>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Source EPSG</label>
-            <select name="epsg" class="form-control" required>
-              <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
-              <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
-              <option value="4326">WGS 84 (EPSG:4326)</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary">Upload & Save</button>
-        </form>
+      <div class="row g-2 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Allocation reason</label>
+          <select name="allocation_reason" class="form-control" required>
+            <option value="" selected disabled>-- select --</option>
+            <option value="physical_separation">physical_separation</option>
+            <option value="research_phase">research_phase</option>
+            <option value="horizontal_stratigraphy">horizontal_stratigraphy</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Notes</label>
+          <input type="text" class="form-control" name="notes" placeholder="optional">
+        </div>
       </div>
-    </div>
-  </div>
 
-  <!-- Row 2: bottom-left list + bottom-right media uploads -->
-  <div class="row g-3 mt-2">
-    <!-- Existing polygons + actions -->
-    <div class="col-md-6">
-      <div class="p-3 rounded-3 border">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h4 class="mb-0">Existing polygons</h4>
-          <div class="btn-group">
-            <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
-              <button type="submit" class="btn btn-outline-warning btn-sm">Rebuild geometry (all)</button>
-            </form>
-            <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success btn-sm">Export SHP</a>
+      <!-- TOP ranges -->
+      <div class="mt-3">
+        <div class="d-flex align-items-center mb-2">
+          <h6 class="mb-0 me-2">TOP ranges (FROM–TO)</h6>
+          <small class="text-muted">(upper/top polygon points)</small>
+        </div>
+
+        <div id="top-ranges-container">
+          <div class="row g-2 align-items-end range-row">
+            <div class="col-5">
+              <label class="form-label">FROM</label>
+              <input type="number" class="form-control" name="top_range_from[]">
+            </div>
+            <div class="col-5">
+              <label class="form-label">TO</label>
+              <input type="number" class="form-control" name="top_range_to[]">
+            </div>
+            <div class="col-2">
+              <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow('top')">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM ranges -->
+      <div class="mt-3">
+        <div class="d-flex align-items-center mb-2">
+          <h6 class="mb-0 me-2">BOTTOM ranges (FROM–TO)</h6>
+          <small class="text-muted">(lower/bottom polygon points)</small>
+        </div>
+
+        <div id="bottom-ranges-container">
+          <div class="row g-2 align-items-end range-row">
+            <div class="col-5">
+              <label class="form-label">FROM</label>
+              <input type="number" class="form-control" name="bottom_range_from[]">
+            </div>
+            <div class="col-5">
+              <label class="form-label">TO</label>
+              <input type="number" class="form-control" name="bottom_range_to[]">
+            </div>
+            <div class="col-2">
+              <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow('bottom')">+</button>
+            </div>
           </div>
         </div>
 
-        {% if polygons and polygons|length %}
-          <table class="table table-sm table-bordered align-middle mb-0">
+        <small class="text-muted d-block mt-2">
+          Tip: You can define only TOP or only BOTTOM ranges (at least one is required).
+        </small>
+      </div>
+
+      <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Save & Rebuild</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function addRangeRow(side) {
+    const containerId = (side === 'top') ? 'top-ranges-container' : 'bottom-ranges-container';
+    const fromName = (side === 'top') ? 'top_range_from[]' : 'bottom_range_from[]';
+    const toName   = (side === 'top') ? 'top_range_to[]'   : 'bottom_range_to[]';
+
+    const container = document.getElementById(containerId);
+
+    const row = document.createElement('div');
+    row.className = 'row g-2 align-items-end range-row mt-2';
+
+    row.innerHTML = `
+      <div class="col-5">
+        <label class="form-label">FROM</label>
+        <input type="number" class="form-control" name="${fromName}">
+      </div>
+      <div class="col-5">
+        <label class="form-label">TO</label>
+        <input type="number" class="form-control" name="${toName}">
+      </div>
+      <div class="col-2 d-flex gap-1">
+        <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow('${side}')">+</button>
+        <button type="button" class="btn btn-outline-danger mt-4" onclick="removeRangeRow(this)">−</button>
+      </div>
+    `;
+
+    container.appendChild(row);
+  }
+
+  function removeRangeRow(btn) {
+    const row = btn.closest('.range-row');
+    if (row) row.remove();
+  }
+</script>
+
+
+
+
+<!-- Upload from TXT/CSV -->
+<div class="col-md-6">
+  <div class="p-3 rounded-3 border bg-light">
+    <h4 class="mb-3 d-flex align-items-center gap-2">
+  Import polygon(s) from TXT/CSV
+  <button type="button"
+          class="btn btn-sm btn-outline-secondary"
+          data-bs-toggle="modal"
+          data-bs-target="#helpUploadPolygon"
+          title="Help">
+    ?
+  </button>
+</h4>
+
+
+    <form action="{{ url_for('polygons.upload_polygons') }}" method="post" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label">Select TXT/CSV file</label>
+        <input type="file" name="file" class="form-control" accept=".csv,.txt" required>
+        <small class="text-muted">
+          Format: id_pts,x,y,h,code,polygon_name (polygon_name is last column)
+        </small>
+      </div>
+
+      <div class="row g-2">
+        <div class="col-md-6">
+          <label class="form-label">Source EPSG</label>
+          <select name="epsg" class="form-control" required>
+            <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
+            <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
+            <option value="4326">WGS 84 (EPSG:4326)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Imported side</label>
+          <select name="side" class="form-control" required>
+            <option value="top" selected>TOP (upper)</option>
+            <option value="bottom">BOTTOM (lower)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row g-2 mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Allocation reason</label>
+          <select name="allocation_reason" class="form-control" required>
+            <option value="" selected disabled>-- select --</option>
+            <option value="physical_separation">physical_separation</option>
+            <option value="research_phase">research_phase</option>
+            <option value="horizontal_stratigraphy">horizontal_stratigraphy</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Parent polygon (optional)</label>
+          <input type="text" class="form-control" name="parent_name" list="parent-polygons-upload" placeholder="optional">
+          <datalist id="parent-polygons-upload">
+            {% for p in polygons %}
+              <option value="{{ p.name }}"></option>
+            {% endfor %}
+          </datalist>
+        </div>
+      </div>
+
+      <div class="mt-2">
+        <label class="form-label">Notes (optional)</label>
+        <input type="text" class="form-control" name="notes" placeholder="optional">
+      </div>
+
+      <button type="submit" class="btn btn-primary mt-3">Upload → Save → Rebuild</button>
+    </form>
+  </div>
+</div>
+
+
+<!-- Row 2: bottom list (full width) -->
+<div class="row g-3 mt-2">
+  <!-- Existing polygons + actions -->
+  <div class="col-12">
+    <div class="p-3 rounded-3 border">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h4 class="mb-0">Existing polygons</h4>
+        <div class="btn-group">
+          <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
+            <button type="submit" class="btn btn-outline-warning btn-sm">Rebuild geometry (all)</button>
+          </form>
+          <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success btn-sm">Export SHP</a>
+        </div>
+      </div>
+
+      {% if polygons and polygons|length %}
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-0 w-100">
             <thead class="table-light">
               <tr>
-                <th style="width:90px;">ID</th>
+                <th style="width:70px;">ID</th>
                 <th>Name</th>
-                <th class="text-end" style="width:120px;"># points</th>
+                <th style="width:120px;">Parent</th>
+                <th style="width:220px;">Allocation</th>
+                <th class="text-center" style="width:90px;">TOP</th>
+                <th class="text-center" style="width:110px;">BOTTOM</th>
+                <th class="text-end" style="width:110px;"># points</th>
                 <th class="text-end" style="width:90px;">SRID</th>
+                <th class="text-end" style="width:190px;">Seeing is believing</th>
               </tr>
             </thead>
             <tbody>
               {% for p in polygons %}
               <tr>
                 <td>{{ p.id }}</td>
-                <td>{{ p.name }}</td>
+                <td class="text-break">{{ p.name }}</td>
+
+                <td class="text-break">
+                  {% if p.parent %}
+                    {{ p.parent }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {{ p.allocation_reason }}
+                </td>
+
+                <td class="text-center">
+                  {% if p.has_top %}
+                    <span class="badge bg-success">yes</span>
+                  {% else %}
+                    <span class="badge bg-secondary">no</span>
+                  {% endif %}
+                </td>
+
+                <td class="text-center">
+                  {% if p.has_bottom %}
+                    <span class="badge bg-success">yes</span>
+                  {% else %}
+                    <span class="badge bg-secondary">no</span>
+                  {% endif %}
+                </td>
+
                 <td class="text-end">{{ p.points }}</td>
-                <td class="text-end">{{ p.srid }}</td>
+
+                <td class="text-end">
+                  {% if p.srid %}
+                    {{ p.srid }}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+
+                <td class="text-end">
+                  <button type="button"
+                  class="btn btn-sm btn-outline-primary"
+                  data-bs-toggle="modal"
+                  data-bs-target="#polygonMapModal"
+                  data-polygon-name="{{ p.name }}">
+                  Show
+                  </button>
+                </td>
+
               </tr>
               {% endfor %}
             </tbody>
           </table>
-        {% else %}
-          <p class="text-muted mb-0">No polygons stored yet.</p>
-        {% endif %}
-      </div>
+        </div>
+      {% else %}
+        <p class="text-muted mb-0">No polygons stored yet.</p>
+      {% endif %}
     </div>
+  </div>
+</div>
+
 
     <!-- Media uploads for polygon -->
     <div class="col-md-6">
@@ -277,4 +490,228 @@ function addRangeRow() {
   container.appendChild(row);
 }
 </script>
+
+
+<!-- Help modal: Manual polygon -->
+<div class="modal fade" id="helpManualPolygon" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help: Manual polygon</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% include "help/polygons_manual_help.html" %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Help modal: Upload polygon(s) -->
+<div class="modal fade" id="helpUploadPolygon" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help: Upload polygon(s)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% include "help/polygons_upload_help.html" %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Polygon map preview modal -->
+<div class="modal fade" id="polygonMapModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          Polygon preview: <span id="polyModalTitle" class="fw-bold"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- TOP/BOTTOM toggles -->
+        <div class="d-flex flex-wrap gap-3 mb-2 align-items-center">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="chkTop" checked>
+            <label class="form-check-label" for="chkTop">Show TOP</label>
+          </div>
+
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="chkBottom" checked>
+            <label class="form-check-label" for="chkBottom">Show BOTTOM</label>
+          </div>
+
+          <small class="text-muted">Map uses WGS84 (EPSG:4326)</small>
+        </div>
+
+        <!-- Map -->
+        <div id="polygonMap"
+             style="height: 60vh; width: 100%; border-radius: 12px; border: 1px solid #ddd;">
+        </div>
+
+        <!-- Message area -->
+        <div id="polyMapMsg" class="text-muted mt-2" style="display:none;"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Leaflet map + layers
+  let polyMap = null;
+  let topLayer = null;
+  let bottomLayer = null;
+
+  function setMsg(text) {
+    const msg = document.getElementById('polyMapMsg');
+    msg.textContent = text || '';
+    msg.style.display = text ? 'block' : 'none';
+  }
+
+  function ensureMap() {
+    if (polyMap) return;
+
+    polyMap = L.map('polygonMap');
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 20,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(polyMap);
+
+    // Bind toggle events once
+    document.getElementById('chkTop').addEventListener('change', () => {
+      if (!polyMap || !topLayer) return;
+      const show = document.getElementById('chkTop').checked;
+      if (show) topLayer.addTo(polyMap);
+      else polyMap.removeLayer(topLayer);
+    });
+
+    document.getElementById('chkBottom').addEventListener('change', () => {
+      if (!polyMap || !bottomLayer) return;
+      const show = document.getElementById('chkBottom').checked;
+      if (show) bottomLayer.addTo(polyMap);
+      else polyMap.removeLayer(bottomLayer);
+    });
+  }
+
+  function clearLayers() {
+    if (!polyMap) return;
+    if (topLayer) { polyMap.removeLayer(topLayer); topLayer = null; }
+    if (bottomLayer) { polyMap.removeLayer(bottomLayer); bottomLayer = null; }
+  }
+
+  function updateToggleAvailability(hasTop, hasBottom) {
+    const chkTop = document.getElementById('chkTop');
+    const chkBottom = document.getElementById('chkBottom');
+
+    chkTop.disabled = !hasTop;
+    chkBottom.disabled = !hasBottom;
+
+    // if not available, force unchecked
+    if (!hasTop) chkTop.checked = false;
+    if (!hasBottom) chkBottom.checked = false;
+
+    // if only one exists, ensure it is checked
+    if (hasTop && !hasBottom) chkTop.checked = true;
+    if (!hasTop && hasBottom) chkBottom.checked = true;
+  }
+
+  async function loadPolygonToMap(polygonName) {
+    document.getElementById('polyModalTitle').textContent = polygonName;
+    setMsg('');
+    clearLayers();
+
+    // fetch GeoJSON
+    const url = `{{ url_for('polygons.polygon_geojson') }}?name=${encodeURIComponent(polygonName)}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.error || 'Failed to load polygon GeoJSON');
+    }
+
+    const hasTop = !!data.top;
+    const hasBottom = !!data.bottom;
+    updateToggleAvailability(hasTop, hasBottom);
+
+    // Create layers (do not add if toggle off)
+    if (hasTop) {
+      topLayer = L.geoJSON(data.top, {
+        style: { weight: 3 } // TOP: solid
+      });
+      if (document.getElementById('chkTop').checked) topLayer.addTo(polyMap);
+    }
+
+    if (hasBottom) {
+      bottomLayer = L.geoJSON(data.bottom, {
+        style: { weight: 3, dashArray: '6 6' } // BOTTOM: dashed
+      });
+      if (document.getElementById('chkBottom').checked) bottomLayer.addTo(polyMap);
+    }
+
+    if (!hasTop && !hasBottom) {
+      setMsg('No geometry available (TOP/BOTTOM is NULL). Try Rebuild.');
+      polyMap.setView([0, 0], 2);
+      return;
+    }
+
+    // Fit bounds using available layers (even if currently hidden)
+    const bounds = [];
+    if (topLayer) bounds.push(topLayer.getBounds());
+    if (bottomLayer) bounds.push(bottomLayer.getBounds());
+
+    let b = bounds[0];
+    for (let i = 1; i < bounds.length; i++) b = b.extend(bounds[i]);
+    polyMap.fitBounds(b.pad(0.1));
+  }
+
+  // Hook modal show/hide
+  const modalEl = document.getElementById('polygonMapModal');
+
+  modalEl.addEventListener('shown.bs.modal', async (event) => {
+    ensureMap();
+
+    // Leaflet must recompute size after modal is visible
+    setTimeout(() => polyMap.invalidateSize(), 50);
+
+    const btn = event.relatedTarget;
+    const polygonName = btn.getAttribute('data-polygon-name');
+
+    try {
+      await loadPolygonToMap(polygonName);
+    } catch (e) {
+      setMsg(e.message);
+    }
+  });
+
+  modalEl.addEventListener('hidden.bs.modal', () => {
+    setMsg('');
+    // optional: clear layers on close
+    // clearLayers();
+  });
+</script>
+
+
+
+
+
+
+
 {% endblock %}

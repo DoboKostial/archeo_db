@@ -229,18 +229,52 @@ def get_all_objects(conn):
 
 def get_polygons_list():
     """
-    Returns (id, polygon_name, number_of_points, srid) for all polygons.
-    `ST_SRID(geom)` may be NULL if geom is not yet built.
+    Minimal list for UI.
+
+    Returns:
+      id (row_number for display),
+      name (polygon_name),
+      npoints (sum of vertices in geom_top+geom_bottom),
+      srid (from first non-null geom; NULL if SRID=0),
+      parent (parent_name),
+      allocation_reason (text),
+      has_top (binding exists),
+      has_bottom (binding exists)
     """
     return """
         SELECT
-            p.id,
-            p.polygon_name,
-            COALESCE(ST_NPoints(p.geom), 0) AS npoints,
-            ST_SRID(p.geom)                 AS srid
-        FROM tab_polygons AS p
+            ROW_NUMBER() OVER (ORDER BY p.polygon_name) AS id,
+            p.polygon_name                              AS name,
+
+            (COALESCE(ST_NPoints(p.geom_top), 0) +
+             COALESCE(ST_NPoints(p.geom_bottom), 0))    AS npoints,
+
+            NULLIF(
+              ST_SRID(COALESCE(p.geom_top, p.geom_bottom)),
+              0
+            )                                           AS srid,
+
+            p.parent_name                               AS parent,
+            p.allocation_reason::text                   AS allocation_reason,
+
+            EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_top bt
+              WHERE bt.ref_polygon = p.polygon_name
+              LIMIT 1
+            )                                           AS has_top,
+
+            EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_bottom bb
+              WHERE bb.ref_polygon = p.polygon_name
+              LIMIT 1
+            )                                           AS has_bottom
+
+        FROM tab_polygons p
         ORDER BY p.polygon_name;
     """
+
 
 
 # ----------------------------------------------------
@@ -278,10 +312,6 @@ def insert_polygon_sql(polygon_name, points, source_epsg):
 # ----------------------------------------------------
 
 def insert_polygon_manual_sql():
-    """
-    Insert/Upsert polygon metadata (no geometries). 'parent_name' optional.
-    Params: (polygon_name, parent_name, allocation_reason, notes)
-    """
     return """
         INSERT INTO tab_polygons (polygon_name, parent_name, allocation_reason, notes)
         VALUES (%s, NULLIF(%s,''), %s, NULLIF(%s,''))
@@ -293,18 +323,12 @@ def insert_polygon_manual_sql():
     """
 
 def delete_bindings_top_sql():
-    """Delete all TOP bindings for a polygon. Params: (polygon_name,)"""
     return "DELETE FROM tab_polygon_geopts_binding_top WHERE ref_polygon=%s;"
 
 def delete_bindings_bottom_sql():
-    """Delete all BOTTOM bindings for a polygon. Params: (polygon_name,)"""
     return "DELETE FROM tab_polygon_geopts_binding_bottom WHERE ref_polygon=%s;"
 
 def insert_binding_top_sql():
-    """
-    Insert one TOP range (FROM..TO) for a polygon.
-    Params: (ref_polygon, pts_from, pts_to)
-    """
     return """
         INSERT INTO tab_polygon_geopts_binding_top (ref_polygon, pts_from, pts_to)
         VALUES (%s, %s, %s)
@@ -312,14 +336,22 @@ def insert_binding_top_sql():
     """
 
 def insert_binding_bottom_sql():
-    """
-    Insert one BOTTOM range (FROM..TO) for a polygon.
-    Params: (ref_polygon, pts_from, pts_to)
-    """
     return """
         INSERT INTO tab_polygon_geopts_binding_bottom (ref_polygon, pts_from, pts_to)
         VALUES (%s, %s, %s)
         ON CONFLICT (ref_polygon, pts_from, pts_to) DO NOTHING;
+    """
+
+
+def select_polygons_with_bindings_sql():
+    return """
+        SELECT DISTINCT ref_polygon
+        FROM (
+          SELECT ref_polygon FROM tab_polygon_geopts_binding_top
+          UNION
+          SELECT ref_polygon FROM tab_polygon_geopts_binding_bottom
+        ) s
+        ORDER BY ref_polygon;
     """
 
 def rebuild_geom_sql():
@@ -329,16 +361,97 @@ def rebuild_geom_sql():
     """
     return "SELECT rebuild_polygon_geoms_from_geopts(%s);"
 
-def select_polygons_with_bindings_sql():
-    """Select polygon names that have any TOP/BOTTOM bindings."""
+def find_geopts_srid_sql():
+    """
+    Returns SRID assigned to tab_geopts.pts_geom typmod (after set_project_srid).
+    Casts current_schema() to text to match PostGIS Find_SRID signature.
+    """
+    return "SELECT Find_SRID(current_schema()::text, 'tab_geopts'::text, 'pts_geom'::text);"
+
+
+
+def upsert_geopt_sql():
+    """
+    Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.
+    Params: (id_pts, x_src, y_src, h_src, source_epsg, target_srid, h_src, code)
+    Note: Z (h) is stored as provided (no vertical transform).
+    """
     return """
-        SELECT DISTINCT ref_polygon
-        FROM (
-          SELECT ref_polygon FROM tab_polygon_geopts_binding_top
-          UNION
-          SELECT ref_polygon FROM tab_polygon_geopts_binding_bottom
-        ) s
-        ORDER BY ref_polygon;
+        WITH p AS (
+            SELECT ST_Transform(
+                       ST_SetSRID(ST_MakePoint(%s, %s, %s), %s),
+                       %s
+                   ) AS g
+        )
+        INSERT INTO tab_geopts (id_pts, x, y, h, code)
+        SELECT
+            %s,
+            ST_X(p.g),
+            ST_Y(p.g),
+            %s,
+            NULLIF(%s,'')
+        FROM p
+        ON CONFLICT (id_pts) DO UPDATE SET
+            x    = EXCLUDED.x,
+            y    = EXCLUDED.y,
+            h    = EXCLUDED.h,
+            code = EXCLUDED.code;
+    """
+
+def polygon_geoms_geojson_sql():
+    """
+    Returns (geom_top_geojson, geom_bottom_geojson) for a polygon_name.
+    Geoms are transformed to EPSG:4326 and forced to 2D for Leaflet.
+    Params: (polygon_name,)
+    """
+    return """
+        SELECT
+            CASE
+              WHEN geom_top IS NULL THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(ST_Transform(geom_top, 4326)))
+            END AS top_gj,
+            CASE
+              WHEN geom_bottom IS NULL THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(ST_Transform(geom_bottom, 4326)))
+            END AS bottom_gj
+        FROM tab_polygons
+        WHERE polygon_name = %s;
+    """
+
+
+def find_polygons_srid_sql():
+    """
+    Returns SRID of tab_polygons geometry typmod.
+    Prefer geom_top, fallback to geom_bottom.
+    Casts to text to satisfy Find_SRID signature.
+    """
+    return """
+        SELECT NULLIF(Find_SRID(current_schema()::text, 'tab_polygons'::text, 'geom_top'::text), 0) AS srid
+        UNION ALL
+        SELECT NULLIF(Find_SRID(current_schema()::text, 'tab_polygons'::text, 'geom_bottom'::text), 0) AS srid
+        LIMIT 1;
+    """
+
+
+def polygons_geojson_top_bottom_sql():
+    """
+    Returns (polygon_name, top_geojson, bottom_geojson) for all polygons.
+    Geoms are forced to 2D for shapefile.
+    """
+    return """
+        SELECT
+            polygon_name,
+            CASE
+              WHEN geom_top IS NULL THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(geom_top))
+            END AS top_gj,
+            CASE
+              WHEN geom_bottom IS NULL THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(geom_bottom))
+            END AS bottom_gj
+        FROM tab_polygons
+        WHERE geom_top IS NOT NULL OR geom_bottom IS NOT NULL
+        ORDER BY polygon_name;
     """
 
 
@@ -356,13 +469,6 @@ def list_authors_sql():
 # -------------------------
 # Shapefile export helpers
 # -------------------------
-
-def find_polygons_srid_sql():
-    """
-    Returns the SRID of tab_polygons.geom for the current schema.
-    """
-    return "SELECT Find_SRID(current_schema(), 'tab_polygons', 'geom');"
-
 
 def srtext_by_srid_sql():
     """

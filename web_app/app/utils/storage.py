@@ -1,10 +1,7 @@
 # app/utils/storage.py
 # handlers for storage and paths manipulation
 
-import os
-import re
-import time
-import shutil
+import os, re, time, shutil
 from typing import Tuple
 from werkzeug.datastructures import FileStorage
 
@@ -86,3 +83,21 @@ def delete_media_files(file_path: str, thumb_path: str) -> Tuple[bool, bool]:
     except Exception:
         pass
     return fd, td
+
+
+
+def _sanitize_filename(name: str) -> Tuple[str, str]:
+    base, ext = os.path.splitext(name)
+    ext = ext.lower().lstrip(".")
+    safe_base = re.sub(r"[^A-Za-z0-9._-]", "_", base).strip("_")
+    if not safe_base or not ext:
+        raise ValueError("Invalid filename after sanitization.")
+    return safe_base, ext
+
+# Public helper: keep extension, return full sanitized name ---
+# Return safe filename preserving (lowercased) extension.
+# Example: 'My Bad File.JPG' -> 'My_Bad_File.jpg'
+def sanitize_filename_keep_ext(name: str) -> str:
+    base, ext = _sanitize_filename(name)
+    return f"{base}.{ext}"
+

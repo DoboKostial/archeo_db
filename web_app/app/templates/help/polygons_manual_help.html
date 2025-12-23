@@ -1,0 +1,18 @@
+<p>
+  This form creates/updates a polygon by defining ranges of measured point IDs from <code>tab_geopts</code>.
+  The geometry (<code>geom_top</code>/<code>geom_bottom</code>) is rebuilt from those points.
+</p>
+
+<ul>
+  <li><strong>Polygon name</strong>: unique polygon identifier (primary key).</li>
+  <li><strong>Parent polygon</strong>: optional, used for hierarchy.</li>
+  <li><strong>Allocation reason</strong>: required, stored in <code>tab_polygons</code>.</li>
+  <li><strong>TOP / BOTTOM ranges</strong>: enter one or more FROM–TO intervals (inclusive).</li>
+</ul>
+
+<p class="mb-2"><strong>Tips</strong></p>
+<ul class="mb-0">
+  <li>You can define only TOP or only BOTTOM (at least one side is required).</li>
+  <li>Ranges may overlap; points are deduplicated by point ID during rebuild.</li>
+  <li>If geometry is not created, check that points exist in <code>tab_geopts</code> and form a valid polygon.</li>
+</ul>
