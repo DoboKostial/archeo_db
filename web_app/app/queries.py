@@ -513,55 +513,9 @@ def polygons_geojson_sql():
         WHERE geom IS NOT NULL;
     """
 
-
-# ------------------------------------
-# Media: Photos / Sketches / Photograms
-# ------------------------------------
-# Expected tables/columns (based on our earlier DDL discussion):
-#
-# tab_photos(
-#   id_photo VARCHAR PRIMARY KEY,
-#   photo_typ TEXT NOT NULL,
-#   datum DATE NOT NULL,
-#   author VARCHAR NOT NULL REFERENCES gloss_personalia(mail),
-#   notes TEXT,
-#   mime_type TEXT NOT NULL,
-#   file_size BIGINT NOT NULL,
-#   checksum_sha256 TEXT NOT NULL,
-#   shoot_datetime TIMESTAMPTZ NULL,
-#   gps_lat DOUBLE PRECISION NULL,
-#   gps_lon DOUBLE PRECISION NULL,
-#   gps_alt DOUBLE PRECISION NULL,
-#   exif_json JSONB NULL
-# )
-#
-# tabaid_polygon_photos(ref_polygon INT REFERENCES tab_polygons(id), ref_photo VARCHAR REFERENCES tab_photos(id_photo))
-#
-# tab_sketches(
-#   id_sketch VARCHAR PRIMARY KEY,
-#   sketch_typ TEXT NOT NULL,
-#   author VARCHAR NOT NULL REFERENCES gloss_personalia(mail),
-#   datum DATE NOT NULL,
-#   notes TEXT,
-#   mime_type TEXT NOT NULL,
-#   file_size BIGINT NOT NULL,
-#   checksum_sha256 TEXT NOT NULL
-# )
-#
-# tabaid_polygon_sketches(ref_polygon INT REFERENCES tab_polygons(id), ref_sketch VARCHAR REFERENCES tab_sketches(id_sketch))
-#
-# tab_photograms(
-#   id_photogram VARCHAR PRIMARY KEY,
-#   photogram_typ TEXT NOT NULL,
-#   ref_sketch VARCHAR NULL REFERENCES tab_sketches(id_sketch),
-#   notes TEXT,
-#   mime_type TEXT NOT NULL,
-#   file_size BIGINT NOT NULL,
-#   checksum_sha256 TEXT NOT NULL
-# )
-#
-# tabaid_polygon_photograms(ref_polygon INT REFERENCES tab_polygons(id), ref_photogram VARCHAR REFERENCES tab_photograms(id_photogram))
-
+# -------------------------
+# SQLs for media handling
+# -------------------------
 
 def insert_photo_sql():
     """
@@ -585,17 +539,6 @@ def insert_photo_sql():
     """
 
 
-def bind_photo_to_polygon_sql():
-    """
-    Bind an existing photo to a polygon (M:N).
-    Params: (ref_polygon, ref_photo)
-    """
-    return """
-        INSERT INTO tabaid_polygon_photos (ref_polygon, ref_photo)
-        VALUES (%s, %s);
-    """
-
-
 def insert_sketch_sql():
     """
     Insert one sketch metadata row.
@@ -609,17 +552,6 @@ def insert_sketch_sql():
             mime_type, file_size, checksum_sha256
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-    """
-
-
-def bind_sketch_to_polygon_sql():
-    """
-    Bind an existing sketch to a polygon (M:N).
-    Params: (ref_polygon, ref_sketch)
-    """
-    return """
-        INSERT INTO tabaid_polygon_sketches (ref_polygon, ref_sketch)
-        VALUES (%s, %s);
     """
 
 
@@ -639,15 +571,35 @@ def insert_photogram_sql():
         VALUES (%s, %s, %s, %s, %s, %s);
     """
 
+# -------------------------
+# Polygons ↔ media helpers
+# -------------------------
 
-def bind_photogram_to_polygon_sql():
+def polygon_exists_sql():
+    """Check polygon exists by polygon_name. Params: (polygon_name,)"""
+    return "SELECT 1 FROM tab_polygons WHERE polygon_name = %s;"
+
+
+def link_polygon_photo_sql():
+    """Params: (polygon_name, id_photo)"""
+    return """
+        INSERT INTO tabaid_polygon_photos (ref_polygon, ref_photo)
+        VALUES (%s, %s);
     """
-    Bind an existing photogram to a polygon (M:N).
-    Params: (ref_polygon, ref_photogram)
+
+def link_polygon_sketch_sql():
+    """Params: (polygon_name, id_sketch)"""
+    return """
+        INSERT INTO tabaid_polygon_sketches (ref_polygon, ref_sketch)
+        VALUES (%s, %s);
     """
+
+def link_polygon_photogram_sql():
+    """Params: (polygon_name, id_photogram)"""
     return """
         INSERT INTO tabaid_polygon_photograms (ref_polygon, ref_photogram)
         VALUES (%s, %s);
     """
+
 
 

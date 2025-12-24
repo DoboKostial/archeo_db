@@ -2,15 +2,15 @@
 # logic for archeological polygons
 
 from io import BytesIO
+import os
+from psycopg2.extras import Json
 import json
 import zipfile
 import shapefile  # pyshp
 
-from flask import (
-    Blueprint, request, render_template, redirect, url_for,
-    flash, session, send_file, jsonify
-)
+from flask import Blueprint, request, render_template, redirect, url_for, flash, session, send_file, jsonify
 
+from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db
@@ -18,25 +18,22 @@ from app.utils.geom_utils import process_polygon_upload
 from app.utils import storage
 from app.utils.validators import validate_extension, validate_mime, sha256_file
 from app.utils.images import detect_mime, make_thumbnail, extract_exif
-from config import Config
 
 # SQLs from app/queries.py
 from app.queries import (
     insert_polygon_manual_sql, delete_bindings_top_sql, delete_bindings_bottom_sql,
     insert_binding_top_sql, insert_binding_bottom_sql, rebuild_geom_sql, select_polygons_with_bindings_sql,
     srtext_by_srid_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
-    polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql, get_polygon_parent_sql, reparent_children_sql, delete_polygon_sql
+    polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql, get_polygon_parent_sql, reparent_children_sql, delete_polygon_sql,
+    polygon_exists_sql, insert_photo_sql, insert_sketch_sql, insert_photogram_sql, link_polygon_photo_sql, link_polygon_sketch_sql, link_polygon_photogram_sql
 )
 
 
 polygons_bp = Blueprint('polygons', __name__)
 
 # Local mapping for polygon↔media link tables (so we don't touch media_map.py)
-POLY_LINKS = {
-    "photos":     {"table": "tabaid_polygon_photos",     "fk_media": "ref_photo"},
-    "sketches":   {"table": "tabaid_polygon_sketches",   "fk_media": "ref_sketch"},
-    "photograms": {"table": "tabaid_polygon_photograms", "fk_media": "ref_photogram"},
-}
+from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_POLYGON
+
 MEDIA_DIRS = Config.MEDIA_DIRS  # {"photos": "photos", ...}
 ALLOWED_EXT = Config.ALLOWED_EXTENSIONS
 ALLOWED_MIME = Config.ALLOWED_MIME
@@ -496,200 +493,198 @@ def download_polygons():
         except Exception:
             pass
 
+# ---------- GRAPHIC MEDIA FOR POLYGONS ----------
 
+@polygons_bp.post("/polygons/upload/<media_type>")
+@require_selected_db
+def upload_polygon_media(media_type):
+    selected_db = session["selected_db"]
 
-# ---------- MEDIA UPLOAD (photos/sketches/photograms) ----------
-def _handle_media_upload(kind: str):
-    """
-    Common handler for photos/sketches/photograms uploads bound to a polygon.
-    Uses ONLY existing utils functions.
-    """
-    assert kind in ("photos", "sketches", "photograms")
-    selected_db = session.get('selected_db')
-    dbname = selected_db  # used for make_pk()
+    # 1) validate media_type
+    if media_type not in MEDIA_TABLES:
+        flash("Invalid media type.", "danger")
+        return redirect(url_for("polygons.polygons"))
+    if media_type not in LINK_TABLES_POLYGON:
+        flash("This media type is not supported for polygons.", "danger")
+        return redirect(url_for("polygons.polygons"))
 
-    ref_polygon_raw = request.form.get('ref_polygon', '').strip()
-    if not ref_polygon_raw:
-        raise ValueError("Polygon ID is required.")
-    try:
-        ref_polygon = int(ref_polygon_raw)
-    except Exception:
-        raise ValueError("Polygon ID must be integer.")
+    # 2) polygon_name (TEXT PK)
+    polygon_name = (request.form.get("polygon_name") or "").strip()
+    if not polygon_name:
+        flash("You must select a polygon first.", "warning")
+        return redirect(url_for("polygons.polygons"))
 
-    # common meta
-    notes = (request.form.get('notes') or '').strip()
-
-    # kind-specific extras
-    extras = {}
-    if kind == "photos":
-        extras["photo_typ"] = (request.form.get('photo_typ') or '').strip()
-        extras["datum"]     = (request.form.get('datum') or '').strip()  # 'YYYY-MM-DD'
-        extras["author"]    = (request.form.get('author') or '').strip()
-    elif kind == "sketches":
-        extras["sketch_typ"] = (request.form.get('sketch_typ') or '').strip()
-        extras["author"]     = (request.form.get('author') or '').strip()
-        extras["datum"]      = (request.form.get('datum') or '').strip()
-    else:  # photograms
-        extras["photogram_typ"] = (request.form.get('photogram_typ') or '').strip()
-        extras["ref_sketch"]    = (request.form.get('ref_sketch') or '').strip() or None
-
-    # files
-    files = request.files.getlist('files[]')
+    # 3) files input (name="files" multiple)
+    files = request.files.getlist("files")
     if not files:
-        raise ValueError("Select at least one file.")
+        flash("No files provided.", "warning")
+        return redirect(url_for("polygons.polygons"))
 
-    saved = 0
-    failed = []
-
+    # 4) verify polygon exists
     conn = get_terrain_connection(selected_db)
-    conn.autocommit = False
     try:
         with conn.cursor() as cur:
-            for fs in files:
-                try:
-                    # Build PK based on DB prefix + sanitized original name
-                    pk = storage.make_pk(dbname, fs.filename)
-
-                    # Save to uploads tmp
-                    tmp_path, fsize = storage.save_to_uploads(Config.UPLOAD_FOLDER, fs)
-
-                    # Validate by ext + MIME
-                    ext = pk.rsplit('.', 1)[-1].lower()
-                    validate_extension(ext, ALLOWED_EXT)
-                    mime = detect_mime(tmp_path)
-                    validate_mime(mime, ALLOWED_MIME)
-
-                    # Checksums
-                    checksum = sha256_file(tmp_path)
-
-                    # Final paths
-                    subdir = MEDIA_DIRS[kind]
-                    final_path, thumb_path = storage.final_paths(Config.DATA_DIR, dbname, subdir, pk)
-
-                    # Extract EXIF only for photos
-                    shoot_dt = gps_lat = gps_lon = gps_alt = None
-                    exif_json = None
-                    if kind == "photos" and mime == "image/jpeg":
-                        shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = extract_exif(tmp_path)
-
-                    # Move into place
-                    storage.move_into_place(tmp_path, final_path)
-
-                    # Thumbnail if raster
-                    try:
-                        make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
-                    except Exception:
-                        # thumb is not critical
-                        pass
-
-                    # Insert media row + bind to polygon
-                    if kind == "photos":
-                        # tab_photos insert
-                        cur.execute("""
-                            INSERT INTO tab_photos(
-                                id_photo, photo_typ, datum, author, notes,
-                                mime_type, file_size, checksum_sha256,
-                                shoot_datetime, gps_lat, gps_lon, gps_alt, exif_json
-                            )
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        """, (
-                            pk, extras["photo_typ"] or '', extras["datum"] or None, extras["author"] or None, notes or None,
-                            mime, fsize, checksum,
-                            shoot_dt, gps_lat, gps_lon, gps_alt, json.dumps(exif_json) if exif_json is not None else None
-                        ))
-                        # bind
-                        cur.execute(f"""
-                            INSERT INTO {POLY_LINKS['photos']['table']} (ref_polygon, {POLY_LINKS['photos']['fk_media']})
-                            VALUES (%s, %s)
-                        """, (ref_polygon, pk))
-
-                    elif kind == "sketches":
-                        cur.execute("""
-                            INSERT INTO tab_sketches(
-                                id_sketch, sketch_typ, author, datum, notes,
-                                mime_type, file_size, checksum_sha256
-                            )
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-                        """, (
-                            pk, extras["sketch_typ"] or '', extras["author"] or None, extras["datum"] or None, notes or None,
-                            mime, fsize, checksum
-                        ))
-                        cur.execute(f"""
-                            INSERT INTO {POLY_LINKS['sketches']['table']} (ref_polygon, {POLY_LINKS['sketches']['fk_media']})
-                            VALUES (%s, %s)
-                        """, (ref_polygon, pk))
-
-                    else:  # photograms
-                        cur.execute("""
-                            INSERT INTO tab_photograms(
-                                id_photogram, photogram_typ, ref_sketch, notes,
-                                mime_type, file_size, checksum_sha256
-                            )
-                            VALUES (%s,%s,%s,%s,%s,%s,%s)
-                        """, (
-                            pk, extras["photogram_typ"] or '', extras["ref_sketch"], notes or None,
-                            mime, fsize, checksum
-                        ))
-                        cur.execute(f"""
-                            INSERT INTO {POLY_LINKS['photograms']['table']} (ref_polygon, {POLY_LINKS['photograms']['fk_media']})
-                            VALUES (%s, %s)
-                        """, (ref_polygon, pk))
-
-                    saved += 1
-
-                except Exception as e:
-                    # clean tmp if still there
-                    try:
-                        storage.cleanup_upload(tmp_path)
-                    except Exception:
-                        pass
-                    logger.warning(f"[{selected_db}] media upload failed for {fs.filename}: {e}")
-                    failed.append(f"{fs.filename}: {e}")
-
-        conn.commit()
-        if saved:
-            flash(f"Uploaded {saved} file(s)." + (f" {len(failed)} failed." if failed else ""), "success")
-        if failed:
-            flash("Failed: " + "; ".join(failed), "warning")
-
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"[{selected_db}] media upload fatal error: {e}")
-        flash(f"Upload failed: {e}", "danger")
-
+            cur.execute(polygon_exists_sql(), (polygon_name,))
+            if not cur.fetchone():
+                flash(f'Polygon "{polygon_name}" not found.', "danger")
+                return redirect(url_for("polygons.polygons"))
     finally:
         try:
-            storage.cleanup_upload(tmp_path)  # best-effort
+            conn.close()
         except Exception:
             pass
-        conn.close()
 
+    # 5) metadata from form (compatible with existing INSERT SQLs)
+    notes = (request.form.get("notes") or "").strip() or None
 
-@polygons_bp.route('/polygons/upload/photos', methods=['POST'])
-@require_selected_db
-def upload_polygon_photos():
-    try:
-        _handle_media_upload("photos")
-    except Exception as e:
-        flash(str(e), "danger")
-    return redirect(url_for('polygons.polygons'))
+    # read once (same for all uploaded files in this submit)
+    if media_type == "photos":
+        photo_typ = (request.form.get("photo_typ") or "").strip()
+        datum = (request.form.get("datum") or "").strip() or None  # YYYY-MM-DD
+        author = (request.form.get("author") or "").strip() or None
+    elif media_type == "sketches":
+        sketch_typ = (request.form.get("sketch_typ") or "").strip()
+        author = (request.form.get("author") or "").strip() or None
+        datum = (request.form.get("datum") or "").strip() or None
+    else:  # photograms
+        photogram_typ = (request.form.get("photogram_typ") or "").strip()
 
+    ok, failed = 0, []
 
-@polygons_bp.route('/polygons/upload/sketches', methods=['POST'])
-@require_selected_db
-def upload_polygon_sketches():
-    try:
-        _handle_media_upload("sketches")
-    except Exception as e:
-        flash(str(e), "danger")
-    return redirect(url_for('polygons.polygons'))
+    for f in files:
+        tmp_path = None
+        final_path = None
+        thumb_path = None
 
+        try:
+            # A) temp store
+            tmp_path, tmp_size = storage.save_to_uploads(Config.UPLOAD_FOLDER, f)
 
-@polygons_bp.route('/polygons/upload/photograms', methods=['POST'])
-@require_selected_db
-def upload_polygon_photograms():
-    try:
-        _handle_media_upload("photograms")
-    except Exception as e:
-        flash(str(e), "danger")
-    return redirect(url_for('polygons.polygons'))
+            # B) pk + ext validation
+            pk_name = storage.make_pk(selected_db, f.filename)
+            storage.validate_pk(pk_name)
+            ext = pk_name.rsplit(".", 1)[-1].lower()
+            validate_extension(ext, Config.ALLOWED_EXTENSIONS)
+
+            # C) final paths + collision
+            media_dir = Config.MEDIA_DIRS[media_type]
+            final_path, thumb_path = storage.final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
+            if os.path.exists(final_path):
+                raise ValueError(f"File already exists: {pk_name}")
+
+            # D) move into place then MIME validate
+            storage.move_into_place(tmp_path, final_path)
+            tmp_path = None
+
+            mime = detect_mime(final_path)
+            validate_mime(mime, Config.ALLOWED_MIME)
+            checksum = sha256_file(final_path)
+
+            # thumb best-effort
+            try:
+                make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
+            except Exception:
+                pass
+
+            # E) EXIF for photos only (JPEG/TIFF)
+            shoot_dt = gps_lat = gps_lon = gps_alt = None
+            exif_json = {}
+            if media_type == "photos" and mime in ("image/jpeg", "image/tiff"):
+                sdt, la, lo, al, exif = extract_exif(final_path)
+                shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = sdt, la, lo, al, exif
+
+            # F) DB insert + link (commit per file)
+            conn2 = get_terrain_connection(selected_db)
+            cur2 = conn2.cursor()
+            try:
+                if media_type == "photos":
+                    cur2.execute(
+                        insert_photo_sql(),
+                        (
+                            pk_name,
+                            photo_typ or "",
+                            datum,
+                            author,
+                            notes,
+                            mime,
+                            os.path.getsize(final_path),
+                            checksum,
+                            shoot_dt, gps_lat, gps_lon, gps_alt,
+                            Json(exif_json),
+                        )
+                    )
+                    cur2.execute(link_polygon_photo_sql(), (polygon_name, pk_name))
+
+                elif media_type == "sketches":
+                    cur2.execute(
+                        insert_sketch_sql(),
+                        (
+                            pk_name,
+                            sketch_typ or "",
+                            author,
+                            datum,
+                            notes,
+                            mime,
+                            os.path.getsize(final_path),
+                            checksum,
+                        )
+                    )
+                    cur2.execute(link_polygon_sketch_sql(), (polygon_name, pk_name))
+
+                else:  # photograms (ref_sketch ignored for now)
+                    cur2.execute(
+                        insert_photogram_sql(),
+                        (
+                            pk_name,
+                            photogram_typ or "",
+                            notes,
+                            mime,
+                            os.path.getsize(final_path),
+                            checksum,
+                        )
+                    )
+                    cur2.execute(link_polygon_photogram_sql(), (polygon_name, pk_name))
+
+                conn2.commit()
+                ok += 1
+
+            except Exception:
+                conn2.rollback()
+                # cleanup FS garbage if DB fails
+                try:
+                    storage.delete_media_files(final_path, thumb_path)
+                except Exception:
+                    pass
+                raise
+
+            finally:
+                try:
+                    cur2.close()
+                except Exception:
+                    pass
+                try:
+                    conn2.close()
+                except Exception:
+                    pass
+
+        except Exception as e:
+            failed.append(f"{f.filename}: {e}")
+            logger.warning(f"[{selected_db}] polygon media upload failed ({media_type}) {f.filename}: {e}")
+
+        finally:
+            if tmp_path:
+                try:
+                    storage.cleanup_upload(tmp_path)
+                except Exception:
+                    pass
+
+    if failed:
+        flash(
+            f"Uploaded {ok} file(s), {len(failed)} failed: " + "; ".join(failed),
+            "warning" if ok else "danger"
+        )
+    else:
+        flash(f"Uploaded {ok} file(s).", "success")
+
+    logger.info(f"[{selected_db}] polygon-media upload: polygon={polygon_name} type={media_type} ok={ok} failed={len(failed)}")
+    return redirect(url_for("polygons.polygons"))
