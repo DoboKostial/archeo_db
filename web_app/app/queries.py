@@ -601,5 +601,27 @@ def link_polygon_photogram_sql():
         VALUES (%s, %s);
     """
 
+def polygons_geojson_top_bottom_sql():
+    return """
+        SELECT
+            polygon_name,
+            CASE WHEN geom_top IS NOT NULL
+              THEN ST_AsGeoJSON(ST_Transform(ST_Force2D(geom_top), 4326))
+              ELSE NULL END AS top_gj,
+            CASE WHEN geom_bottom IS NOT NULL
+              THEN ST_AsGeoJSON(ST_Transform(ST_Force2D(geom_bottom), 4326))
+              ELSE NULL END AS bottom_gj
+        FROM tab_polygons
+        ORDER BY polygon_name;
+    """
+
+
+def polygons_hierarchy_sql():
+    """Returns (polygon_name, parent_name) for hierarchy diagram."""
+    return """
+        SELECT polygon_name, parent_name
+        FROM tab_polygons
+        ORDER BY polygon_name;
+    """
 
 

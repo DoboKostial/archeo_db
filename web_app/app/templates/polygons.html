@@ -9,14 +9,14 @@
 
 <div class="container mt-3">
 
-  <!-- Row 1: two top panels (manual / TXT) -->
+  <!-- Row 1: two top panels (manual / TXT polygon insert) -->
   <div class="row g-3">
   
   <!-- Manual create -->
 <div class="col-md-6">
   <div class="p-3 rounded-3 border bg-light">
     <h4 class="mb-3 d-flex align-items-center gap-2">
-  Manual polygon (by geodetic point ranges)
+  Manual polygon (by point ranges in DB)
   <button type="button"
           class="btn btn-sm btn-outline-secondary"
           data-bs-toggle="modal"
@@ -122,6 +122,7 @@
   </div>
 </div>
 
+<!-- JS adding another row/points bulk -->
 <script>
   function addRangeRow(side) {
     const containerId = (side === 'top') ? 'top-ranges-container' : 'bottom-ranges-container';
@@ -188,9 +189,12 @@
         <div class="col-md-6">
           <label class="form-label">Source EPSG</label>
           <select name="epsg" class="form-control" required>
-            <option value="5514">S-JTSK / Krovak East North (EPSG:5514)</option>
-            <option value="32633">WGS 84 / UTM zone 33N (EPSG:32633)</option>
+            <option value="5514">S-JTSK / Křovák East North (EPSG:5514)</option>
             <option value="4326">WGS 84 (EPSG:4326)</option>
+            <option value="3857">Web Mercator (EPSG:3857)</option>
+            <option value="32633">UTM zone 33N (EPSG:32633)</option>
+            <option value="32633">UTM zone 43N (EPSG:32643)</option>
+            <option value="3035">ETRS89 / LAEA Europe (EPSG:3035)</option>
           </select>
         </div>
 
@@ -237,19 +241,30 @@
 </div>
 
 
-<!-- Row 2: bottom list (full width) -->
+<!-- Row 2: Existing polygons list (full width) -->
 <div class="row g-3 mt-2">
   <!-- Existing polygons + actions -->
   <div class="col-12">
     <div class="p-3 rounded-3 border">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h4 class="mb-0">Existing polygons</h4>
-        <div class="btn-group">
+        <!-- Here buttons for actions -->
+        <div class="d-flex gap-2">
           <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
             <button type="submit" class="btn btn-outline-warning btn-sm">Rebuild geometry (all)</button>
           </form>
+
+          <button type="button" class="btn btn-success btn-sm" 
+          data-bs-toggle="modal"  data-bs-target="#modalShowAllPolygons"> Show all
+          </button>
+          
+          <button type="button" class="btn btn-success btn-sm"
+          data-bs-toggle="modal" data-bs-target="#modalShowPolygonHierarchy"> Show hierarchy
+          </button>
+                       
           <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success btn-sm">Export SHP</a>
         </div>
+      
       </div>
 
       {% if polygons and polygons|length %}
@@ -260,12 +275,11 @@
                 <th style="width:70px;">ID</th>
                 <th>Name</th>
                 <th style="width:120px;">Parent</th>
-                <th style="width:220px;">Allocation</th>
+                <th style="width:250px;">Allocation reason</th>
                 <th class="text-center" style="width:80px;">TOP</th>
                 <th class="text-center" style="width:80px;">BOTTOM</th>
-                <th class="text-end" style="width:110px;"># POINTS</th>
-                <th class="text-end" style="width:90px;">SRID</th>
-                <th class="text-end" style="width:180px;">Seeing is believing</th>
+                <th class="text-end" style="width:100px;">POINTS NR.</th>
+                <th class="text-end" style="width:120px;">SRID / EPSG</th>
                 <th class="text-end" style="width:50px;">DELETE</th>
               </tr>
             </thead>
@@ -315,16 +329,6 @@
 
                 <td class="text-end">
                   <button type="button"
-                  class="btn btn-sm btn-outline-primary"
-                  data-bs-toggle="modal"
-                  data-bs-target="#polygonMapModal"
-                  data-polygon-name="{{ p.name }}">
-                  Show
-                  </button>
-                </td>
-
-                <td class="text-end">
-                  <button type="button"
                   class="btn btn-sm btn-outline-danger"
                   data-bs-toggle="modal"
                   data-bs-target="#deletePolygonModal"
@@ -347,7 +351,261 @@
 
 
 
+<!-- 3. row ========= GRAPHIC DOCUMENTATION (for polygons) ========= -->
+<div class="container mt-4">
+  <fieldset class="border p-3 bg-success-subtle">
+    <legend class="w-auto px-2">Graphic documentation</legend>
 
+    <!-- Polygon selector -->
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Select polygon</label>
+        <select id="polyDocSelect" class="form-select">
+          <option value="" selected>-- select polygon --</option>
+          {% for p in polygons %}
+            <option value="{{ p.name }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <div class="alert alert-light border mb-0 py-2">
+          <span class="text-muted">Selected:</span>
+          <strong id="polyDocSelectedLabel" class="ms-1">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary polyDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalPolyPhotos">
+        Upload photos
+      </button>
+      <button type="button" class="btn btn-secondary polyDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalPolySketches">
+        Upload sketches
+      </button>
+      <button type="button" class="btn btn-warning polyDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalPolyPhotograms">
+        Upload photograms
+      </button>
+    </div>
+
+    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+  </fieldset>
+</div>
+
+<!-- Photos modal - opens window for photo selection -->
+<div class="modal fade" id="modalPolyPhotos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form id="formPolyPhotos"
+          method="post"
+          action="{{ url_for('polygons.upload_polygon_media', media_type='photos') }}"
+          enctype="multipart/form-data"
+          class="modal-content polyDocForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload photos to polygon</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="polygon_name" class="polyDocHidden" value="">
+
+        <div id="filesPolyPhotos" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesPolyPhotos')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Photo type</label>
+            <input type="text" name="photo_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Polygon: <span class="polyDocPreview"></span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- Sketches modal - opens window for sketches selection-->
+ <div class="modal fade" id="modalPolySketches" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form id="formPolySketches"
+          method="post"
+          action="{{ url_for('polygons.upload_polygon_media', media_type='sketches') }}"
+          enctype="multipart/form-data"
+          class="modal-content polyDocForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload sketches to polygon</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="polygon_name" class="polyDocHidden" value="">
+
+        <div id="filesPolySketches" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesPolySketches')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Sketch type</label>
+            <input type="text" name="sketch_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Polygon: <span class="polyDocPreview"></span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Photograms modal - opens window for photograms selection -->
+ <div class="modal fade" id="modalPolyPhotograms" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form id="formPolyPhotograms"
+          method="post"
+          action="{{ url_for('polygons.upload_polygon_media', media_type='photograms') }}"
+          enctype="multipart/form-data"
+          class="modal-content polyDocForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload photograms to polygon</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="polygon_name" class="polyDocHidden" value="">
+
+        <div id="filesPolyPhotograms" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesPolyPhotograms')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Photogram type</label>
+            <input type="text" name="photogram_typ" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Polygon: <span class="polyDocPreview"></span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- JS logic for add another inputs in modals for graphic documentation -->
+<script>
+  // Add another <input type="file" ...> into a container
+  function addFileInput(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.name = 'files';
+    inp.className = 'form-control mb-2';
+    inp.multiple = true;
+    inp.accept = '.jpeg,.jpg,.png,.tiff,.svg,.pdf';
+
+    container.appendChild(inp);
+  }
+
+  (function () {
+    const sel = document.getElementById('polyDocSelect');
+    const label = document.getElementById('polyDocSelectedLabel');
+
+    // all hidden polygon_name inputs in modals
+    const hiddenInputs = document.querySelectorAll('.polyDocHidden');
+
+    // previews in modal footers
+    const previews = document.querySelectorAll('.polyDocPreview');
+
+    // optional: disable opening modal until polygon selected
+    const modalButtons = document.querySelectorAll('.polyDocBtn');
+
+    function applyPolygon() {
+      const name = (sel.value || '').trim();
+
+      label.textContent = name ? name : '—';
+      hiddenInputs.forEach(i => i.value = name);
+      previews.forEach(p => p.textContent = name ? name : '—');
+
+      // UX guard: disable buttons until selection
+      modalButtons.forEach(b => b.disabled = !name);
+    }
+
+    sel.addEventListener('change', applyPolygon);
+    applyPolygon();
+
+    // Guard on submit: ensure polygon_name present
+    document.querySelectorAll('.polyDocForm').forEach(form => {
+      form.addEventListener('submit', (e) => {
+        const val = form.querySelector('.polyDocHidden')?.value?.trim();
+        if (!val) {
+          e.preventDefault();
+          alert('Please select a polygon first.');
+        }
+      });
+    });
+  })();
+</script>
+
+
+<!-- Providing numbering of rows in polygons list -->
 <script>
 function addRangeRow() {
   const container = document.getElementById('ranges-container');
@@ -370,7 +628,7 @@ function addRangeRow() {
 }
 </script>
 
-
+<!-- ==== HERE MODALS FOR HELP IN WEB INTERFACE -->
 <!-- Help modal: Manual polygon -->
 <div class="modal fade" id="helpManualPolygon" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -409,7 +667,8 @@ function addRangeRow() {
 
 
 
-<!-- Polygon map preview modal -->
+<!-- ==== HERE MODALS FOR MAP ETC... -->
+<!-- Polygon map preview modal - for one polygon from polygon list -->
 <div class="modal fade" id="polygonMapModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content">
@@ -433,7 +692,7 @@ function addRangeRow() {
             <label class="form-check-label" for="chkBottom">Show BOTTOM</label>
           </div>
 
-          <small class="text-muted">Map uses WGS84 (EPSG:4326)</small>
+          <small class="text-muted">Map uses WGS844 (EPSG:4326)</small>
         </div>
 
         <!-- Map -->
@@ -451,7 +710,6 @@ function addRangeRow() {
     </div>
   </div>
 </div>
-
 
 <!-- Delete polygon confirm modal -->
 <div class="modal fade" id="deletePolygonModal" tabindex="-1" aria-hidden="true">
@@ -485,6 +743,7 @@ function addRangeRow() {
   </div>
 </div>
 
+
 <script>
   // Fill delete modal with polygon name
   const deleteModalEl = document.getElementById('deletePolygonModal');
@@ -497,146 +756,275 @@ function addRangeRow() {
 </script>
 
 
+<!-- Modal: Show all polygons (Leaflet) -->
+
+<div class="modal fade" id="modalShowAllPolygons" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">All polygons (TOP + BOTTOM)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-light border py-2 mb-2">
+          <small class="text-muted">
+            Layers: <strong>TOP</strong> and <strong>BOTTOM</strong>. You can toggle them in the layer control.
+          </small>
+        </div>
+
+        <div id="mapAllPolygons" style="height: 70vh; width: 100%; border: 1px solid #ddd; border-radius: 8px;"></div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="text-muted me-auto" id="allPolygonsStatus">—</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Modal: Show hierarchy (nested boxes: parent contains children) -->
+<div class="modal fade" id="modalShowPolygonHierarchy" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Polygon hierarchy (box-in-box)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-light border py-2 mb-2">
+          <small class="text-muted">
+            Parent polygon <strong>contains</strong> its child polygons (nested boxes).
+          </small>
+        </div>
+
+        <!-- Scrollable canvas -->
+        <div class="border rounded p-2"
+             style="width:100%; overflow:auto; background:#ffffff;">
+          <!-- Root container for nested boxes -->
+          <div id="polyHierarchyNested"
+               style="
+                 display:flex;
+                 flex-wrap:wrap;
+                 gap:10px;
+                 align-items:flex-start;
+                 min-width:1200px;
+                 min-height:600px;
+               ">
+            <!-- JS will render boxes here -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span class="text-muted me-auto" id="hierarchyStatus">—</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
 
 <script>
-  // Leaflet map + layers
-  let polyMap = null;
-  let topLayer = null;
-  let bottomLayer = null;
+/* -------------------------
+   A) Show all polygons (Leaflet)
+-------------------------- */
 
-  function setMsg(text) {
-    const msg = document.getElementById('polyMapMsg');
-    msg.textContent = text || '';
-    msg.style.display = text ? 'block' : 'none';
+let _allPolyMap = null;
+let _allPolyLayers = { top: null, bottom: null };
+let _allPolyLayerCtrl = null;
+
+function initAllPolygonsMap() {
+  if (_allPolyMap) return _allPolyMap;
+
+  // You already use Leaflet elsewhere; reuse your tile layer choice if you have one.
+  _allPolyMap = L.map('mapAllPolygons', { preferCanvas: true });
+
+  // Basic OSM tiles (replace with your own basemap if you already have one)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(_allPolyMap);
+
+  return _allPolyMap;
+}
+
+async function loadAllPolygonsToMap() {
+  const statusEl = document.getElementById('allPolygonsStatus');
+  statusEl.textContent = 'Loading…';
+
+  const map = initAllPolygonsMap();
+
+  // Clear old layers
+  if (_allPolyLayers.top) map.removeLayer(_allPolyLayers.top);
+  if (_allPolyLayers.bottom) map.removeLayer(_allPolyLayers.bottom);
+  if (_allPolyLayerCtrl) map.removeControl(_allPolyLayerCtrl);
+
+  const resp = await fetch('{{ url_for("polygons.polygons_geojson") }}?mode=all', { cache: 'no-store' });
+  if (!resp.ok) {
+    statusEl.textContent = 'Failed to load data.';
+    throw new Error('Failed to fetch polygons geojson');
   }
+  const data = await resp.json();
 
-  function ensureMap() {
-    if (polyMap) return;
+  const topFeatures = [];
+  const bottomFeatures = [];
 
-    polyMap = L.map('polygonMap');
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 20,
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(polyMap);
-
-    // Bind toggle events once
-    document.getElementById('chkTop').addEventListener('change', () => {
-      if (!polyMap || !topLayer) return;
-      const show = document.getElementById('chkTop').checked;
-      if (show) topLayer.addTo(polyMap);
-      else polyMap.removeLayer(topLayer);
+  for (const item of (data.top || [])) {
+    if (item.geojson) topFeatures.push({
+      type: 'Feature',
+      properties: { name: item.name, side: 'top' },
+      geometry: item.geojson
     });
+  }
 
-    document.getElementById('chkBottom').addEventListener('change', () => {
-      if (!polyMap || !bottomLayer) return;
-      const show = document.getElementById('chkBottom').checked;
-      if (show) bottomLayer.addTo(polyMap);
-      else polyMap.removeLayer(bottomLayer);
+  for (const item of (data.bottom || [])) {
+    if (item.geojson) bottomFeatures.push({
+      type: 'Feature',
+      properties: { name: item.name, side: 'bottom' },
+      geometry: item.geojson
     });
   }
 
-  function clearLayers() {
-    if (!polyMap) return;
-    if (topLayer) { polyMap.removeLayer(topLayer); topLayer = null; }
-    if (bottomLayer) { polyMap.removeLayer(bottomLayer); bottomLayer = null; }
+  // Styles: TOP vs BOTTOM
+  const topStyle = { color: '#1f77b4', weight: 3, fillOpacity: 0.05 };
+  const bottomStyle = { color: '#d62728', weight: 3, fillOpacity: 0.05 };
+
+  _allPolyLayers.top = L.geoJSON({ type: 'FeatureCollection', features: topFeatures }, {
+    style: topStyle,
+    onEachFeature: (feature, layer) => {
+      const n = feature?.properties?.name || '';
+      layer.bindPopup(`<strong>${n}</strong><br><small>TOP</small>`);
+    }
+  }).addTo(map);
+
+  _allPolyLayers.bottom = L.geoJSON({ type: 'FeatureCollection', features: bottomFeatures }, {
+    style: bottomStyle,
+    onEachFeature: (feature, layer) => {
+      const n = feature?.properties?.name || '';
+      layer.bindPopup(`<strong>${n}</strong><br><small>BOTTOM</small>`);
+    }
+  }).addTo(map);
+
+  // Layer control
+  _allPolyLayerCtrl = L.control.layers(null, {
+    'Top edges': _allPolyLayers.top,
+    'Bottom edges': _allPolyLayers.bottom
+  }, { collapsed: false }).addTo(map);
+
+  // Fit bounds
+  const allBounds = [];
+  if (_allPolyLayers.top.getLayers().length) allBounds.push(_allPolyLayers.top.getBounds());
+  if (_allPolyLayers.bottom.getLayers().length) allBounds.push(_allPolyLayers.bottom.getBounds());
+
+  if (allBounds.length) {
+    // combine bounds
+    let b = allBounds[0];
+    for (let i = 1; i < allBounds.length; i++) b = b.extend(allBounds[i]);
+    map.fitBounds(b.pad(0.05));
+    statusEl.textContent = `Loaded TOP: ${topFeatures.length}, BOTTOM: ${bottomFeatures.length}`;
+  } else {
+    map.setView([0, 0], 2);
+    statusEl.textContent = 'No geometries to display.';
   }
 
-  function updateToggleAvailability(hasTop, hasBottom) {
-    const chkTop = document.getElementById('chkTop');
-    const chkBottom = document.getElementById('chkBottom');
+  // Fix Leaflet sizing in modal
+  setTimeout(() => map.invalidateSize(), 150);
+}
 
-    chkTop.disabled = !hasTop;
-    chkBottom.disabled = !hasBottom;
-
-    // if not available, force unchecked
-    if (!hasTop) chkTop.checked = false;
-    if (!hasBottom) chkBottom.checked = false;
-
-    // if only one exists, ensure it is checked
-    if (hasTop && !hasBottom) chkTop.checked = true;
-    if (!hasTop && hasBottom) chkBottom.checked = true;
+// Hook modal open
+document.addEventListener('DOMContentLoaded', () => {
+  const modalEl = document.getElementById('modalShowAllPolygons');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', () => {
+      loadAllPolygonsToMap().catch(err => console.error(err));
+    });
   }
+});
 
-  async function loadPolygonToMap(polygonName) {
-    document.getElementById('polyModalTitle').textContent = polygonName;
-    setMsg('');
-    clearLayers();
 
-    // fetch GeoJSON
-    const url = `{{ url_for('polygons.polygon_geojson') }}?name=${encodeURIComponent(polygonName)}`;
-    const resp = await fetch(url);
-    const data = await resp.json();
+/* -------------------------
+   B) Polygon hierarchy (Box diagram SVG)
+-------------------------- */
 
-    if (!resp.ok) {
-      throw new Error(data.error || 'Failed to load polygon GeoJSON');
-    }
-
-    const hasTop = !!data.top;
-    const hasBottom = !!data.bottom;
-    updateToggleAvailability(hasTop, hasBottom);
-
-    // Create layers (do not add if toggle off)
-    if (hasTop) {
-      topLayer = L.geoJSON(data.top, {
-        style: { weight: 3 } // TOP: solid
-      });
-      if (document.getElementById('chkTop').checked) topLayer.addTo(polyMap);
-    }
-
-    if (hasBottom) {
-      bottomLayer = L.geoJSON(data.bottom, {
-        style: { weight: 3, dashArray: '6 6' } // BOTTOM: dashed
-      });
-      if (document.getElementById('chkBottom').checked) bottomLayer.addTo(polyMap);
-    }
-
-    if (!hasTop && !hasBottom) {
-      setMsg('No geometry available (TOP/BOTTOM is NULL). Try Rebuild.');
-      polyMap.setView([0, 0], 2);
-      return;
-    }
-
-    // Fit bounds using available layers (even if currently hidden)
-    const bounds = [];
-    if (topLayer) bounds.push(topLayer.getBounds());
-    if (bottomLayer) bounds.push(bottomLayer.getBounds());
-
-    let b = bounds[0];
-    for (let i = 1; i < bounds.length; i++) b = b.extend(bounds[i]);
-    polyMap.fitBounds(b.pad(0.1));
-  }
-
-  // Hook modal show/hide
-  const modalEl = document.getElementById('polygonMapModal');
-
-  modalEl.addEventListener('shown.bs.modal', async (event) => {
-    ensureMap();
-
-    // Leaflet must recompute size after modal is visible
-    setTimeout(() => polyMap.invalidateSize(), 50);
-
-    const btn = event.relatedTarget;
-    const polygonName = btn.getAttribute('data-polygon-name');
-
-    try {
-      await loadPolygonToMap(polygonName);
-    } catch (e) {
-      setMsg(e.message);
-    }
+function buildHierarchy(nodes) {
+  const byName = new Map();
+  const children = new Map();
+  nodes.forEach(n => {
+    byName.set(n.name, n);
+    children.set(n.name, []);
+  });
+  nodes.forEach(n => {
+    if (n.parent && children.has(n.parent)) children.get(n.parent).push(n.name);
   });
 
-  modalEl.addEventListener('hidden.bs.modal', () => {
-    setMsg('');
-    // optional: clear layers on close
-    // clearLayers();
-  });
+  const roots = nodes
+    .filter(n => !n.parent || !byName.has(n.parent))
+    .map(n => n.name)
+    .sort((a,b)=>a.localeCompare(b));
+
+  // sort children for stable output
+  for (const [k, arr] of children.entries()) arr.sort((a,b)=>a.localeCompare(b));
+
+  return { children, roots };
+}
+
+function renderNodeNested(name, childrenMap) {
+  const box = document.createElement('div');
+  box.className = 'poly-box';
+
+  const title = document.createElement('div');
+  title.className = 'poly-box-title';
+  title.textContent = name;
+  box.appendChild(title);
+
+  const kids = childrenMap.get(name) || [];
+  if (kids.length) {
+    const ch = document.createElement('div');
+    ch.className = 'poly-children';
+    kids.forEach(k => ch.appendChild(renderNodeNested(k, childrenMap)));
+    box.appendChild(ch);
+  }
+
+  return box;
+}
+
+async function loadHierarchyNested() {
+  const statusEl = document.getElementById('hierarchyStatus');
+  const root = document.getElementById('polyHierarchyNested');
+  statusEl.textContent = 'Loading…';
+  root.innerHTML = '';
+
+  const resp = await fetch('{{ url_for("polygons.polygons_geojson") }}?mode=hierarchy', { cache: 'no-store' });
+  if (!resp.ok) {
+    statusEl.textContent = 'Failed to load hierarchy.';
+    return;
+  }
+  const data = await resp.json();
+  const nodes = data.nodes || [];
+  if (!nodes.length) {
+    statusEl.textContent = 'No polygons.';
+    return;
+  }
+
+  const g = buildHierarchy(nodes);
+  g.roots.forEach(r => root.appendChild(renderNodeNested(r, g.children)));
+  statusEl.textContent = `Roots: ${g.roots.length}, Nodes: ${nodes.length}`;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modalEl = document.getElementById('modalShowPolygonHierarchy');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', () => loadHierarchyNested());
+  }
+});
 </script>
-
-
-
-
-
 
 
 {% endblock %}

@@ -31,3 +31,10 @@ LINK_TABLES_SJ = {
     "drawings":    {"table": "tabaid_sj_drawings",   "fk_media": "ref_drawing",   "fk_sj": "ref_sj"},
     "photograms":  {"table": "tabaid_photogram_sj",   "fk_media": "ref_photogram", "fk_sj": "ref_sj"},
 }
+
+# Relations polygon ↔ media (table columns)
+LINK_TABLES_POLYGON = {
+    "photos":      {"table": "tabaid_polygon_photos",       "fk_media": "ref_photo",     "fk_polygon": "ref_polygon"},
+    "sketches":    {"table": "tabaid_polygon_sketches",     "fk_media": "ref_sketch",    "fk_polygon": "ref_polygon"},
+    "photograms":  {"table": "tabaid_polygon_photograms",   "fk_media": "ref_photogram", "fk_polygon": "ref_polygon"},
+}

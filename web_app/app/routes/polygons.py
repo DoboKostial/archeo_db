@@ -25,7 +25,8 @@ from app.queries import (
     insert_binding_top_sql, insert_binding_bottom_sql, rebuild_geom_sql, select_polygons_with_bindings_sql,
     srtext_by_srid_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
     polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql, get_polygon_parent_sql, reparent_children_sql, delete_polygon_sql,
-    polygon_exists_sql, insert_photo_sql, insert_sketch_sql, insert_photogram_sql, link_polygon_photo_sql, link_polygon_sketch_sql, link_polygon_photogram_sql
+    polygon_exists_sql, insert_photo_sql, insert_sketch_sql, insert_photogram_sql, link_polygon_photo_sql, link_polygon_sketch_sql, link_polygon_photogram_sql,
+    polygons_geojson_top_bottom_sql, polygons_hierarchy_sql
 )
 
 
@@ -283,37 +284,72 @@ def upload_polygons():
 
     return redirect(url_for('polygons.polygons'))
 
-# making GeoJSON for export to leaflet (showing geometry in modal window)
+
+
+# making GeoJSON for export to Leaflet (showing geometry in modal window)
+#    mode:
+#      - all:        returns {top:[{name,geojson}], bottom:[...]}
+#      - one:        returns {name, top:geojson|null, bottom:geojson|null}
+#      - hierarchy:  returns {nodes:[{name,parent}]}
+#
+#    Backward-friendly:
+#      If mode is missing and name is provided -> behaves like mode=one.
+#      If mode is missing and nothing provided -> behaves like mode=all.
 
 @polygons_bp.route('/polygons/geojson', methods=['GET'])
 @require_selected_db
-def polygon_geojson():
+def polygons_geojson():
     selected_db = session.get('selected_db')
-    name = (request.args.get('name') or '').strip()
 
-    if not name:
-        return jsonify({"error": "Missing polygon name"}), 400
+    mode = (request.args.get('mode') or '').strip().lower()
+    name = (request.args.get('name') or request.args.get('polygon_name') or '').strip()
+
+    # Backward-friendly defaults
+    if not mode:
+        mode = 'one' if name else 'all'
 
     conn = get_terrain_connection(selected_db)
     try:
         with conn.cursor() as cur:
-            cur.execute(polygon_geoms_geojson_sql(), (name,))
-            row = cur.fetchone()
-            if not row:
-                return jsonify({"error": "Polygon not found"}), 404
+            if mode == 'hierarchy':
+                cur.execute(polygons_hierarchy_sql())
+                nodes = [{"name": r[0], "parent": r[1]} for r in cur.fetchall()]
+                return jsonify({"nodes": nodes})
 
-            top_gj, bottom_gj = row[0], row[1]
+            if mode == 'one':
+                if not name:
+                    return jsonify({"error": "Missing 'name'"}), 400
 
-        # return JSON objects (GeoJSON), not strings
-        payload = {
-            "name": name,
-            "top": json.loads(top_gj) if top_gj else None,
-            "bottom": json.loads(bottom_gj) if bottom_gj else None,
-        }
-        return jsonify(payload)
+                cur.execute("""
+                    SELECT
+                      polygon_name,
+                      CASE WHEN geom_top IS NOT NULL THEN ST_AsGeoJSON(geom_top) ELSE NULL END AS top_gj,
+                      CASE WHEN geom_bottom IS NOT NULL THEN ST_AsGeoJSON(geom_bottom) ELSE NULL END AS bottom_gj
+                    FROM tab_polygons
+                    WHERE polygon_name = %s
+                """, (name,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"error": f"Polygon not found: {name}"}), 404
+
+                top = json.loads(row[1]) if row[1] else None
+                bottom = json.loads(row[2]) if row[2] else None
+                return jsonify({"name": row[0], "top": top, "bottom": bottom})
+
+            # mode == 'all'
+            cur.execute(polygons_geojson_top_bottom_sql())
+            top_list = []
+            bottom_list = []
+            for polygon_name, top_gj, bottom_gj in cur.fetchall():
+                if top_gj:
+                    top_list.append({"name": polygon_name, "geojson": json.loads(top_gj)})
+                if bottom_gj:
+                    bottom_list.append({"name": polygon_name, "geojson": json.loads(bottom_gj)})
+
+            return jsonify({"top": top_list, "bottom": bottom_list})
 
     except Exception as e:
-        logger.error(f"[{selected_db}] polygon_geojson error: {e}")
+        logger.error(f"[{selected_db}] /polygons/geojson error: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
         try:
