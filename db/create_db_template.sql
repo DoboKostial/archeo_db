@@ -78,10 +78,19 @@ CREATE TABLE gloss_personalia (
 
 ---
 -- tab_section definition
----
+---i
+
+CREATE TYPE section_type AS ENUM (
+  'standard',      -- standard section from above to bottom by removing the part of stratigraphy
+  'cumulative',    -- cumulative section according Ph. Barker
+  'synthetic',     -- synthetic section is post-excav modeling, synthesis of more profiles
+  'other'          -- other (define in notes)
+);
+
 CREATE TABLE tab_section (
 	id_section int4 NOT NULL,
-	description TEXT NULL,
+  section_type section_type NOT NULL,
+	description text NULL,
 	CONSTRAINT tab_section_pk PRIMARY KEY (id_section)
 );
 
@@ -149,7 +158,7 @@ CREATE TABLE tab_polygon_geopts_binding_top (
                  ON UPDATE CASCADE ON DELETE CASCADE,
   pts_from     int  NOT NULL,
   pts_to       int  NOT NULL,
-  CHECK (pts_from <= pts_to),
+  CHECK (pts_from <= pts_to), 
   -- to avoid 2x the same
   UNIQUE (ref_polygon, pts_from, pts_to)
 );
@@ -337,8 +346,7 @@ CREATE INDEX tab_drawings_checksum_idx   ON tab_drawings (checksum_sha256);
 CREATE TABLE tab_photograms (
   id_photogram     VARCHAR(120) PRIMARY KEY,                       
   photogram_typ    VARCHAR(60)  NOT NULL,
-  ref_sketch       VARCHAR(120) NULL REFERENCES tab_sketches(id_sketch)
-                                 ON UPDATE CASCADE ON DELETE SET NULL,
+  ref_sketch       VARCHAR(120) NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE SET NULL,
   notes            text,
   mime_type        text         NOT NULL,
   file_size        bigint       NOT NULL CHECK (file_size >= 0),
@@ -400,16 +408,18 @@ CREATE UNIQUE INDEX tabaid_sj_drawings_unique_idx ON tabaid_sj_drawings(ref_sj, 
 CREATE INDEX tabaid_sj_drawings_ref_drawing_idx ON tabaid_sj_drawings(ref_drawing);
 
 
--- tabaid_section_photogram definition
--- this table connects sections and photograms (m:n)
-CREATE TABLE tabaid_section_photogram (
-	id_aut serial4 NOT NULL,
-	ref_section int4 NOT NULL,
-	ref_photogram VARCHAR(100) NOT NULL,
-	CONSTRAINT tabaid_section_photogram_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_section_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_section_photogram_fk_section FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
+-- tabaid_sj_section_definition
+-- this table connects SUs and sections (m:n)
+CREATE TABLE IF NOT EXISTS tabaid_sj_section (
+  id_aut      serial4 PRIMARY KEY,
+  ref_sj      int4 NOT NULL,
+  ref_section int4 NOT NULL,
+  CONSTRAINT tabaid_sj_section_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_sj_section_fk_section FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_sj_section_uq UNIQUE (ref_sj, ref_section)
 );
+CREATE INDEX IF NOT EXISTS tabaid_sj_section_idx ON tabaid_sj_section(ref_section, ref_sj);
+
 
 -- tabaid_photogram_photo definition
 -- this table connects photograms and photos (m:n)
@@ -434,17 +444,6 @@ CREATE TABLE tabaid_photogram_sj (
 	CONSTRAINT tabaid_photogram_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- tabaid_sj_section definition
--- this table is clue between SJs and SECTIONs (m:n)
-CREATE TABLE tabaid_sj_section (
-	id_aut serial4 NOT NULL,
-	ref_sj int4 NOT NULL,
-	ref_section int4 NOT NULL,
-	CONSTRAINT tabaid_sj_section_pk PRIMARY KEY (id_aut),
-    CONSTRAINT tabaid_sj_section_fk_sj FOREIGN KEY (ref_section) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT tabaid_sj_section_fk_section FOREIGN KEY (ref_sj) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
-);
-    
 
 -- tabaid_sj_sketch definition
 -- this tabaid clues SJs and Sketches (m:n)
@@ -502,27 +501,48 @@ CREATE TABLE tabaid_polygon_photograms (
 CREATE INDEX tabaid_polygon_photograms_photogram_idx ON tabaid_polygon_photograms(ref_photogram);
 
 
+-- M:N between sections and geodetic points
+CREATE TABLE IF NOT EXISTS tab_section_geopts_binding (
+  id          serial4 PRIMARY KEY,
+  ref_section int4 NOT NULL,
+  pts_from    int4 NOT NULL,
+  pts_to      int4 NOT NULL,
+  CONSTRAINT tab_section_geopts_binding_check CHECK (pts_from <= pts_to), CONSTRAINT tab_section_geopts_binding_pts_from_pts_to_key UNIQUE (ref_section, pts_from, pts_to),
+  CONSTRAINT tab_section_geopts_binding_ref_section_fkey FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
+);
+ALTER TABLE tab_section_geopts_binding ADD CONSTRAINT tab_section_geopts_binding_pts_from_fkey FOREIGN KEY (pts_from) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE tab_section_geopts_binding ADD CONSTRAINT tab_section_geopts_binding_pts_to_fkey FOREIGN KEY (pts_to) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX IF NOT EXISTS tab_section_geopts_binding_idx ON tab_section_geopts_binding(ref_section, pts_from, pts_to);
+
+
+-- 6) M:N SECTIONS and DOCU entities
 -- SECTIONS <-> PHOTOS
 CREATE TABLE IF NOT EXISTS tabaid_section_photos (
   id_aut   serial PRIMARY KEY,
-  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photo varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE
+  ref_section int4 NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (ref_section, ref_photo)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_photos_idx ON tabaid_section_photos(ref_section, ref_photo);
 
 -- SECTIONS <-> SKETCHES
 CREATE TABLE IF NOT EXISTS tabaid_section_sketches (
   id_aut   serial PRIMARY KEY,
-  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_sketch varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE
+  ref_section  int4 NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_sketch varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (ref_section, ref_sketch)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_sketches_idx ON tabaid_section_sketches(ref_section, ref_sketch);
 
 -- SECTIONS <-> PHOTOGRAMS
 CREATE TABLE IF NOT EXISTS tabaid_section_photograms (
-  id_aut   serial PRIMARY KEY,
-  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE
+	id_aut serial4 NOT NULL,
+	ref_section int4 NOT NULL,
+	ref_photogram VARCHAR(120) NOT NULL,
+	CONSTRAINT tabaid_section_photogram_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_section_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_section_photogram_fk_section FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE,
+  UNIQUE (ref_section, ref_photogram)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_photograms_idx ON tabaid_section_photograms(ref_section, ref_photogram);
 
@@ -530,7 +550,8 @@ CREATE INDEX IF NOT EXISTS tabaid_section_photograms_idx ON tabaid_section_photo
 CREATE TABLE IF NOT EXISTS tabaid_section_drawings (
   id_aut    serial PRIMARY KEY,
   ref_section   int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_drawing varchar(120) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE
+  ref_drawing varchar(120) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE,
+  UNIQUE (ref_section, ref_drawing)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_drawings_idx ON tabaid_section_drawings(ref_section, ref_drawing);
 
