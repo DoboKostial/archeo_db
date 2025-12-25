@@ -77,12 +77,12 @@ CREATE TABLE gloss_personalia (
 ------
 
 ---
--- tab_cut definition
+-- tab_section definition
 ---
-CREATE TABLE tab_cut (
-	id_cut int4 NOT NULL,
+CREATE TABLE tab_section (
+	id_section int4 NOT NULL,
 	description TEXT NULL,
-	CONSTRAINT tab_cut_pk PRIMARY KEY (id_cut)
+	CONSTRAINT tab_section_pk PRIMARY KEY (id_section)
 );
 
 ---
@@ -400,15 +400,15 @@ CREATE UNIQUE INDEX tabaid_sj_drawings_unique_idx ON tabaid_sj_drawings(ref_sj, 
 CREATE INDEX tabaid_sj_drawings_ref_drawing_idx ON tabaid_sj_drawings(ref_drawing);
 
 
--- tabaid_cut_photogram definition
--- this table connects cuts and photograms (m:n)
-CREATE TABLE tabaid_cut_photogram (
+-- tabaid_section_photogram definition
+-- this table connects sections and photograms (m:n)
+CREATE TABLE tabaid_section_photogram (
 	id_aut serial4 NOT NULL,
-	ref_cut int4 NOT NULL,
+	ref_section int4 NOT NULL,
 	ref_photogram VARCHAR(100) NOT NULL,
-	CONSTRAINT tabaid_cut_photogram_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_cut_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_cut_photogram_fk_cut FOREIGN KEY (ref_cut) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
+	CONSTRAINT tabaid_section_photogram_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_section_photogram_fk_photogram FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_section_photogram_fk_section FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- tabaid_photogram_photo definition
@@ -434,15 +434,15 @@ CREATE TABLE tabaid_photogram_sj (
 	CONSTRAINT tabaid_photogram_sj_fk_sj FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
--- tabaid_sj_cut definition
--- this table is clue between SJs and CUTs (m:n)
-CREATE TABLE tabaid_sj_cut (
+-- tabaid_sj_section definition
+-- this table is clue between SJs and SECTIONs (m:n)
+CREATE TABLE tabaid_sj_section (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
-	ref_cut int4 NOT NULL,
-	CONSTRAINT tabaid_sj_cut_pk PRIMARY KEY (id_aut),
-    CONSTRAINT tabaid_sj_cut_fk_sj FOREIGN KEY (ref_cut) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT tabaid_sj_cut_fk_cut FOREIGN KEY (ref_sj) REFERENCES tab_cut(id_cut) ON DELETE CASCADE ON UPDATE CASCADE
+	ref_section int4 NOT NULL,
+	CONSTRAINT tabaid_sj_section_pk PRIMARY KEY (id_aut),
+    CONSTRAINT tabaid_sj_section_fk_sj FOREIGN KEY (ref_section) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT tabaid_sj_section_fk_section FOREIGN KEY (ref_sj) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
 );
     
 
@@ -502,37 +502,37 @@ CREATE TABLE tabaid_polygon_photograms (
 CREATE INDEX tabaid_polygon_photograms_photogram_idx ON tabaid_polygon_photograms(ref_photogram);
 
 
--- CUTS <-> PHOTOS
-CREATE TABLE IF NOT EXISTS tabaid_cut_photos (
+-- SECTIONS <-> PHOTOS
+CREATE TABLE IF NOT EXISTS tabaid_section_photos (
   id_aut   serial PRIMARY KEY,
-  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_photo varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS tabaid_cut_photos_idx ON tabaid_cut_photos(ref_cut, ref_photo);
+CREATE INDEX IF NOT EXISTS tabaid_section_photos_idx ON tabaid_section_photos(ref_section, ref_photo);
 
--- CUTS <-> SKETCHES
-CREATE TABLE IF NOT EXISTS tabaid_cut_sketches (
+-- SECTIONS <-> SKETCHES
+CREATE TABLE IF NOT EXISTS tabaid_section_sketches (
   id_aut   serial PRIMARY KEY,
-  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_sketch varchar(120) NOT NULL REFERENCES tab_sketches(id_sketch) ON UPDATE CASCADE ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS tabaid_cut_sketches_idx ON tabaid_cut_sketches(ref_cut, ref_sketch);
+CREATE INDEX IF NOT EXISTS tabaid_section_sketches_idx ON tabaid_section_sketches(ref_section, ref_sketch);
 
--- CUTS <-> PHOTOGRAMS
-CREATE TABLE IF NOT EXISTS tabaid_cut_photograms (
+-- SECTIONS <-> PHOTOGRAMS
+CREATE TABLE IF NOT EXISTS tabaid_section_photograms (
   id_aut   serial PRIMARY KEY,
-  ref_cut  int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_section  int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_photogram varchar(120) NOT NULL REFERENCES tab_photograms(id_photogram) ON UPDATE CASCADE ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS tabaid_cut_photograms_idx ON tabaid_cut_photograms(ref_cut, ref_photogram);
+CREATE INDEX IF NOT EXISTS tabaid_section_photograms_idx ON tabaid_section_photograms(ref_section, ref_photogram);
 
--- CUTS <-> DRAWINGS
-CREATE TABLE IF NOT EXISTS tabaid_cut_drawings (
+-- SECTIONS <-> DRAWINGS
+CREATE TABLE IF NOT EXISTS tabaid_section_drawings (
   id_aut    serial PRIMARY KEY,
-  ref_cut   int NOT NULL REFERENCES tab_cut(id_cut) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_section   int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_drawing varchar(120) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS tabaid_cut_drawings_idx ON tabaid_cut_drawings(ref_cut, ref_drawing);
+CREATE INDEX IF NOT EXISTS tabaid_section_drawings_idx ON tabaid_section_drawings(ref_section, ref_drawing);
 
 
 
@@ -932,47 +932,47 @@ END;
 $function$
 ;
 
--- this function requires the ID of cut and lists all SJs cut by this cut
-CREATE OR REPLACE FUNCTION fnc_get_cut_and_related_sjs(choose_cut INTEGER)
- RETURNS TABLE(id_cut INTEGER, id_sj INTEGER, docu_plan BOOLEAN, docu_vertical BOOLEAN)
+-- this function requires the ID of section and lists all SJs cut by this section
+CREATE OR REPLACE FUNCTION fnc_get_section_and_related_sjs(choose_section INTEGER)
+ RETURNS TABLE(id_section INTEGER, id_sj INTEGER, docu_plan BOOLEAN, docu_vertical BOOLEAN)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
-            tc.id_cut,
+            tc.id_section,
             tsj.id_sj,
             tsj.docu_plan,
 	    tsj.docu_vertical
         FROM
-            tab_cut tc
+            tab_section tc
         INNER JOIN
-            tabaid_sj_cut tasc ON tc.id_cut = tasc.ref_cut
+            tabaid_sj_section tasc ON tc.id_section = tasc.ref_section
         INNER JOIN
             tab_sj tsj ON tasc.ref_sj = tsj.id_sj
-	WHERE tc.id_cut = choose_cut
+	WHERE tc.id_section = choose_section
     );
 END;
 $function$
 ;
 
--- this function takes ID of SJ and list all cuts cutting this SJ 
-CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_cuts(choose_sj INTEGER)
- RETURNS TABLE(sj_id INTEGER, id_cut INTEGER, description CHARACTER VARYING)
+-- this function takes ID of SJ and list all sections cutting this SJ 
+CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_sections(choose_sj INTEGER)
+ RETURNS TABLE(sj_id INTEGER, id_section INTEGER, description CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
 BEGIN
     RETURN QUERY (
         SELECT
             sj.id_sj,
-            tc.id_cut,
+            tc.id_section,
             tc.description
         FROM
             tab_sj sj
         INNER JOIN
-            tabaid_sj_cut tasc ON sj.id_sj = tasc.ref_sj
+            tabaid_sj_section tasc ON sj.id_sj = tasc.ref_sj
         INNER JOIN
-            tab_cut tc ON tasc.ref_cut = tc.id_cut
+            tab_section tc ON tasc.ref_section = tc.id_section
 	WHERE sj.id_sj = choose_sj
     );
 END;
