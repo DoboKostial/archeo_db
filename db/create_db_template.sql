@@ -510,8 +510,6 @@ CREATE TABLE IF NOT EXISTS tab_section_geopts_binding (
   CONSTRAINT tab_section_geopts_binding_check CHECK (pts_from <= pts_to), CONSTRAINT tab_section_geopts_binding_pts_from_pts_to_key UNIQUE (ref_section, pts_from, pts_to),
   CONSTRAINT tab_section_geopts_binding_ref_section_fkey FOREIGN KEY (ref_section) REFERENCES tab_section(id_section) ON DELETE CASCADE ON UPDATE CASCADE
 );
-ALTER TABLE tab_section_geopts_binding ADD CONSTRAINT tab_section_geopts_binding_pts_from_fkey FOREIGN KEY (pts_from) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE tab_section_geopts_binding ADD CONSTRAINT tab_section_geopts_binding_pts_to_fkey FOREIGN KEY (pts_to) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
 CREATE INDEX IF NOT EXISTS tab_section_geopts_binding_idx ON tab_section_geopts_binding(ref_section, pts_from, pts_to);
 
 
