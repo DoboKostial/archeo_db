@@ -641,4 +641,122 @@ def polygons_hierarchy_sql():
         ORDER BY polygon_name;
     """
 
+# ----------------------------------------------------
+# Sections: SQL helpers (manual create + bindings + SJ links)
+# ----------------------------------------------------
+
+def get_sections_list_sql():
+    """
+    Returns list for /sections page:
+      (id_section, section_type, description, ranges_nr, sj_nr)
+    """
+    return """
+        SELECT
+          s.id_section,
+          s.section_type::text,
+          COALESCE(s.description, '') AS description,
+          COALESCE(b.ranges_nr, 0) AS ranges_nr,
+          COALESCE(x.sj_nr, 0) AS sj_nr
+        FROM tab_section s
+        LEFT JOIN (
+          SELECT ref_section, COUNT(*) AS ranges_nr
+          FROM tab_section_geopts_binding
+          GROUP BY ref_section
+        ) b ON b.ref_section = s.id_section
+        LEFT JOIN (
+          SELECT ref_section, COUNT(*) AS sj_nr
+          FROM tabaid_sj_section
+          GROUP BY ref_section
+        ) x ON x.ref_section = s.id_section
+        ORDER BY s.id_section;
+    """
+
+def list_sj_ids_sql():
+    """Simple list of SJ IDs for multi-select."""
+    return "SELECT id_sj FROM tab_sj ORDER BY id_sj;"
+
+
+def upsert_section_manual_sql():
+    """
+    Upsert section metadata.
+    Params: (id_section, section_type, description)
+    """
+    return """
+        INSERT INTO tab_section (id_section, section_type, description)
+        VALUES (%s, %s, NULLIF(%s,''))
+        ON CONFLICT (id_section)
+        DO UPDATE SET
+          section_type = EXCLUDED.section_type,
+          description  = EXCLUDED.description;
+    """
+
+
+def delete_section_geopts_bindings_sql():
+    """Params: (id_section,)"""
+    return "DELETE FROM tab_section_geopts_binding WHERE ref_section = %s;"
+
+
+def insert_section_geopts_binding_sql():
+    """Params: (id_section, pts_from, pts_to)"""
+    return """
+        INSERT INTO tab_section_geopts_binding (ref_section, pts_from, pts_to)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (ref_section, pts_from, pts_to) DO NOTHING;
+    """
+
+
+def delete_section_sj_links_sql():
+    """Delete M:N links SECTION→SJ. Params: (id_section,)"""
+    return "DELETE FROM tabaid_sj_section WHERE ref_section = %s;"
+
+
+def insert_section_sj_link_sql():
+    """
+    Insert one SECTION↔SJ link.
+    Params: (ref_sj, ref_section)
+    Tip: if you add UNIQUE(ref_sj, ref_section), you can safely DO NOTHING on conflict.
+    """
+    return """
+        INSERT INTO tabaid_sj_section (ref_sj, ref_section)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+
+def section_exists_sql():
+    """Check section exists. Params: (id_section,)"""
+    return "SELECT 1 FROM tab_section WHERE id_section = %s;"
+
+
+# -------------------------
+# Sections ↔ media helpers
+# -------------------------
+
+def link_section_photo_sql():
+    """Params: (id_section, id_photo)"""
+    return """
+        INSERT INTO tabaid_section_photos (ref_section, ref_photo)
+        VALUES (%s, %s);
+    """
+
+def link_section_sketch_sql():
+    """Params: (id_section, id_sketch)"""
+    return """
+        INSERT INTO tabaid_section_sketches (ref_section, ref_sketch)
+        VALUES (%s, %s);
+    """
+
+def link_section_photogram_sql():
+    """Params: (id_section, id_photogram)"""
+    return """
+        INSERT INTO tabaid_section_photograms (ref_section, ref_photogram)
+        VALUES (%s, %s);
+    """
+
+def link_section_drawing_sql():
+    """Params: (id_section, id_drawing)"""
+    return """
+        INSERT INTO tabaid_section_drawings (ref_section, ref_drawing)
+        VALUES (%s, %s);
+    """
 
