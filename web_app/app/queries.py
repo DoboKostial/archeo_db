@@ -760,3 +760,75 @@ def link_section_drawing_sql():
         VALUES (%s, %s);
     """
 
+def select_sections_with_bindings_sql():
+    """
+    Returns section IDs that have at least one binding row.
+    """
+    return """
+        SELECT DISTINCT ref_section::int4
+        FROM tab_section_geopts_binding
+        ORDER BY ref_section::int4;
+    """
+
+
+def section_line_geojson_by_id_sql():
+    """
+    Returns one row: (line_geojson) for given section id, built from bindings + tab_geopts.
+    Line is built ascending by id_pts, duplicates removed.
+    Params: (id_section,)
+    """
+    return """
+        WITH pts AS (
+            SELECT
+                g.id_pts,
+                g.pts_geom
+            FROM tab_section_geopts_binding b
+            JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+            WHERE b.ref_section::int4 = %s
+        ),
+        dpts AS (
+            SELECT DISTINCT ON (id_pts) id_pts, pts_geom
+            FROM pts
+            ORDER BY id_pts
+        )
+        SELECT
+            CASE
+              WHEN COUNT(*) < 2 THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)))
+            END AS line_gj
+        FROM dpts;
+    """
+
+
+def sections_lines_geojson_sql():
+    """
+    Returns (id_section, line_geojson) for ALL sections, built from bindings + tab_geopts.
+    Line is built ascending by id_pts, duplicates removed.
+    """
+    return """
+        WITH pts AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                g.id_pts,
+                g.pts_geom
+            FROM tab_section_geopts_binding b
+            JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+        ),
+        dpts AS (
+            SELECT DISTINCT ON (id_section, id_pts)
+                id_section, id_pts, pts_geom
+            FROM pts
+            ORDER BY id_section, id_pts
+        )
+        SELECT
+            id_section,
+            CASE
+              WHEN COUNT(*) < 2 THEN NULL
+              ELSE ST_AsGeoJSON(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)))
+            END AS line_gj
+        FROM dpts
+        GROUP BY id_section
+        ORDER BY id_section;
+    """

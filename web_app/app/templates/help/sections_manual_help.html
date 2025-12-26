@@ -1,0 +1,17 @@
+<p>
+  This form creates/updates a section by defining ranges of measured point IDs from <code>tab_geopts</code>.
+</p>
+
+<ul>
+  <li><strong>Section ID:</strong>: unique section/cut identifier (primary key).</li>
+  <li><strong>Section type:</strong>: standard, cumulative, synthetic (see Figs. 01 - 03)</li>
+  <li><strong>Point ranges:</strong>: any points definining section spatialy (FX, VB etc...) <code>tab_geopts</code>.</li>
+  <li><strong>Cut stratigraphy units:</strong>: all SUs that are cut by section.</li>
+</ul>
+
+<p class="mb-2"><strong>Tips</strong></p>
+<ul class="mb-0">
+  <li>Point ranges are mandatory, but without points stored in Geopts table You are not able to build geometry.</li>
+  <li>Ranges may overlap; points are deduplicated by point ID during rebuild.</li>
+  <li>If geometry is not created, check that points exist in <code>tab_geopts</code>.</li>
+</ul>
