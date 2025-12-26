@@ -571,6 +571,23 @@ def insert_photogram_sql():
         VALUES (%s, %s, %s, %s, %s, %s);
     """
 
+def insert_drawing_sql():
+    """
+    Insert one drawing metadata row.
+
+    Params:
+      (id_drawing, author, datum, notes,
+       mime_type, file_size, checksum_sha256)
+    """
+    return """
+        INSERT INTO tab_drawings (
+            id_drawing, author, datum, notes,
+            mime_type, file_size, checksum_sha256
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s);
+    """
+
+
 # -------------------------
 # Polygons ↔ media helpers
 # -------------------------

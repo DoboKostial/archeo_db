@@ -38,3 +38,11 @@ LINK_TABLES_POLYGON = {
     "sketches":    {"table": "tabaid_polygon_sketches",     "fk_media": "ref_sketch",    "fk_polygon": "ref_polygon"},
     "photograms":  {"table": "tabaid_polygon_photograms",   "fk_media": "ref_photogram", "fk_polygon": "ref_polygon"},
 }
+
+# Relations section ↔ media (table columns)
+LINK_TABLES_SECTION = {
+    "photos":      {"table": "tabaid_section_photos",      "fk_media": "ref_photo",     "fk_section": "ref_section"},
+    "sketches":    {"table": "tabaid_section_sketches",    "fk_media": "ref_sketch",    "fk_section": "ref_section"},
+    "drawings":    {"table": "tabaid_section_drawings",    "fk_media": "ref_drawing",   "fk_section": "ref_section"},
+    "photograms":  {"table": "tabaid_section_photograms",  "fk_media": "ref_photogram", "fk_section": "ref_section"},
+}
