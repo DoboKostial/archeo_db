@@ -647,29 +647,53 @@ def polygons_hierarchy_sql():
 
 def get_sections_list_sql():
     """
-    Returns list for /sections page:
-      (id_section, section_type, description, ranges_nr, sj_nr)
+    Listing for /sections:
+      - srid_txt: SRID inferred from geopts used by section (— / <srid> / mixed)
+      - ranges_txt: e.g. "1-4, 7-9, 12-13"
+      - sj_nr: count of linked SJs
     """
     return """
+        WITH r AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                STRING_AGG((b.pts_from::text || '-' || b.pts_to::text), ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt
+            FROM tab_section_geopts_binding b
+            GROUP BY b.ref_section::int4
+        ),
+        sj AS (
+            SELECT
+                x.ref_section::int4 AS id_section,
+                COUNT(*)::int AS sj_nr
+            FROM tabaid_sj_section x
+            GROUP BY x.ref_section::int4
+        ),
+        sr AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                CASE
+                    WHEN COUNT(g.id_pts) = 0 THEN '—'
+                    WHEN COUNT(DISTINCT ST_SRID(g.pts_geom)) = 1 THEN MIN(ST_SRID(g.pts_geom))::text
+                    ELSE 'mixed'
+                END AS srid_txt
+            FROM tab_section_geopts_binding b
+            LEFT JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+            GROUP BY b.ref_section::int4
+        )
         SELECT
-          s.id_section,
-          s.section_type::text,
-          COALESCE(s.description, '') AS description,
-          COALESCE(b.ranges_nr, 0) AS ranges_nr,
-          COALESCE(x.sj_nr, 0) AS sj_nr
+            s.id_section,
+            s.section_type,
+            s.description,
+            COALESCE(sr.srid_txt, '—') AS srid_txt,
+            COALESCE(r.ranges_txt, '—') AS ranges_txt,
+            COALESCE(sj.sj_nr, 0) AS sj_nr
         FROM tab_section s
-        LEFT JOIN (
-          SELECT ref_section, COUNT(*) AS ranges_nr
-          FROM tab_section_geopts_binding
-          GROUP BY ref_section
-        ) b ON b.ref_section = s.id_section
-        LEFT JOIN (
-          SELECT ref_section, COUNT(*) AS sj_nr
-          FROM tabaid_sj_section
-          GROUP BY ref_section
-        ) x ON x.ref_section = s.id_section
+        LEFT JOIN r  ON r.id_section  = s.id_section
+        LEFT JOIN sj ON sj.id_section = s.id_section
+        LEFT JOIN sr ON sr.id_section = s.id_section
         ORDER BY s.id_section;
     """
+
 
 def list_sj_ids_sql():
     """Simple list of SJ IDs for multi-select."""

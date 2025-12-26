@@ -3,11 +3,44 @@
 </p>
 
 <ul>
-  <li><strong>Section ID:</strong>: unique section/cut identifier (primary key).</li>
-  <li><strong>Section type:</strong>: standard, cumulative, synthetic (see Figs. 01 - 03)</li>
-  <li><strong>Point ranges:</strong>: any points definining section spatialy (FX, VB etc...) <code>tab_geopts</code>.</li>
+  <li><strong>Section ID:</strong> unique section/cut identifier (primary key).</li>
+  <li><strong>Section type:</strong> standard, cumulative, synthetic (see Figs. 01 - 03)</li>
+  <li><strong>Point ranges:</strong> any points definining section spatialy (FX, VB etc...) <code>tab_geopts</code>.</li>
   <li><strong>Cut stratigraphy units:</strong>: all SUs that are cut by section.</li>
 </ul>
+
+<div class="mt-3">
+  <p class="mb-2"><strong>Figures</strong></p>
+
+  <div class="row g-2">
+    <div class="col-md-4">
+      <figure class="mb-0">
+        <img src="{{ url_for('static', filename='images/section_standard.png') }}"
+             class="img-fluid rounded border"
+             alt="Standard section example">
+        <figcaption class="small text-muted mt-1">Fig. 01 — Standard section</figcaption>
+      </figure>
+    </div>
+
+    <div class="col-md-4">
+      <figure class="mb-0">
+        <img src="{{ url_for('static', filename='images/section_cumulative.png') }}"
+             class="img-fluid rounded border"
+             alt="Cumulative section example">
+        <figcaption class="small text-muted mt-1">Fig. 02 — Cumulative section</figcaption>
+      </figure>
+    </div>
+
+    <div class="col-md-4">
+      <figure class="mb-0">
+        <img src="{{ url_for('static', filename='images/section_synthetic.png') }}"
+             class="img-fluid rounded border"
+             alt="Synthetic section example">
+        <figcaption class="small text-muted mt-1">Fig. 03 — Synthetic section</figcaption>
+      </figure>
+    </div>
+  </div>
+</div>
 
 <p class="mb-2"><strong>Tips</strong></p>
 <ul class="mb-0">

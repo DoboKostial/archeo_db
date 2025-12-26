@@ -175,8 +175,9 @@ def sections():
                     "id": r[0],
                     "type": r[1],
                     "description": r[2],
-                    "ranges_nr": r[3],
-                    "sj_nr": r[4],
+                    "srid": r[3],
+                    "ranges": r[4],
+                    "sj_nr": r[5],
                 }
                 for r in cur.fetchall()
             ]
