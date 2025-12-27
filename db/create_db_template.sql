@@ -279,31 +279,39 @@ CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON tab_sj_structure USING 
 ---
 -- tab_photos definition
 ---
-CREATE TABLE tab_photos (
-  id_photo        varchar(150) PRIMARY KEY,
-  photo_typ       varchar(60)  NOT NULL,
-  datum           date         NOT NULL,
-  author          varchar(100) NOT NULL REFERENCES gloss_personalia(mail),
-  notes           text,
-  mime_type       text         NOT NULL,
-  file_size       bigint       NOT NULL CHECK (file_size >= 0),
-  checksum_sha256 text         NOT NULL,
-  shoot_datetime  timestamptz,
-  gps_lat         double precision,
-  gps_lon         double precision,
-  gps_alt         double precision,
-  exif_json        jsonb        DEFAULT '{}'::jsonb,
-  photo_centroid  geometry(Point)   -- SRID not defined ("empty"); after creating new DB will be changed by update_geometry_srid()
-  -- Validation PK and MIME:
-  CONSTRAINT tab_photos_id_format_chk CHECK (id_photo ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
-  CONSTRAINT tab_photos_mime_chk CHECK (mime_type IN ('image/jpg','image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
+-- public.tab_photos (template/fresh install)
+CREATE TABLE IF NOT EXISTS tab_photos (
+  id_photo        varchar(150)  NOT NULL,
+  photo_typ       varchar(60)   NOT NULL,
+  datum           date          NOT NULL,
+  author          varchar(100)  NOT NULL,
+  notes           text          NULL,
+  mime_type       text          NOT NULL,
+  file_size       int8          NOT NULL,
+  checksum_sha256 text          NOT NULL,
+  shoot_datetime  timestamptz   NULL,
+  gps_lat         float8        NULL,
+  gps_lon         float8        NULL,
+  gps_alt         float8        NULL,
+  exif_json       jsonb         NULL DEFAULT '{}'::jsonb,
+  photo_centroid  geometry(PointZ) NULL,  -- SRID set dynamically per-project by set_project_srids
+  CONSTRAINT tab_photos_pkey PRIMARY KEY (id_photo),
+  CONSTRAINT tab_photos_file_size_check CHECK (file_size >= 0),
+  CONSTRAINT tab_photos_id_format_chk CHECK ((id_photo)::text ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'::text),
+  CONSTRAINT tab_photos_mime_chk CHECK (
+    mime_type = ANY (ARRAY[
+      'image/jpg'::text, 'image/jpeg'::text, 'image/png'::text,
+      'image/tiff'::text, 'image/svg+xml'::text, 'application/pdf'::text
+    ])
+  )
 );
-CREATE INDEX tab_photos_author_idx ON tab_photos (author);
-CREATE INDEX tab_photos_datum_idx ON tab_photos (datum);
-CREATE INDEX tab_photos_checksum_idx ON tab_photos (checksum_sha256);
-CREATE INDEX tab_photos_shoot_dt_idx ON tab_photos (shoot_datetime);
--- index only for not null geometries
-CREATE INDEX tab_photos_centroid_gix ON tab_photos USING GIST (photo_centroid) WHERE photo_centroid IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS tab_photos_author_idx      ON tab_photos (author);
+CREATE INDEX IF NOT EXISTS tab_photos_checksum_idx    ON tab_photos (checksum_sha256);
+CREATE INDEX IF NOT EXISTS tab_photos_datum_idx       ON tab_photos (datum);
+CREATE INDEX IF NOT EXISTS tab_photos_shoot_dt_idx    ON tab_photos (shoot_datetime);
+CREATE INDEX IF NOT EXISTS tab_photos_centroid_gix ON tab_photos USING GIST (photo_centroid) WHERE photo_centroid IS NOT NULL;
+ALTER TABLE tab_photos ADD CONSTRAINT tab_photos_author_fkey FOREIGN KEY (author) REFERENCES gloss_personalia(mail);
 
 
 
@@ -822,31 +830,20 @@ $$
 DECLARE
   v_epsg int;
 BEGIN
-  -- If without GPS → centroid NULL
   IF NEW.gps_lat IS NULL OR NEW.gps_lon IS NULL THEN
     NEW.photo_centroid := NULL;
     RETURN NEW;
   END IF;
 
-  -- Check for values, if more than WGS limits → NULL
-  IF NEW.gps_lat < -90 OR NEW.gps_lat > 90
-     OR NEW.gps_lon < -180 OR NEW.gps_lon > 180 THEN
-    NEW.photo_centroid := NULL;
-    RETURN NEW;
-  END IF;
-
-  -- SRID target: retype to text
   v_epsg := Find_SRID(TG_TABLE_SCHEMA::text, TG_TABLE_NAME::text, 'photo_centroid'::text);
-
- 
   IF v_epsg IS NULL OR v_epsg <= 0 THEN
     NEW.photo_centroid := NULL;
     RETURN NEW;
   END IF;
 
   NEW.photo_centroid :=
-    ST_Transform(
-      ST_SetSRID(ST_MakePoint(NEW.gps_lon, NEW.gps_lat), 4326),
+    ST_SetSRID(
+      ST_MakePoint(NEW.gps_lon, NEW.gps_lat, COALESCE(NEW.gps_alt, 0)),
       v_epsg
     );
 
@@ -858,10 +855,11 @@ EXCEPTION
     RETURN NEW;
 END
 $$;
--- ensure there is only one trigger
+
 DROP TRIGGER IF EXISTS trg_tab_photos_set_centroid ON tab_photos;
+
 CREATE TRIGGER trg_tab_photos_set_centroid
-BEFORE INSERT OR UPDATE OF gps_lat, gps_lon
+BEFORE INSERT OR UPDATE OF gps_lat, gps_lon, gps_alt
 ON tab_photos
 FOR EACH ROW
 EXECUTE FUNCTION tab_photos_set_centroid();

@@ -7,3 +7,4 @@ from .archeo_objects import archeo_objects_bp
 from .polygons import polygons_bp
 from .terr_photo import terr_photo_bp
 from .sections import sections_bp
+from .geodesy import geodesy_bp

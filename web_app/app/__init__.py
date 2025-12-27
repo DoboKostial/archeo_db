@@ -12,7 +12,7 @@ def create_app():
 
     # Bluprints registration
     # so far only routes
-    from app.routes import main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp, sections_bp, terr_photo_bp
+    from app.routes import main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp, sections_bp, terr_photo_bp, geodesy_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -21,6 +21,7 @@ def create_app():
     app.register_blueprint(polygons_bp)
     app.register_blueprint(sections_bp)
     app.register_blueprint(terr_photo_bp)
+    app.register_blueprint(geodesy_bp)
 
     @app.context_processor
     def inject_user_info():
