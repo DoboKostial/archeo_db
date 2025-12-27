@@ -97,12 +97,22 @@ CREATE TABLE tab_section (
 ---
 -- tab_geopts definition
 ---
+CREATE TYPE geopt_code AS ENUM (
+      'SU', -- tracking boundaries of stratigraphic unit
+      'FX', -- fix (e.g. nail)
+      'EP', -- excavation polygon
+      'FO', -- photogrammetric point
+      'NI', -- nielation for making surfaces
+      'PF', -- point field for total station stationing
+      'SP'  -- special meaning (free)
+);
+
 CREATE TABLE IF NOT EXISTS tab_geopts (
   id_pts   int4    PRIMARY KEY,
   x        double precision NOT NULL,   -- more precise than numeric
   y        double precision NOT NULL,
   h        double precision NOT NULL,
-  code     text,
+  code     geopt_code,  -- see enum above
   notes    text,
   pts_geom geometry(PointZ)             -- SRID set by set_project_srid later
 );
