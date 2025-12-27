@@ -369,11 +369,10 @@ def find_geopts_srid_sql():
     return "SELECT Find_SRID(current_schema()::text, 'tab_geopts'::text, 'pts_geom'::text);"
 
 
-
 def upsert_geopt_sql():
     """
     Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.
-    Params: (id_pts, x_src, y_src, h_src, source_epsg, target_srid, h_src, code)
+    Params: (x_src, y_src, h_src, source_epsg, target_srid, id_pts, h_src, code)
     Note: Z (h) is stored as provided (no vertical transform).
     """
     return """
@@ -389,7 +388,12 @@ def upsert_geopt_sql():
             ST_X(p.g),
             ST_Y(p.g),
             %s,
-            NULLIF(%s,'')
+            CASE
+              WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
+              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+                THEN UPPER(BTRIM(%s))::geopt_code
+              ELSE NULL
+            END
         FROM p
         ON CONFLICT (id_pts) DO UPDATE SET
             x    = EXCLUDED.x,
@@ -397,6 +401,7 @@ def upsert_geopt_sql():
             h    = EXCLUDED.h,
             code = EXCLUDED.code;
     """
+
 
 def polygon_geoms_geojson_sql():
     """
