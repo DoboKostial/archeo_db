@@ -97,18 +97,18 @@ CREATE TABLE tab_section (
 ---
 -- tab_geopts definition
 ---
-CREATE TABLE tab_geopts (
+CREATE TABLE IF NOT EXISTS tab_geopts (
   id_pts   int4    PRIMARY KEY,
   x        double precision NOT NULL,   -- more precise than numeric
   y        double precision NOT NULL,
   h        double precision NOT NULL,
   code     text,
   notes    text,
-  pts_geom geometry(Point)              -- bez SRID; set_project_srid will define this
+  pts_geom geometry(PointZ)             -- SRID set by set_project_srid later
 );
-
-CREATE UNIQUE INDEX tab_geopts_id_pts_idx ON tab_geopts (id_pts);
-CREATE INDEX tab_geopts_geom_gix ON tab_geopts USING GIST (pts_geom) WHERE pts_geom IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS tab_geopts_id_pts_idx ON tab_geopts (id_pts);
+-- Spatial index for bbox queries etc.
+CREATE INDEX IF NOT EXISTS tab_geopts_geom_gix ON tab_geopts USING GIST (pts_geom) WHERE pts_geom IS NOT NULL;
 
 
 ---
@@ -645,12 +645,13 @@ $$;
 
 
 
--- This PL/PGSQL function is for excavation polygons and namely constructs polygon from geomesuring points:
--- - collects points from tab_geopts in range
+-- Rebuild polygon geometries from geodetic points (tab_geopts)
+-- - collects points from ranges
 -- - sorts by id_pts
 -- - closes line (adds startpoint to end)
--- - unifies SRID to project
--- - creates POLYGON and saves to tab_polygons.geom.
+-- - removes consecutive duplicates
+-- - validates (min points, simple line, valid polygon)
+-- - stores into tab_polygons.geom_top / geom_bottom
 CREATE OR REPLACE FUNCTION rebuild_polygon_geoms_from_geopts(p_polygon_name text)
 RETURNS void
 LANGUAGE plpgsql
@@ -669,7 +670,7 @@ BEGIN
       ('tab_polygon_geopts_binding_top',    'geom_top'),
       ('tab_polygon_geopts_binding_bottom', 'geom_bottom')
   LOOP
-    -- collect points from ranges and sort them ascending according id_pts
+    -- collect points from ranges and sort them ascending by id_pts
     q := format($SQL$
       WITH ranges AS (
         SELECT pts_from, pts_to
@@ -709,6 +710,11 @@ BEGIN
     -- remove duplicities (consecutive)
     v_line := ST_RemoveRepeatedPoints(v_line, 1e-7);
 
+    -- enforce 3D only if needed (tab_geopts.pts_geom is PointZ, so usually already 3D)
+    IF ST_CoordDim(v_line) < 3 THEN
+      v_line := ST_Force3D(v_line);
+    END IF;
+
     -- GUARD 1: must have at least 4 points in closed ring (3 distinct + closing point)
     IF ST_NPoints(v_line) < 4 THEN
       EXECUTE format('UPDATE tab_polygons SET %I = NULL WHERE polygon_name = $1', target_col)
@@ -725,9 +731,6 @@ BEGIN
       CONTINUE;
     END IF;
 
-    -- enforce 3D (if points are 2D)
-    v_line := ST_Force3D(v_line);
-
     -- build polygon (no autocorrection)
     v_poly_try := ST_MakePolygon(v_line);
 
@@ -740,7 +743,12 @@ BEGIN
       CONTINUE;
     END IF;
 
-    v_poly := ST_Force3D(v_poly_try);
+    -- enforce PolygonZ only if needed
+    IF ST_CoordDim(v_poly_try) < 3 THEN
+      v_poly := ST_Force3D(v_poly_try);
+    ELSE
+      v_poly := v_poly_try;
+    END IF;
 
     -- final check: must be a single polygon
     IF ST_IsEmpty(v_poly) OR ST_GeometryType(v_poly) <> 'ST_Polygon' THEN
@@ -854,8 +862,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  NEW.pts_geom :=
-    ST_SetSRID(ST_MakePoint(NEW.x, NEW.y), v_epsg);
+  NEW.pts_geom := ST_SetSRID(ST_MakePoint(NEW.x, NEW.y, NEW.h), v_epsg);
 
   RETURN NEW;
 
@@ -868,11 +875,10 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_tab_geopts_set_geom ON tab_geopts;
 CREATE TRIGGER trg_tab_geopts_set_geom
-BEFORE INSERT OR UPDATE OF x, y
+BEFORE INSERT OR UPDATE OF x, y, h
 ON tab_geopts
 FOR EACH ROW
 EXECUTE FUNCTION tab_geopts_set_geom();
-
 
 
 
