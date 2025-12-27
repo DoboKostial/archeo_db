@@ -592,6 +592,9 @@ $$
 DECLARE
   r record;
   q text;
+  type_name text;
+  suffix text;
+  failed text[] := ARRAY[]::text[];
 BEGIN
   IF target_srid IS NULL OR target_srid <= 0 THEN
     RAISE EXCEPTION 'Invalid target_srid: %', target_srid;
@@ -602,40 +605,46 @@ BEGIN
       n.nspname                                AS sch,
       c.relname                                AS tbl,
       a.attname                                AS col,
-      postgis_typmod_type(a.atttypmod)         AS base_type,   -- e.g. 'POLYGON'
-      postgis_typmod_dims(a.atttypmod)         AS dims,        -- 2,3,4...
+      postgis_typmod_type(a.atttypmod)         AS base_type,
+      postgis_typmod_dims(a.atttypmod)         AS dims,
       postgis_typmod_srid(a.atttypmod)         AS cur_srid
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace
     JOIN pg_attribute a ON a.attrelid = c.oid
     JOIN pg_type t ON t.oid = a.atttypid
     WHERE n.nspname = in_schema
-      AND c.relkind = 'r'
+      AND c.relkind IN ('r','p')               -- i partitioned tables
       AND a.attnum > 0
       AND NOT a.attisdropped
       AND t.typname = 'geometry'
   LOOP
-    -- If already assigned, keep as is
     IF r.cur_srid = target_srid THEN
       CONTINUE;
     END IF;
 
+    -- decide suffix from dims (best effort; avoids ZZ by checking base_type itself)
+    suffix :=
+      CASE
+        WHEN r.dims = 4 THEN 'ZM'
+        WHEN r.dims = 3 THEN 'Z'
+        ELSE ''
+      END;
+
+    -- if base_type already ends with Z/M/ZM (any case), do NOT append suffix
+    IF r.base_type ~* '(ZM|Z|M)$' THEN
+      type_name := r.base_type;
+    ELSE
+      type_name := r.base_type || suffix;
+    END IF;
+
     BEGIN
-      -- Retype column to geometry(<type>[Z/M/ZM], <target_srid>) while preserving dimensions.
-      -- Then assign SRID to existing values (no coordinate transformation).
       q := format(
         'ALTER TABLE %I.%I
            ALTER COLUMN %I
-           TYPE geometry(%s%s, %s)
+           TYPE geometry(%s, %s)
            USING ST_SetSRID(%I, %s)',
         r.sch, r.tbl, r.col,
-        r.base_type,
-        CASE
-          WHEN r.dims = 2 THEN ''   -- 2D
-          WHEN r.dims = 3 THEN 'Z'  -- 3D
-          WHEN r.dims = 4 THEN 'ZM' -- 4D
-          ELSE ''                   -- fallback
-        END,
+        type_name,
         target_srid,
         r.col,
         target_srid
@@ -646,10 +655,17 @@ BEGIN
       RAISE NOTICE 'SRID updated: %.%.% → EPSG %', r.sch, r.tbl, r.col, target_srid;
 
     EXCEPTION WHEN OTHERS THEN
-      -- Do not fail whole run; just report
+      failed := array_append(
+        failed,
+        format('%.%.% (type=%s dims=%s cur_srid=%s): %s', r.sch, r.tbl, r.col, r.base_type, r.dims, r.cur_srid, SQLERRM)
+      );
       RAISE NOTICE 'SRID update failed for %.%.%: %', r.sch, r.tbl, r.col, SQLERRM;
     END;
   END LOOP;
+
+  IF array_length(failed, 1) IS NOT NULL THEN
+    RAISE EXCEPTION 'set_project_srid failed for % column(s): %', array_length(failed, 1), array_to_string(failed, ' | ');
+  END IF;
 END
 $$;
 
