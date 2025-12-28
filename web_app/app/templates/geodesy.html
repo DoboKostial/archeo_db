@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-3">
+
+  <div class="row">
+    <!-- Left column: upload + controls -->
+    <div class="col-lg-5">
+
+      <div class="card mb-3">
+        <div class="card-header">
+          <strong>Geodesy – Import points</strong>
+        </div>
+        <div class="card-body">
+
+          <form method="POST" action="{{ url_for('geodesy.upload_geopts') }}" enctype="multipart/form-data">
+            <div class="mb-2">
+              <label class="form-label">File (CSV/TXT)</label>
+              <input class="form-control" type="file" name="file" required>
+              <div class="form-text">
+                Expected columns: <code>id_pts, x, y, h, code, notes</code> (notes optional).
+                Delimiters supported: comma (<code>,</code>), semicolon (<code>;</code>) or whitespace.
+              </div>
+            </div>
+
+            <div class="alert alert-info py-2">
+              <strong>Project SRID:</strong> <code>{{ target_srid }}</code>
+              <div class="small text-muted">
+                Import assumes coordinates are already in the project SRID. No EPSG selection is required.
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">Upload</button>
+              <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#geoptsModal">
+                Existing points
+              </button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><strong>Map layers</strong></div>
+        <div class="card-body">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="chkPolys" checked>
+            <label class="form-check-label" for="chkPolys">
+              Excavation polygons (tab_polygons.geom_top)
+            </label>
+          </div>
+
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="chkPhotos">
+            <label class="form-check-label" for="chkPhotos">
+              Photo GPS points (tab_photos.gps_*)
+            </label>
+          </div>
+
+          <hr>
+
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label">Code filter</label>
+              <select id="filterCode" class="form-select">
+                <option value="">(all)</option>
+                {% for c in codes %}
+                  <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Text filter (notes/code)</label>
+              <input id="filterQ" type="text" class="form-control" placeholder="search...">
+            </div>
+          </div>
+
+          <div class="row g-2 mt-1">
+            <div class="col-6">
+              <label class="form-label">ID from</label>
+              <input id="filterIdFrom" type="number" class="form-control">
+            </div>
+            <div class="col-6">
+              <label class="form-label">ID to</label>
+              <input id="filterIdTo" type="number" class="form-control">
+            </div>
+          </div>
+
+          <div class="mt-2">
+            <button id="btnReload" class="btn btn-sm btn-outline-primary">Reload map</button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right column: map -->
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header">
+          <strong>Map preview</strong>
+          <span class="text-muted ms-2">Data are loaded by map bounding box (EPSG:4326)</span>
+        </div>
+        <div class="card-body p-0">
+          <div id="geodesyMap" style="height: 75vh; width: 100%;"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- Existing points modal -->
+<div class="modal fade" id="geoptsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Existing points</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="row g-2 mb-2">
+          <div class="col-md-4">
+            <input id="modalQ" class="form-control" placeholder="filter (code/notes)">
+          </div>
+          <div class="col-md-2">
+            <input id="modalFrom" class="form-control" type="number" placeholder="id from">
+          </div>
+          <div class="col-md-2">
+            <input id="modalTo" class="form-control" type="number" placeholder="id to">
+          </div>
+          <div class="col-md-2">
+            <button id="btnModalReload" class="btn btn-outline-primary w-100">Reload</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm table-striped align-middle">
+            <thead>
+              <tr>
+                <th>ID</th><th>X</th><th>Y</th><th>H</th><th>Code</th><th>Notes</th><th style="width:140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="geoptsTbody"></tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- Edit point modal -->
+<div class="modal fade" id="editPointModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Edit point</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label">X</label>
+            <input id="editX" class="form-control" type="number" step="any">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Y</label>
+            <input id="editY" class="form-control" type="number" step="any">
+          </div>
+          <div class="col-6">
+            <label class="form-label">H</label>
+            <input id="editH" class="form-control" type="number" step="any">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Code</label>
+            <select id="editCode" class="form-select">
+              <option value="">(null)</option>
+              {% for c in codes %}
+                <option value="{{ c }}">{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea id="editNotes" class="form-control" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div id="editErr" class="alert alert-danger mt-2 d-none"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btnSaveEdit" class="btn btn-primary">Save</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  window.GEODESY = {
+    endpoints: {
+      geopts: "{{ url_for('geodesy.geopts_geojson') }}",
+      polys: "{{ url_for('geodesy.polygons_geojson') }}",
+      photos: "{{ url_for('geodesy.photos_geojson') }}",
+      list: "{{ url_for('geodesy.list_geopts') }}",
+      delBase: "{{ url_for('geodesy.delete_geopt', id_pts=0) }}".replace("/0", ""),
+      updBase: "{{ url_for('geodesy.update_geopt', id_pts=0) }}".replace("/0", "")
+    }
+  };
+</script>
+
+<script src="{{ url_for('static', filename='js/geodesy_map.js') }}"></script>
+
+{% endblock %}

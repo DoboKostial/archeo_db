@@ -23,6 +23,7 @@ def create_app():
     app.register_blueprint(terr_photo_bp)
     app.register_blueprint(geodesy_bp)
 
+
     @app.context_processor
     def inject_user_info():
         user_name = ""

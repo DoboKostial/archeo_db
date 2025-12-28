@@ -369,38 +369,6 @@ def find_geopts_srid_sql():
     return "SELECT Find_SRID(current_schema()::text, 'tab_geopts'::text, 'pts_geom'::text);"
 
 
-def upsert_geopt_sql():
-    """
-    Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.
-    Params: (x_src, y_src, h_src, source_epsg, target_srid, id_pts, h_src, code)
-    Note: Z (h) is stored as provided (no vertical transform).
-    """
-    return """
-        WITH p AS (
-            SELECT ST_Transform(
-                       ST_SetSRID(ST_MakePoint(%s, %s, %s), %s),
-                       %s
-                   ) AS g
-        )
-        INSERT INTO tab_geopts (id_pts, x, y, h, code)
-        SELECT
-            %s,
-            ST_X(p.g),
-            ST_Y(p.g),
-            %s,
-            CASE
-              WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
-              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
-                THEN UPPER(BTRIM(%s))::geopt_code
-              ELSE NULL
-            END
-        FROM p
-        ON CONFLICT (id_pts) DO UPDATE SET
-            x    = EXCLUDED.x,
-            y    = EXCLUDED.y,
-            h    = EXCLUDED.h,
-            code = EXCLUDED.code;
-    """
 
 
 def polygon_geoms_geojson_sql():
@@ -438,26 +406,26 @@ def find_polygons_srid_sql():
     """
 
 
-def polygons_geojson_top_bottom_sql():
-    """
-    Returns (polygon_name, top_geojson, bottom_geojson) for all polygons.
-    Geoms are forced to 2D for shapefile.
-    """
-    return """
-        SELECT
-            polygon_name,
-            CASE
-              WHEN geom_top IS NULL THEN NULL
-              ELSE ST_AsGeoJSON(ST_Force2D(geom_top))
-            END AS top_gj,
-            CASE
-              WHEN geom_bottom IS NULL THEN NULL
-              ELSE ST_AsGeoJSON(ST_Force2D(geom_bottom))
-            END AS bottom_gj
-        FROM tab_polygons
-        WHERE geom_top IS NOT NULL OR geom_bottom IS NOT NULL
-        ORDER BY polygon_name;
-    """
+#def polygons_geojson_top_bottom_sql():
+#    """
+#    Returns (polygon_name, top_geojson, bottom_geojson) for all polygons.
+#    Geoms are forced to 2D for shapefile.
+#    """
+#    return """
+#        SELECT
+#            polygon_name,
+#            CASE
+#              WHEN geom_top IS NULL THEN NULL
+#              ELSE ST_AsGeoJSON(ST_Force2D(geom_top))
+#            END AS top_gj,
+#            CASE
+#              WHEN geom_bottom IS NULL THEN NULL
+#              ELSE ST_AsGeoJSON(ST_Force2D(geom_bottom))
+#            END AS bottom_gj
+#        FROM tab_polygons
+#        WHERE geom_top IS NOT NULL OR geom_bottom IS NOT NULL
+#        ORDER BY polygon_name;
+#    """
 
 # parent a children are important when deleting polygons - children are "reparented" to grandfather
 def get_polygon_parent_sql():
@@ -861,3 +829,222 @@ def sections_lines_geojson_sql():
         GROUP BY id_section
         ORDER BY id_section;
     """
+
+
+def upsert_geopt_sql():
+    """
+    Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.
+    Params: (x_src, y_src, h_src, source_epsg, target_srid, id_pts, h_src, code)
+    Note: Z (h) is stored as provided (no vertical transform).
+    """
+    return """
+        WITH p AS (
+            SELECT ST_Transform(
+                       ST_SetSRID(ST_MakePoint(%s, %s, %s), %s),
+                       %s
+                   ) AS g
+        )
+        INSERT INTO tab_geopts (id_pts, x, y, h, code)
+        SELECT
+            %s,
+            ST_X(p.g),
+            ST_Y(p.g),
+            %s,
+            CASE
+              WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
+              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+                THEN UPPER(BTRIM(%s))::geopt_code
+              ELSE NULL
+            END
+        FROM p
+        ON CONFLICT (id_pts) DO UPDATE SET
+            x    = EXCLUDED.x,
+            y    = EXCLUDED.y,
+            h    = EXCLUDED.h,
+            code = EXCLUDED.code;
+    """
+
+
+#############################
+## Geodesy queries
+#############################
+
+def list_geopts_sql():
+    """
+    List points (for modal table).
+    Params: (q_like, q_like, id_from, id_to, limit)
+    """
+    return """
+      SELECT id_pts, x, y, h, code::text AS code, notes
+      FROM tab_geopts
+      WHERE
+        (
+          %s IS NULL
+          OR code::text ILIKE %s
+          OR notes ILIKE %s
+        )
+        AND (%s IS NULL OR id_pts >= %s)
+        AND (%s IS NULL OR id_pts <= %s)
+      ORDER BY id_pts
+      LIMIT %s;
+    """
+
+
+def delete_geopt_sql():
+    return "DELETE FROM tab_geopts WHERE id_pts = %s;"
+
+
+def update_geopt_sql():
+    """
+    Update x,y,h,code,notes. Trigger will maintain pts_geom.
+    Params: (x, y, h, code, code, code, notes, id_pts)
+    """
+    return """
+      UPDATE tab_geopts
+      SET
+        x = %s,
+        y = %s,
+        h = %s,
+        code = CASE
+                 WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
+                 WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+                   THEN UPPER(BTRIM(%s))::geopt_code
+                 ELSE NULL
+               END,
+        notes = NULLIF(%s, '')
+      WHERE id_pts = %s;
+    """
+
+
+def geojson_geopts_bbox_sql():
+    """
+    Returns FeatureCollection of points inside bbox (bbox in EPSG:4326).
+    Params: (minx, miny, maxx, maxy, target_srid, code_filter, q_like, q_like, id_from, id_to, limit)
+    """
+    return """
+      WITH
+      bbox AS (
+        SELECT ST_Transform(
+                 ST_MakeEnvelope(%s, %s, %s, %s, 4326),
+                 %s
+               ) AS g
+      ),
+      pts AS (
+        SELECT
+          g.id_pts,
+          g.code::text AS code,
+          g.notes,
+          ST_Transform(g.pts_geom, 4326) AS geom_4326
+        FROM tab_geopts g, bbox b
+        WHERE g.pts_geom IS NOT NULL
+          AND ST_Intersects(g.pts_geom, b.g)
+          AND (%s IS NULL OR g.code::text = %s)
+          AND (
+            %s IS NULL
+            OR g.notes ILIKE %s
+            OR g.code::text ILIKE %s
+          )
+          AND (%s IS NULL OR g.id_pts >= %s)
+          AND (%s IS NULL OR g.id_pts <= %s)
+        ORDER BY g.id_pts
+        LIMIT %s
+      )
+      SELECT json_build_object(
+        'type', 'FeatureCollection',
+        'features', COALESCE(json_agg(
+          json_build_object(
+            'type', 'Feature',
+            'geometry', ST_AsGeoJSON(geom_4326)::json,
+            'properties', json_build_object(
+              'id_pts', id_pts,
+              'code', code,
+              'notes', notes
+            )
+          )
+        ), '[]'::json)
+      )
+      FROM pts;
+    """
+
+
+def geojson_polygons_bbox_sql():
+    """
+    Overlay polygons (geom_top) inside bbox (bbox in EPSG:4326).
+    Params: (minx, miny, maxx, maxy, target_srid, limit)
+    """
+    return """
+      WITH
+      bbox AS (
+        SELECT ST_Transform(
+                 ST_MakeEnvelope(%s, %s, %s, %s, 4326),
+                 %s
+               ) AS g
+      ),
+      polys AS (
+        SELECT
+          p.polygon_name,
+          ST_Transform(p.geom_top, 4326) AS geom_4326
+        FROM tab_polygons p, bbox b
+        WHERE p.geom_top IS NOT NULL
+          AND ST_Intersects(p.geom_top, b.g)
+        ORDER BY p.polygon_name
+        LIMIT %s
+      )
+      SELECT json_build_object(
+        'type', 'FeatureCollection',
+        'features', COALESCE(json_agg(
+          json_build_object(
+            'type', 'Feature',
+            'geometry', ST_AsGeoJSON(geom_4326)::json,
+            'properties', json_build_object('polygon_name', polygon_name)
+          )
+        ), '[]'::json)
+      )
+      FROM polys;
+    """
+
+
+def geojson_photos_bbox_sql():
+    """
+    Photo centroids from tab_photos (gps_lon, gps_lat, gps_alt). Assumed WGS84.
+    Params: (minx, miny, maxx, maxy, limit)
+    """
+    return """
+      WITH
+      bbox AS (
+        SELECT ST_MakeEnvelope(%s, %s, %s, %s, 4326) AS g
+      ),
+      ph AS (
+        SELECT
+          id_foto,
+          file_name,
+          gps_lat,
+          gps_lon,
+          gps_alt,
+          ST_SetSRID(ST_MakePoint(gps_lon, gps_lat, COALESCE(gps_alt, 0)), 4326) AS geom_4326
+        FROM tab_photos
+        WHERE gps_lat IS NOT NULL AND gps_lon IS NOT NULL
+        LIMIT %s
+      ),
+      inside AS (
+        SELECT *
+        FROM ph, bbox
+        WHERE ST_Intersects(ph.geom_4326, bbox.g)
+      )
+      SELECT json_build_object(
+        'type', 'FeatureCollection',
+        'features', COALESCE(json_agg(
+          json_build_object(
+            'type', 'Feature',
+            'geometry', ST_AsGeoJSON(geom_4326)::json,
+            'properties', json_build_object(
+              'id_foto', id_foto,
+              'file_name', file_name,
+              'gps_alt', gps_alt
+            )
+          )
+        ), '[]'::json)
+      )
+      FROM inside;
+    """
+
