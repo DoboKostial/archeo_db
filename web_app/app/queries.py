@@ -1048,3 +1048,19 @@ def geojson_photos_bbox_sql():
       FROM inside;
     """
 
+# this query serves for getting extent of geodesy points - then used for scaling map automatically
+def geopts_extent_4326_sql():
+    """
+    Returns bbox of tab_geopts points in EPSG:4326.
+    Output: (minx, miny, maxx, maxy) or all NULL if no points.
+    """
+    return """
+      WITH e AS (
+        SELECT ST_Extent(ST_Transform(pts_geom, 4326)) AS ext
+        FROM tab_geopts
+        WHERE pts_geom IS NOT NULL
+      )
+      SELECT
+        ST_XMin(ext), ST_YMin(ext), ST_XMax(ext), ST_YMax(ext)
+      FROM e;
+    """
