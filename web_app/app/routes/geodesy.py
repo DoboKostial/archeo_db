@@ -20,7 +20,8 @@ from app.queries import (
     update_geopt_sql,
     geojson_geopts_bbox_sql,
     geojson_polygons_bbox_sql,
-    geojson_photos_bbox_sql
+    geojson_photos_bbox_sql,
+    geopts_extent_4326_sql
 )
 
 geodesy_bp = Blueprint('geodesy', __name__)
@@ -467,5 +468,36 @@ def photos_geojson():
     except Exception as e:
         logger.exception(f"[{selected_db}] geodesy photos geojson failed: {e}")
         return jsonify({"type": "FeatureCollection", "features": [], "error": str(e)}), 500
+    finally:
+        conn.close()
+
+# route for adjusting geodesy map preview extent
+@geodesy_bp.route('/geodesy/extent', methods=['GET'])
+@require_selected_db
+def geopts_extent():
+    """
+    Returns bbox of geodetic points in EPSG:4326:
+      { ok: True, bbox: [minx, miny, maxx, maxy] }  or bbox: null if no points
+    """
+    selected_db = session.get('selected_db')
+    conn = get_terrain_connection(selected_db)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(geopts_extent_4326_sql())
+            row = cur.fetchone()
+
+        if not row or any(v is None for v in row):
+            return jsonify({"ok": True, "bbox": None})
+
+        minx, miny, maxx, maxy = [float(v) for v in row]
+        # sanity
+        if minx >= maxx or miny >= maxy:
+            return jsonify({"ok": True, "bbox": None})
+
+        return jsonify({"ok": True, "bbox": [minx, miny, maxx, maxy]})
+
+    except Exception as e:
+        logger.exception(f"[{selected_db}] geodesy extent failed: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
     finally:
         conn.close()

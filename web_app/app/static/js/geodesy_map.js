@@ -238,31 +238,62 @@
     await reloadAll();
   }
 
-  // ----- init -----
 
-  function initMap() {
-    map = L.map("geodesyMap");
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 20,
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
+// This has to be ABOVE initMap (same level as other functions)
+async function setInitialView() {
+  try {
+    const res = await fetch(EP.extent);
+    const data = await res.json();
 
-    // default view
-    map.setView([49.0, 15.0], 6);
+    if (data.ok && data.bbox) {
+      const [minx, miny, maxx, maxy] = data.bbox;
 
-    map.on("moveend", scheduleReload);
+      const bounds = L.latLngBounds(
+        [miny, minx],   // SW (lat, lon)
+        [maxy, maxx]    // NE (lat, lon)
+      );
 
-    document.getElementById("chkPolys").addEventListener("change", reloadAll);
-    document.getElementById("chkPhotos").addEventListener("change", reloadAll);
-    document.getElementById("btnReload").addEventListener("click", reloadAll);
-
-    document.getElementById("filterCode").addEventListener("change", reloadAll);
-    document.getElementById("filterQ").addEventListener("input", scheduleReload);
-    document.getElementById("filterIdFrom").addEventListener("input", scheduleReload);
-    document.getElementById("filterIdTo").addEventListener("input", scheduleReload);
-
-    reloadAll();
+      map.fitBounds(bounds, { padding: [20, 20] });
+      return;
+    }
+  } catch (e) {
+    console.error("extent fetch failed", e);
   }
+
+  // fallback when no points exist or request fails
+  map.setView([49.0, 15.0], 6);
+}
+
+
+// ----- init -----
+async function initMap() {
+  map = L.map("geodesyMap");
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 20,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  // center map to points extent (or fallback)
+  await setInitialView();
+
+  map.on("moveend", scheduleReload);
+
+  document.getElementById("chkPolys").addEventListener("change", reloadAll);
+  document.getElementById("chkPhotos").addEventListener("change", reloadAll);
+  document.getElementById("btnReload").addEventListener("click", reloadAll);
+
+  document.getElementById("filterCode").addEventListener("change", reloadAll);
+  document.getElementById("filterQ").addEventListener("input", scheduleReload);
+  document.getElementById("filterIdFrom").addEventListener("input", scheduleReload);
+  document.getElementById("filterIdTo").addEventListener("input", scheduleReload);
+
+  reloadAll();
+}
+
+window.addEventListener("load", () => {
+  initMap().catch(console.error);
+});
+
 
   // Modal events
   document.getElementById("geoptsModal").addEventListener("shown.bs.modal", () => {

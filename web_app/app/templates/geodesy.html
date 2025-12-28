@@ -223,6 +223,7 @@
 <script>
   window.GEODESY = {
     endpoints: {
+      extent: "{{ url_for('geodesy.geopts_extent') }}",
       geopts: "{{ url_for('geodesy.geopts_geojson') }}",
       polys: "{{ url_for('geodesy.polygons_geojson') }}",
       photos: "{{ url_for('geodesy.photos_geojson') }}",
