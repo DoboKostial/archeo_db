@@ -279,7 +279,7 @@ CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON tab_sj_structure USING 
 ---
 -- tab_photos definition
 ---
--- public.tab_photos (template/fresh install)
+-- tab_photos (template/fresh install)
 CREATE TABLE IF NOT EXISTS tab_photos (
   id_photo        varchar(150)  NOT NULL,
   photo_typ       varchar(60)   NOT NULL,
@@ -380,23 +380,83 @@ CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms (ref_sketch);
 CREATE INDEX tab_photograms_checksum_idx   ON tab_photograms (checksum_sha256);
 
 
--- tab_sack definition
--- sacks are containers for finds
-
-CREATE TABLE tab_sack (
-	id_sack int4 NOT NULL,
-	ref_sj int4 NULL,
-	"content" TEXT NULL,
-	description TEXT NULL,
-	"number" int4 NULL,
-	CONSTRAINT tab_sack_pk PRIMARY KEY (id_sack),
-	CONSTRAINT tab_sack_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj)
+-- tab_finds definition
+-- mostly is it sack as primary identificator - container for finds
+CREATE TABLE tab_finds (
+	id_find int4 NOT NULL,
+	"content" text NOT NULL,
+	description text NULL,
+	"number" int4 NOT NULL,
+  ref_sj int4 NOT NULL,
+	ref_geopt int4 NULL,
+  ref_polygon text NULL,
+	box int2 NOT NULL,
+	CONSTRAINT tab_finds_pk PRIMARY KEY (id_find)
 );
+ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_geopts_fk FOREIGN KEY (ref_geopt) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj);
 
+
+
+-- terrain samples
+---
+CREATE TABLE tab_samples (
+	id_sample int4 NOT NULL,
+	sample_type text NOT NULL,
+	description text NULL,
+	ref_sj int4 NOT NULL,
+	ref_geopt int4 NULL,
+	ref_polygon text NULL,
+	CONSTRAINT tab_sample_pk PRIMARY KEY (id_sample)
+);
+ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_geopts_fk FOREIGN KEY (ref_geopt) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_polygons_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --==========================================================
 -- TABAIDS - table helpers for M:N relations between tables
 --==========================================================
+-- tabaid between finds and photos
+CREATE TABLE tabaid_finds_photos (
+	id_aut serial4 NOT NULL,
+	ref_find int4 NOT NULL,
+	ref_photo text NOT NULL,
+	CONSTRAINT tabaid_finds_photos_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_finds_photos_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_finds_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- tabaid between finds and sketches
+CREATE TABLE tabaid_finds_sketches (
+	id_aut serial4 NOT NULL,
+	ref_find int4 NOT NULL,
+	ref_sketch text NOT NULL,
+	CONSTRAINT tabaid_finds_sketches_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_finds_sketches_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_finds_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- tabaid connecting samples and photos
+CREATE TABLE tabaid_samples_photos (
+	id_aut serial4 NOT NULL,
+	ref_sample int4 NOT NULL,
+	ref_photo varchar NOT NULL,
+	CONSTRAINT tabaid_samples_photos_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_samples_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_samples_photos_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- tabaid connecting samples and sketches
+CREATE TABLE tabaid_samples_sketches (
+	id_aut serial4 NOT NULL,
+	ref_sample int4 NOT NULL,
+	ref_sketch text NOT NULL,
+	CONSTRAINT tabaid_samples_sketches_pk PRIMARY KEY (id_aut),
+	CONSTRAINT tabaid_samples_sketches_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT tabaid_samples_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 
 -- tabaid_photo_sj definition
 -- this table connects photos and SUs (stratigraphic units)
