@@ -46,3 +46,15 @@ LINK_TABLES_SECTION = {
     "drawings":    {"table": "tabaid_section_drawings",    "fk_media": "ref_drawing",   "fk_section": "ref_section"},
     "photograms":  {"table": "tabaid_section_photograms",  "fk_media": "ref_photogram", "fk_section": "ref_section"},
 }
+
+# Relations finds ↔ media (table columns)
+LINK_TABLES_FINDS = {
+    "photos":      {"table": "tabaid_finds_photos",      "fk_media": "ref_photo",     "fk_find": "ref_find"},
+    "sketches":    {"table": "tabaid_finds_sketches",    "fk_media": "ref_sketch",    "fk_find": "ref_find"},
+}
+
+# Relations samples ↔ media (table columns)
+LINK_TABLES_SAMPLES = {
+    "photos":      {"table": "tabaid_samples_photos",      "fk_media": "ref_photo",     "fk_sample": "ref_sample"},
+    "sketches":    {"table": "tabaid_samples_sketches",    "fk_media": "ref_sketch",    "fk_sample": "ref_sample"},
+}

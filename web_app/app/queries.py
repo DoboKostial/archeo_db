@@ -1064,3 +1064,229 @@ def geopts_extent_4326_sql():
         ST_XMin(ext), ST_YMin(ext), ST_XMax(ext), ST_YMax(ext)
       FROM e;
     """
+
+# -------------------------
+# Finds & Samples (glossaries + CRUD + linking)
+# -------------------------
+
+def list_find_types_sql():
+    """Return active find types for dropdown. No params."""
+    return """
+        SELECT type_code
+        FROM gloss_find_type
+        WHERE is_active IS TRUE
+        ORDER BY sort_order, type_code;
+    """
+
+
+def insert_find_type_sql():
+    """Params: (type_code,)"""
+    return """
+        INSERT INTO gloss_find_type (type_code)
+        VALUES (LOWER(BTRIM(%s)))
+        ON CONFLICT (type_code) DO NOTHING;
+    """
+
+
+def list_sample_types_sql():
+    """Return active sample types for dropdown. No params."""
+    return """
+        SELECT type_code
+        FROM gloss_sample_type
+        WHERE is_active IS TRUE
+        ORDER BY sort_order, type_code;
+    """
+
+
+def insert_sample_type_sql():
+    """Params: (type_code,)"""
+    return """
+        INSERT INTO gloss_sample_type (type_code)
+        VALUES (LOWER(BTRIM(%s)))
+        ON CONFLICT (type_code) DO NOTHING;
+    """
+
+
+def list_polygons_names_sql():
+    """Return polygon names for dropdown. No params."""
+    return """
+        SELECT polygon_name
+        FROM tab_polygons
+        ORDER BY polygon_name;
+    """
+
+
+def find_exists_sql():
+    """Params: (id_find,)"""
+    return "SELECT 1 FROM tab_finds WHERE id_find = %s;"
+
+
+def sample_exists_sql():
+    """Params: (id_sample,)"""
+    return "SELECT 1 FROM tab_samples WHERE id_sample = %s;"
+
+
+def insert_find_sql():
+    """
+    Params:
+      (id_find, ref_find_type, description, count, ref_sj, ref_geopt, ref_polygon, box)
+    """
+    return """
+        INSERT INTO tab_finds (
+            id_find, ref_find_type, description, count, ref_sj, ref_geopt, ref_polygon, box
+        )
+        VALUES (%s, %s, NULLIF(%s,''), %s, %s, %s, NULLIF(%s,''), %s);
+    """
+
+
+def update_find_sql():
+    """
+    Params:
+      (ref_find_type, description, count, ref_sj, ref_geopt, ref_polygon, box, id_find)
+    """
+    return """
+        UPDATE tab_finds SET
+          ref_find_type = %s,
+          description   = NULLIF(%s,''),
+          count         = %s,
+          ref_sj        = %s,
+          ref_geopt     = %s,
+          ref_polygon   = NULLIF(%s,''),
+          box           = %s
+        WHERE id_find = %s;
+    """
+
+
+def delete_find_sql():
+    """Params: (id_find,)"""
+    return "DELETE FROM tab_finds WHERE id_find = %s;"
+
+
+def list_finds_sql():
+    """Params: (limit,)"""
+    return """
+        SELECT
+          id_find, ref_find_type, ref_sj, count, box,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_finds
+        ORDER BY id_find DESC
+        LIMIT %s;
+    """
+
+
+def get_find_sql():
+    """Params: (id_find,)"""
+    return """
+        SELECT
+          id_find, ref_find_type, ref_sj, count, box,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_finds
+        WHERE id_find = %s;
+    """
+
+
+def insert_sample_sql():
+    """
+    Params:
+      (id_sample, ref_sample_type, description, ref_sj, ref_geopt, ref_polygon)
+    """
+    return """
+        INSERT INTO tab_samples (
+            id_sample, ref_sample_type, description, ref_sj, ref_geopt, ref_polygon
+        )
+        VALUES (%s, %s, NULLIF(%s,''), %s, %s, NULLIF(%s,''));
+    """
+
+
+def update_sample_sql():
+    """
+    Params:
+      (ref_sample_type, description, ref_sj, ref_geopt, ref_polygon, id_sample)
+    """
+    return """
+        UPDATE tab_samples SET
+          ref_sample_type = %s,
+          description     = NULLIF(%s,''),
+          ref_sj          = %s,
+          ref_geopt       = %s,
+          ref_polygon     = NULLIF(%s,'')
+        WHERE id_sample = %s;
+    """
+
+
+def delete_sample_sql():
+    """Params: (id_sample,)"""
+    return "DELETE FROM tab_samples WHERE id_sample = %s;"
+
+
+def list_samples_sql():
+    """Params: (limit,)"""
+    return """
+        SELECT
+          id_sample, ref_sample_type, ref_sj,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_samples
+        ORDER BY id_sample DESC
+        LIMIT %s;
+    """
+
+
+def get_sample_sql():
+    """Params: (id_sample,)"""
+    return """
+        SELECT
+          id_sample, ref_sample_type, ref_sj,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_samples
+        WHERE id_sample = %s;
+    """
+
+
+# ----- Linking (idempotent even without UNIQUE constraints) -----
+
+def link_find_photo_sql():
+    """Params: (id_find, id_photo)"""
+    return """
+        INSERT INTO tabaid_finds_photos (ref_find, ref_photo)
+        SELECT %s, %s
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tabaid_finds_photos WHERE ref_find = %s AND ref_photo = %s
+        );
+    """
+
+
+def link_find_sketch_sql():
+    """Params: (id_find, id_sketch)"""
+    return """
+        INSERT INTO tabaid_finds_sketches (ref_find, ref_sketch)
+        SELECT %s, %s
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tabaid_finds_sketches WHERE ref_find = %s AND ref_sketch = %s
+        );
+    """
+
+
+def link_sample_photo_sql():
+    """Params: (id_sample, id_photo)"""
+    return """
+        INSERT INTO tabaid_samples_photos (ref_sample, ref_photo)
+        SELECT %s, %s
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tabaid_samples_photos WHERE ref_sample = %s AND ref_photo = %s
+        );
+    """
+
+
+def link_sample_sketch_sql():
+    """Params: (id_sample, id_sketch)"""
+    return """
+        INSERT INTO tabaid_samples_sketches (ref_sample, ref_sketch)
+        SELECT %s, %s
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tabaid_samples_sketches WHERE ref_sample = %s AND ref_sketch = %s
+        );
+    """
