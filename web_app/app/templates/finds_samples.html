@@ -1,0 +1,658 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container-fluid mt-3">
+  <div class="row g-3">
+
+    <!-- ========== LEFT: FINDS ========== -->
+    <div class="col-lg-6">
+
+      <!-- (a) Form -->
+      <div class="card mb-3">
+        <div class="card-header"><strong>Finds</strong></div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('finds_samples.add_find') }}">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label">Find ID</label>
+                <input name="id_find" type="number" class="form-control" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Type</label>
+                <div class="input-group">
+                  <select name="ref_find_type" class="form-select" required>
+                    <option value="" selected>-- select --</option>
+                    {% for t in find_types %}
+                      <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="button" class="btn btn-outline-secondary"
+                          data-bs-toggle="modal" data-bs-target="#modalAddFindType">
+                    Define
+                  </button>
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">SJ</label>
+                <input name="ref_sj" type="number" class="form-control" required>
+                <div class="form-text">Later we can plug autocomplete here.</div>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Count</label>
+                <input name="count" type="number" class="form-control" min="1" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Box</label>
+                <input name="box" type="number" class="form-control" min="1" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Polygon (optional)</label>
+                <select name="ref_polygon" class="form-select">
+                  <option value="" selected>-- none --</option>
+                  {% for p in polygons %}
+                    <option value="{{ p }}">{{ p }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Geopt (optional)</label>
+                <input name="ref_geopt" type="number" class="form-control">
+                <div class="form-text">No FK – can be filled before geodesy import.</div>
+              </div>
+
+              <div class="col-md-8">
+                <label class="form-label">Description</label>
+                <input name="description" type="text" class="form-control">
+              </div>
+            </div>
+
+            <div class="mt-2">
+              <button class="btn btn-primary" type="submit">Save find</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- (b) Last entries -->
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center">
+          <strong>Last finds</strong>
+          <button id="btnReloadFinds" class="btn btn-sm btn-outline-primary ms-auto">Reload</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Geopt</th>
+                  <th style="width:220px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyFinds"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- (c) Documentation -->
+      <div class="card">
+        <div class="card-header"><strong>Graphic documentation (finds)</strong></div>
+        <div class="card-body">
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-6">
+              <label class="form-label">Attach to find</label>
+              <select id="findDocSelect" class="form-select">
+                <option value="" selected>-- select find --</option>
+                {% for r in last_finds %}
+                  <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="alert alert-light border mb-0 py-2">
+                <span class="text-muted">Selected:</span>
+                <strong id="findDocSelectedLabel" class="ms-1">—</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-primary docBtn"
+                    data-bs-toggle="modal" data-bs-target="#modalFindPhotos">
+              Upload photos
+            </button>
+            <button type="button" class="btn btn-secondary docBtn"
+                    data-bs-toggle="modal" data-bs-target="#modalFindSketches">
+              Upload sketches
+            </button>
+          </div>
+
+          <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ========== RIGHT: SAMPLES ========== -->
+    <div class="col-lg-6">
+
+      <!-- (a) Form -->
+      <div class="card mb-3">
+        <div class="card-header"><strong>Samples</strong></div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('finds_samples.add_sample') }}">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label">Sample ID</label>
+                <input name="id_sample" type="number" class="form-control" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Type</label>
+                <div class="input-group">
+                  <select name="ref_sample_type" class="form-select" required>
+                    <option value="" selected>-- select --</option>
+                    {% for t in sample_types %}
+                      <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                  </select>
+                  <button type="button" class="btn btn-outline-secondary"
+                          data-bs-toggle="modal" data-bs-target="#modalAddSampleType">
+                    Define
+                  </button>
+                </div>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">SJ</label>
+                <input name="ref_sj" type="number" class="form-control" required>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Polygon (optional)</label>
+                <select name="ref_polygon" class="form-select">
+                  <option value="" selected>-- none --</option>
+                  {% for p in polygons %}
+                    <option value="{{ p }}">{{ p }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Geopt (optional)</label>
+                <input name="ref_geopt" type="number" class="form-control">
+              </div>
+
+              <div class="col-md-8">
+                <label class="form-label">Description</label>
+                <input name="description" type="text" class="form-control">
+              </div>
+            </div>
+
+            <div class="mt-2">
+              <button class="btn btn-primary" type="submit">Save sample</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- (b) Last entries -->
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center">
+          <strong>Last samples</strong>
+          <button id="btnReloadSamples" class="btn btn-sm btn-outline-primary ms-auto">Reload</button>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Geopt</th>
+                  <th style="width:220px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbodySamples"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- (c) Documentation -->
+      <div class="card">
+        <div class="card-header"><strong>Graphic documentation (samples)</strong></div>
+        <div class="card-body">
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-6">
+              <label class="form-label">Attach to sample</label>
+              <select id="sampleDocSelect" class="form-select">
+                <option value="" selected>-- select sample --</option>
+                {% for r in last_samples %}
+                  <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <div class="alert alert-light border mb-0 py-2">
+                <span class="text-muted">Selected:</span>
+                <strong id="sampleDocSelectedLabel" class="ms-1">—</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-primary docBtn"
+                    data-bs-toggle="modal" data-bs-target="#modalSamplePhotos">
+              Upload photos
+            </button>
+            <button type="button" class="btn btn-secondary docBtn"
+                    data-bs-toggle="modal" data-bs-target="#modalSampleSketches">
+              Upload sketches
+            </button>
+          </div>
+
+          <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<!-- ========== MODALS: add types ========== -->
+
+<div class="modal fade" id="modalAddFindType" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('finds_samples.add_find_type') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add find type</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">type_code (snake_case)</label>
+        <input name="type_code" class="form-control" placeholder="e.g. human_bones" required>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal fade" id="modalAddSampleType" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" action="{{ url_for('finds_samples.add_sample_type') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add sample type</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label">type_code (snake_case)</label>
+        <input name="type_code" class="form-control" placeholder="e.g. archeobotany" required>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========== MODALS: uploads ========== -->
+
+<!-- FIND PHOTOS -->
+<div class="modal fade" id="modalFindPhotos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post"
+          action="{{ url_for('finds_samples.upload_find_media', media_type='photos') }}"
+          enctype="multipart/form-data"
+          class="modal-content docForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload photos to find</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="id_find" id="hiddenFindIdPhotos" value="">
+
+        <div id="filesFindPhotos" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesFindPhotos')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Photo type</label>
+            <input type="text" name="photo_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Find: <span id="previewFindPhotos">—</span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- FIND SKETCHES -->
+<div class="modal fade" id="modalFindSketches" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post"
+          action="{{ url_for('finds_samples.upload_find_media', media_type='sketches') }}"
+          enctype="multipart/form-data"
+          class="modal-content docForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload sketches to find</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="id_find" id="hiddenFindIdSketches" value="">
+
+        <div id="filesFindSketches" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesFindSketches')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Sketch type</label>
+            <input type="text" name="sketch_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Find: <span id="previewFindSketches">—</span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SAMPLE PHOTOS -->
+<div class="modal fade" id="modalSamplePhotos" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post"
+          action="{{ url_for('finds_samples.upload_sample_media', media_type='photos') }}"
+          enctype="multipart/form-data"
+          class="modal-content docForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload photos to sample</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="id_sample" id="hiddenSampleIdPhotos" value="">
+
+        <div id="filesSamplePhotos" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesSamplePhotos')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Photo type</label>
+            <input type="text" name="photo_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Sample: <span id="previewSamplePhotos">—</span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SAMPLE SKETCHES -->
+<div class="modal fade" id="modalSampleSketches" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post"
+          action="{{ url_for('finds_samples.upload_sample_media', media_type='sketches') }}"
+          enctype="multipart/form-data"
+          class="modal-content docForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Upload sketches to sample</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" name="id_sample" id="hiddenSampleIdSketches" value="">
+
+        <div id="filesSampleSketches" class="mb-3">
+          <label class="form-label">Files</label>
+          <input type="file" name="files" class="form-control mb-2"
+                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
+                onclick="addFileInput('filesSampleSketches')">+ add files input</button>
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Sketch type</label>
+            <input type="text" name="sketch_typ" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Author (email)</label>
+            <input type="email" name="author" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="datum" class="form-control">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" name="notes" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-muted me-auto">Sample: <span id="previewSampleSketches">—</span></span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<script>
+  const EP = {
+    listFinds: "{{ url_for('finds_samples.list_finds') }}",
+    listSamples: "{{ url_for('finds_samples.list_samples') }}",
+    delFindBase: "{{ url_for('finds_samples.delete_find', id_find=0) }}".replace("/0",""),
+    delSampleBase: "{{ url_for('finds_samples.delete_sample', id_sample=0) }}".replace("/0",""),
+    updFindBase: "{{ url_for('finds_samples.update_find', id_find=0) }}".replace("/0",""),
+    updSampleBase: "{{ url_for('finds_samples.update_sample', id_sample=0) }}".replace("/0",""),
+    printFindBase: "{{ url_for('finds_samples.print_find_label', id_find=0) }}".replace("/0",""),
+    printSampleBase: "{{ url_for('finds_samples.print_sample_label', id_sample=0) }}".replace("/0","")
+  };
+
+  function addFileInput(containerId) {
+    const div = document.getElementById(containerId);
+    const input = document.createElement("input");
+    input.type = "file";
+    input.name = "files";
+    input.multiple = true;
+    input.className = "form-control mb-2";
+    input.accept = ".jpeg,.jpg,.png,.tiff,.svg,.pdf";
+    div.appendChild(input);
+  }
+
+  function actionButtonsFind(r) {
+    const id = r.id_find;
+    return `
+      <button class="btn btn-sm btn-outline-secondary" onclick="openEditFind(${id})">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteFind(${id})">Delete</button>
+      <button class="btn btn-sm btn-outline-primary" onclick="printFind(${id})">Print label</button>
+    `;
+  }
+
+  function actionButtonsSample(r) {
+    const id = r.id_sample;
+    return `
+      <button class="btn btn-sm btn-outline-secondary" onclick="openEditSample(${id})">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="deleteSample(${id})">Delete</button>
+      <button class="btn btn-sm btn-outline-primary" onclick="printSample(${id})">Print label</button>
+    `;
+  }
+
+  async function reloadFinds() {
+    const res = await fetch(EP.listFinds + "?limit=30");
+    const data = await res.json();
+    const tb = document.getElementById("tbodyFinds");
+    tb.innerHTML = "";
+    (data.rows || []).forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.id_find}</td>
+        <td>${r.ref_find_type}</td>
+        <td>${r.ref_sj}</td>
+        <td>${r.count}</td>
+        <td>${r.box}</td>
+        <td>${r.ref_polygon || ""}</td>
+        <td>${r.ref_geopt || ""}</td>
+        <td>${actionButtonsFind(r)}</td>
+      `;
+      tb.appendChild(tr);
+    });
+  }
+
+  async function reloadSamples() {
+    const res = await fetch(EP.listSamples + "?limit=30");
+    const data = await res.json();
+    const tb = document.getElementById("tbodySamples");
+    tb.innerHTML = "";
+    (data.rows || []).forEach(r => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.id_sample}</td>
+        <td>${r.ref_sample_type}</td>
+        <td>${r.ref_sj}</td>
+        <td>${r.ref_polygon || ""}</td>
+        <td>${r.ref_geopt || ""}</td>
+        <td>${actionButtonsSample(r)}</td>
+      `;
+      tb.appendChild(tr);
+    });
+  }
+
+  async function deleteFind(id) {
+    if (!confirm(`Delete find ${id}?`)) return;
+    const res = await fetch(EP.delFindBase + "/" + id, { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) alert(data.error || "Delete failed.");
+    await reloadFinds();
+  }
+
+  async function deleteSample(id) {
+    if (!confirm(`Delete sample ${id}?`)) return;
+    const res = await fetch(EP.delSampleBase + "/" + id, { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) alert(data.error || "Delete failed.");
+    await reloadSamples();
+  }
+
+  function printFind(id) {
+    window.open(EP.printFindBase + "/" + id, "_blank");
+  }
+  function printSample(id) {
+    window.open(EP.printSampleBase + "/" + id, "_blank");
+  }
+
+  // Minimal edit: use prompt (you can replace with Bootstrap modal later)
+  async function openEditFind(id) {
+    alert("Edit modal: reuse pattern from polygons/SU (to be plugged in next step).");
+  }
+  async function openEditSample(id) {
+    alert("Edit modal: reuse pattern from polygons/SU (to be plugged in next step).");
+  }
+
+  // Documentation selectors -> fill hidden inputs + previews
+  function syncDocSelectors() {
+    const findSel = document.getElementById("findDocSelect");
+    const findLabel = document.getElementById("findDocSelectedLabel");
+    const findVal = findSel.value || "";
+    findLabel.textContent = findVal || "—";
+    document.getElementById("hiddenFindIdPhotos").value = findVal;
+    document.getElementById("hiddenFindIdSketches").value = findVal;
+    document.getElementById("previewFindPhotos").textContent = findVal || "—";
+    document.getElementById("previewFindSketches").textContent = findVal || "—";
+
+    const sampleSel = document.getElementById("sampleDocSelect");
+    const sampleLabel = document.getElementById("sampleDocSelectedLabel");
+    const sampleVal = sampleSel.value || "";
+    sampleLabel.textContent = sampleVal || "—";
+    document.getElementById("hiddenSampleIdPhotos").value = sampleVal;
+    document.getElementById("hiddenSampleIdSketches").value = sampleVal;
+    document.getElementById("previewSamplePhotos").textContent = sampleVal || "—";
+    document.getElementById("previewSampleSketches").textContent = sampleVal || "—";
+  }
+
+  document.getElementById("btnReloadFinds").addEventListener("click", reloadFinds);
+  document.getElementById("btnReloadSamples").addEventListener("click", reloadSamples);
+  document.getElementById("findDocSelect").addEventListener("change", syncDocSelectors);
+  document.getElementById("sampleDocSelect").addEventListener("change", syncDocSelectors);
+
+  window.addEventListener("load", async () => {
+    syncDocSelectors();
+    await reloadFinds();
+    await reloadSamples();
+  });
+</script>
+
+{% endblock %}
