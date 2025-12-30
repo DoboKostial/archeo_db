@@ -71,6 +71,48 @@ CREATE TABLE gloss_personalia (
 	CONSTRAINT gloss_personalia_pkey PRIMARY KEY (mail)
 );
 
+-- -------------------------
+-- Finds: glossary of find types
+-- -------------------------
+CREATE TABLE IF NOT EXISTS gloss_find_type (
+  type_code  text PRIMARY KEY,          -- snake_case, e.g. 'human_bones'
+  is_active  boolean NOT NULL DEFAULT true,
+  sort_order int NOT NULL DEFAULT 100
+);
+
+-- seed (defaults)
+INSERT INTO gloss_find_type (type_code, sort_order) VALUES
+  ('ceramics',         10),
+  ('human_bones',      20),
+  ('animal_bones',     30),
+  ('chipped_industry', 40),
+  ('stones',           50),
+  ('wood',             60),
+  ('iron',             70),
+  ('copper',           80),
+  ('bronze',           90)
+ON CONFLICT (type_code) DO NOTHING;
+
+
+-- -------------------------
+-- Samples: glossary of sample types
+-- -------------------------
+CREATE TABLE IF NOT EXISTS gloss_sample_type (
+  type_code  text PRIMARY KEY,          -- snake_case, e.g. 'archeobotany'
+  is_active  boolean NOT NULL DEFAULT true,
+  sort_order int NOT NULL DEFAULT 100
+);
+
+-- seed (defaults)
+INSERT INTO gloss_sample_type (type_code, sort_order) VALUES
+  ('archaeobotany',   10),
+  ('geoarchaeology', 20),
+  ('malacology',     30),
+  ('palynology',     40),
+  ('osteology',      50)
+ON CONFLICT (type_code) DO NOTHING;
+
+
 
 ------
 -- ### HERE MAIN TABLES - TERRAIN ENTITIES
@@ -386,7 +428,7 @@ CREATE TABLE tab_finds (
 	id_find int4 NOT NULL,
 	"content" text NOT NULL,
 	description text NULL,
-	"number" int4 NOT NULL,
+	"count" int2 NOT NULL,
   ref_sj int4 NOT NULL,
 	ref_geopt int4 NULL,
   ref_polygon text NULL,
@@ -394,9 +436,7 @@ CREATE TABLE tab_finds (
 	CONSTRAINT tab_finds_pk PRIMARY KEY (id_find)
 );
 ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_geopts_fk FOREIGN KEY (ref_geopt) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj);
-
 
 
 -- terrain samples
