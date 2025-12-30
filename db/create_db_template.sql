@@ -435,7 +435,7 @@ CREATE TABLE IF NOT EXISTS tab_finds (
   ref_sj         int4  NOT NULL,                 -- mandatory: comes from one stratigraphic unit
   ref_geopt      int4  NULL,                     -- optional: NO FK (geopts may be imported later)
   ref_polygon    text  NULL,                     -- optional: FK to tab_polygons
-  box            int2  NOT NULL,
+  box            int2  NOT NULL,                 -- box for storing sacks/bags
   CONSTRAINT tab_finds_pk PRIMARY KEY (id_find), CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT tab_finds_polygon_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT tab_finds_find_type_fk FOREIGN KEY (ref_find_type) REFERENCES gloss_find_type(type_code) ON DELETE RESTRICT ON UPDATE CASCADE,
