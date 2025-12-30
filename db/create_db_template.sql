@@ -423,79 +423,116 @@ CREATE INDEX tab_photograms_checksum_idx   ON tab_photograms (checksum_sha256);
 
 
 -- tab_finds definition
--- mostly is it sack as primary identificator - container for finds
-CREATE TABLE tab_finds (
-	id_find int4 NOT NULL,
-	"content" text NOT NULL,
-	description text NULL,
-	"count" int2 NOT NULL,
-  ref_sj int4 NOT NULL,
-	ref_geopt int4 NULL,
-  ref_polygon text NULL,
-	box int2 NOT NULL,
-	CONSTRAINT tab_finds_pk PRIMARY KEY (id_find)
+-- mostly is it sack/bag as primary identificator - container for finds
+-- -------------------------
+-- Finds (one record = one bag of a given type from one SJ)
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tab_finds (
+  id_find        int4  NOT NULL,                 -- manual ID (entered by user)
+  ref_find_type  text  NOT NULL,                 -- FK -> gloss_find_type(type_code)
+  description    text  NULL,
+  count          int2  NOT NULL,                 -- number of pieces in the bag
+  ref_sj         int4  NOT NULL,                 -- mandatory: comes from one stratigraphic unit
+  ref_geopt      int4  NULL,                     -- optional: NO FK (geopts may be imported later)
+  ref_polygon    text  NULL,                     -- optional: FK to tab_polygons
+  box            int2  NOT NULL,
+  CONSTRAINT tab_finds_pk PRIMARY KEY (id_find), CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tab_finds_polygon_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT tab_finds_find_type_fk FOREIGN KEY (ref_find_type) REFERENCES gloss_find_type(type_code) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT tab_finds_count_check CHECK (count > 0),
+  CONSTRAINT tab_finds_box_check CHECK (box > 0)
 );
-ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE tab_finds ADD CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj);
+CREATE INDEX IF NOT EXISTS tab_finds_ref_sj_idx      ON tab_finds(ref_sj);
+CREATE INDEX IF NOT EXISTS tab_finds_ref_polygon_idx ON tab_finds(ref_polygon) WHERE ref_polygon IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tab_finds_ref_geopt_idx   ON tab_finds(ref_geopt) WHERE ref_geopt IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tab_finds_type_idx        ON tab_finds(ref_find_type);
+
 
 
 -- terrain samples
 ---
-CREATE TABLE tab_samples (
-	id_sample int4 NOT NULL,
-	sample_type text NOT NULL,
-	description text NULL,
-	ref_sj int4 NOT NULL,
-	ref_geopt int4 NULL,
-	ref_polygon text NULL,
-	CONSTRAINT tab_sample_pk PRIMARY KEY (id_sample)
+CREATE TABLE IF NOT EXISTS tab_samples (
+  id_sample        int4 NOT NULL,               -- manual ID (entered by user)
+  ref_sample_type  text NOT NULL,               -- FK -> gloss_sample_type(type_code)
+  description      text NULL,
+  ref_sj           int4 NOT NULL,               -- mandatory
+  ref_geopt        int4 NULL,                   -- optional: NO FK
+  ref_polygon      text NULL,                   -- optional: FK to tab_polygons
+  CONSTRAINT tab_samples_pk PRIMARY KEY (id_sample), CONSTRAINT tab_samples_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tab_samples_polygon_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT tab_samples_type_fk FOREIGN KEY (ref_sample_type) REFERENCES gloss_sample_type(type_code) ON DELETE RESTRICT ON UPDATE CASCADE
 );
-ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_geopts_fk FOREIGN KEY (ref_geopt) REFERENCES tab_geopts(id_pts) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_polygons_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE tab_samples ADD CONSTRAINT tab_samples_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX IF NOT EXISTS tab_samples_ref_sj_idx      ON tab_samples(ref_sj);
+CREATE INDEX IF NOT EXISTS tab_samples_ref_polygon_idx ON tab_samples(ref_polygon) WHERE ref_polygon IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tab_samples_ref_geopt_idx   ON tab_samples(ref_geopt) WHERE ref_geopt IS NOT NULL;
+CREATE INDEX IF NOT EXISTS tab_samples_type_idx        ON tab_samples(ref_sample_type);
+
 
 --==========================================================
 -- TABAIDS - table helpers for M:N relations between tables
 --==========================================================
 -- tabaid between finds and photos
-CREATE TABLE tabaid_finds_photos (
-	id_aut serial4 NOT NULL,
-	ref_find int4 NOT NULL,
-	ref_photo text NOT NULL,
-	CONSTRAINT tabaid_finds_photos_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_finds_photos_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_finds_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE
+-- -------------------------
+-- Finds ↔ Photos
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tabaid_finds_photos (
+  id_aut   serial4 NOT NULL,
+  ref_find int4    NOT NULL,
+  ref_photo varchar(150) NOT NULL,
+  CONSTRAINT tabaid_finds_photos_pk PRIMARY KEY (id_aut), CONSTRAINT tabaid_finds_photos_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_finds_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_finds_photos_uniq UNIQUE (ref_find, ref_photo)
 );
+CREATE INDEX IF NOT EXISTS tabaid_finds_photos_find_idx  ON tabaid_finds_photos(ref_find);
+CREATE INDEX IF NOT EXISTS tabaid_finds_photos_photo_idx ON tabaid_finds_photos(ref_photo);
 
--- tabaid between finds and sketches
-CREATE TABLE tabaid_finds_sketches (
-	id_aut serial4 NOT NULL,
-	ref_find int4 NOT NULL,
-	ref_sketch text NOT NULL,
-	CONSTRAINT tabaid_finds_sketches_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_finds_sketches_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_finds_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE
-);
 
--- tabaid connecting samples and photos
-CREATE TABLE tabaid_samples_photos (
-	id_aut serial4 NOT NULL,
-	ref_sample int4 NOT NULL,
-	ref_photo varchar NOT NULL,
-	CONSTRAINT tabaid_samples_photos_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_samples_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_samples_photos_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE
+-- -------------------------
+-- Finds ↔ Sketches
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tabaid_finds_sketches (
+  id_aut    serial4 NOT NULL,
+  ref_find  int4    NOT NULL,
+  ref_sketch text   NOT NULL,
+  CONSTRAINT tabaid_finds_sketches_pk PRIMARY KEY (id_aut), CONSTRAINT tabaid_finds_sketches_find_fk FOREIGN KEY (ref_find) REFERENCES tab_finds(id_find) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_finds_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_finds_sketches_uniq UNIQUE (ref_find, ref_sketch)
 );
+CREATE INDEX IF NOT EXISTS tabaid_finds_sketches_find_idx   ON tabaid_finds_sketches(ref_find);
+CREATE INDEX IF NOT EXISTS tabaid_finds_sketches_sketch_idx ON tabaid_finds_sketches(ref_sketch);
 
--- tabaid connecting samples and sketches
-CREATE TABLE tabaid_samples_sketches (
-	id_aut serial4 NOT NULL,
-	ref_sample int4 NOT NULL,
-	ref_sketch text NOT NULL,
-	CONSTRAINT tabaid_samples_sketches_pk PRIMARY KEY (id_aut),
-	CONSTRAINT tabaid_samples_sketches_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT tabaid_samples_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE
+
+-- -------------------------
+-- Samples ↔ Photos
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tabaid_samples_photos (
+  id_aut     serial4 NOT NULL,
+  ref_sample int4    NOT NULL,
+  ref_photo  varchar(150) NOT NULL,
+  CONSTRAINT tabaid_samples_photos_pk PRIMARY KEY (id_aut),
+  CONSTRAINT tabaid_samples_photos_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_samples_photos_photo_fk FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_samples_photos_uniq UNIQUE (ref_sample, ref_photo)
 );
+CREATE INDEX IF NOT EXISTS tabaid_samples_photos_sample_idx ON tabaid_samples_photos(ref_sample);
+CREATE INDEX IF NOT EXISTS tabaid_samples_photos_photo_idx  ON tabaid_samples_photos(ref_photo);
+
+
+-- -------------------------
+-- Samples ↔ Sketches
+-- -------------------------
+CREATE TABLE IF NOT EXISTS tabaid_samples_sketches (
+  id_aut     serial4 NOT NULL,
+  ref_sample int4    NOT NULL,
+  ref_sketch text    NOT NULL,
+  CONSTRAINT tabaid_samples_sketches_pk PRIMARY KEY (id_aut),
+  CONSTRAINT tabaid_samples_sketches_sample_fk FOREIGN KEY (ref_sample) REFERENCES tab_samples(id_sample) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_samples_sketches_sketch_fk FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT tabaid_samples_sketches_uniq UNIQUE (ref_sample, ref_sketch)
+);
+CREATE INDEX IF NOT EXISTS tabaid_samples_sketches_sample_idx ON tabaid_samples_sketches(ref_sample);
+CREATE INDEX IF NOT EXISTS tabaid_samples_sketches_sketch_idx ON tabaid_samples_sketches(ref_sketch);
+
 
 
 -- tabaid_photo_sj definition
