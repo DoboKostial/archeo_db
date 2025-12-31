@@ -1246,47 +1246,54 @@ def get_sample_sql():
     """
 
 
-# ----- Linking (idempotent even without UNIQUE constraints) -----
+
+# -------------------------
+# Finds & Samples: link media
+# -------------------------
 
 def link_find_photo_sql():
-    """Params: (id_find, id_photo)"""
+    """Idempotent link. Params: (id_find, id_photo, id_find, id_photo)"""
     return """
         INSERT INTO tabaid_finds_photos (ref_find, ref_photo)
         SELECT %s, %s
         WHERE NOT EXISTS (
-          SELECT 1 FROM tabaid_finds_photos WHERE ref_find = %s AND ref_photo = %s
+          SELECT 1 FROM tabaid_finds_photos
+          WHERE ref_find = %s AND ref_photo = %s
         );
     """
 
 
 def link_find_sketch_sql():
-    """Params: (id_find, id_sketch)"""
+    """Idempotent link. Params: (id_find, id_sketch, id_find, id_sketch)"""
     return """
         INSERT INTO tabaid_finds_sketches (ref_find, ref_sketch)
         SELECT %s, %s
         WHERE NOT EXISTS (
-          SELECT 1 FROM tabaid_finds_sketches WHERE ref_find = %s AND ref_sketch = %s
+          SELECT 1 FROM tabaid_finds_sketches
+          WHERE ref_find = %s AND ref_sketch = %s
         );
     """
 
 
 def link_sample_photo_sql():
-    """Params: (id_sample, id_photo)"""
+    """Idempotent link. Params: (id_sample, id_photo, id_sample, id_photo)"""
     return """
         INSERT INTO tabaid_samples_photos (ref_sample, ref_photo)
         SELECT %s, %s
         WHERE NOT EXISTS (
-          SELECT 1 FROM tabaid_samples_photos WHERE ref_sample = %s AND ref_photo = %s
+          SELECT 1 FROM tabaid_samples_photos
+          WHERE ref_sample = %s AND ref_photo = %s
         );
     """
 
 
 def link_sample_sketch_sql():
-    """Params: (id_sample, id_sketch)"""
+    """Idempotent link. Params: (id_sample, id_sketch, id_sample, id_sketch)"""
     return """
         INSERT INTO tabaid_samples_sketches (ref_sample, ref_sketch)
         SELECT %s, %s
         WHERE NOT EXISTS (
-          SELECT 1 FROM tabaid_samples_sketches WHERE ref_sample = %s AND ref_sketch = %s
+          SELECT 1 FROM tabaid_samples_sketches
+          WHERE ref_sample = %s AND ref_sketch = %s
         );
     """
