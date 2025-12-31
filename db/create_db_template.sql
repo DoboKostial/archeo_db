@@ -3,12 +3,6 @@
 
 
 ---
--- extensions needed
----
-CREATE EXTENSION IF NOT EXISTS postgis;
-
-
----
 -- BASIX ROLES AND PRIVILEGES
 -- making database with owner grp_dbas creating all tables under this account
 
@@ -339,7 +333,7 @@ CREATE TABLE IF NOT EXISTS tab_photos (
   photo_centroid  geometry(PointZ) NULL,  -- SRID set dynamically per-project by set_project_srids
   CONSTRAINT tab_photos_pkey PRIMARY KEY (id_photo),
   CONSTRAINT tab_photos_file_size_check CHECK (file_size >= 0),
-  CONSTRAINT tab_photos_id_format_chk CHECK ((id_photo)::text ~ '^[0-9]+_[A-Za-z0-9._-]+\\.[a-z0-9]+$'::text),
+  CONSTRAINT tab_photos_id_format_chk CHECK ((id_photo)::text ~ '^[0-9]+_[A-Za-z0-9._-]+[.][a-z0-9]+$'::text),
   CONSTRAINT tab_photos_mime_chk CHECK (
     mime_type = ANY (ARRAY[
       'image/jpg'::text, 'image/jpeg'::text, 'image/png'::text,
