@@ -1,51 +1,71 @@
 # app/routes/finds_samples.py
 
 from __future__ import annotations
-
-import io
 import os
-
-from flask import (
-    Blueprint, render_template, request, redirect, url_for,
-    flash, session, jsonify, Response
-)
-
 from psycopg2.extras import Json
+from flask import (
+    Blueprint,
+    Response,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db
 
-from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_FINDS, LINK_TABLES_SAMPLES
-
-# reuse same utilities as polygon upload
 from app.utils import storage
-from app.utils.file_utils import (
-    validate_extension, validate_mime, detect_mime, sha256_file
-)
-from app.utils.image_utils import make_thumbnail
-from app.utils.exif_utils import extract_exif
+from app.utils.validators import validate_extension, validate_mime, sha256_file
+from app.utils.images import make_thumbnail, extract_exif, detect_mime
 
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
-from reportlab.graphics.barcode import qr
-from reportlab.graphics import renderPDF
-from reportlab.graphics.shapes import Drawing
+from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_FINDS, LINK_TABLES_SAMPLES
+from app.utils.labels import make_a6_label_pdf_bytes
 
 from app.queries import (
-    list_find_types_sql, insert_find_type_sql,
-    list_sample_types_sql, insert_sample_type_sql,
+    # dropdowns
+    list_find_types_sql,
+    insert_find_type_sql,
+    list_sample_types_sql,
+    insert_sample_type_sql,
     list_polygons_names_sql,
-    find_exists_sql, sample_exists_sql,
-    insert_find_sql, update_find_sql, delete_find_sql, list_finds_sql, get_find_sql,
-    insert_sample_sql, update_sample_sql, delete_sample_sql, list_samples_sql, get_sample_sql,
-    link_find_photo_sql, link_find_sketch_sql,
-    link_sample_photo_sql, link_sample_sketch_sql,
-    insert_photo_sql, insert_sketch_sql,
+    # exists
+    find_exists_sql,
+    sample_exists_sql,
+    # finds CRUD
+    insert_find_sql,
+    update_find_sql,
+    delete_find_sql,
+    list_finds_sql,
+    get_find_sql,
+    # samples CRUD
+    insert_sample_sql,
+    update_sample_sql,
+    delete_sample_sql,
+    list_samples_sql,
+    get_sample_sql,
+    # media inserts + linking
+    insert_photo_sql,
+    insert_sketch_sql,
+    link_find_photo_sql,
+    link_find_sketch_sql,
+    link_sample_photo_sql,
+    link_sample_sketch_sql,
 )
 
 finds_samples_bp = Blueprint("finds_samples", __name__)
+
+MEDIA_DIRS = Config.MEDIA_DIRS
+ALLOWED_EXT = Config.ALLOWED_EXTENSIONS
+ALLOWED_MIME = Config.ALLOWED_MIME
+
+SUPPORTED_FINDS_MEDIA = set(LINK_TABLES_FINDS.keys())
+SUPPORTED_SAMPLES_MEDIA = set(LINK_TABLES_SAMPLES.keys())
 
 
 # -------------------------
@@ -59,30 +79,11 @@ def _humanize_code(s: str) -> str:
     return s.replace("_", " ").capitalize()
 
 
-def _a6_pagesize():
-    # A6: 105 × 148 mm
-    return (105 * mm, 148 * mm)
-
-
-def _qr_widget(value: str, size_mm: float = 28.0) -> Drawing:
-    w = qr.QrCodeWidget(value)
-    bounds = w.getBounds()  # (x1,y1,x2,y2)
-    width = bounds[2] - bounds[0]
-    height = bounds[3] - bounds[1]
-    d = Drawing(size_mm * mm, size_mm * mm)
-    d.add(w)
-    # scale to requested drawing size
-    sx = (size_mm * mm) / width
-    sy = (size_mm * mm) / height
-    w.scale(sx, sy)
-    return d
-
-
 def _require_int(form_value: str, field_label: str) -> int:
     try:
         return int(str(form_value).strip())
-    except Exception:
-        raise ValueError(f"Invalid {field_label}.")
+    except Exception as e:
+        raise ValueError(f"Invalid {field_label}.") from e
 
 
 def _optional_int(form_value: str):
@@ -99,6 +100,7 @@ def _optional_int(form_value: str):
 def finds_samples():
     selected_db = session["selected_db"]
     conn = get_terrain_connection(selected_db)
+
     try:
         with conn.cursor() as cur:
             cur.execute(list_find_types_sql())
@@ -110,12 +112,10 @@ def finds_samples():
             cur.execute(list_polygons_names_sql())
             polygons = [r[0] for r in cur.fetchall()]
 
-        # last entries for quick attach dropdowns (optional)
-        with conn.cursor() as cur:
-            cur.execute(list_finds_sql(), (20,))
+            cur.execute(list_finds_sql(), (30,))
             last_finds = cur.fetchall()
 
-            cur.execute(list_samples_sql(), (20,))
+            cur.execute(list_samples_sql(), (30,))
             last_samples = cur.fetchall()
 
     finally:
@@ -131,7 +131,7 @@ def finds_samples():
         polygons=polygons,
         last_finds=last_finds,
         last_samples=last_samples,
-        allowed_ext=", ".join(sorted(Config.ALLOWED_EXTENSIONS)),
+        allowed_ext=", ".join(sorted(ALLOWED_EXT)),
     )
 
 
@@ -154,8 +154,8 @@ def add_find_type():
         with conn.cursor() as cur:
             cur.execute(insert_find_type_sql(), (type_code,))
         conn.commit()
-        flash(f'Find type "{type_code}" saved.', "success")
         logger.info(f"[{selected_db}] add find type: {type_code}")
+        flash(f'Find type "{type_code}" saved.', "success")
     except Exception as e:
         conn.rollback()
         logger.exception(f"[{selected_db}] add find type failed: {e}")
@@ -181,8 +181,8 @@ def add_sample_type():
         with conn.cursor() as cur:
             cur.execute(insert_sample_type_sql(), (type_code,))
         conn.commit()
-        flash(f'Sample type "{type_code}" saved.', "success")
         logger.info(f"[{selected_db}] add sample type: {type_code}")
+        flash(f'Sample type "{type_code}" saved.', "success")
     except Exception as e:
         conn.rollback()
         logger.exception(f"[{selected_db}] add sample type failed: {e}")
@@ -201,6 +201,7 @@ def add_sample_type():
 @require_selected_db
 def add_find():
     selected_db = session["selected_db"]
+
     try:
         id_find = _require_int(request.form.get("id_find"), "Find ID")
         ref_find_type = (request.form.get("ref_find_type") or "").strip().lower()
@@ -235,9 +236,11 @@ def add_find():
                 insert_find_sql(),
                 (id_find, ref_find_type, description, count, ref_sj, ref_geopt, ref_polygon, box),
             )
+
         conn.commit()
         logger.info(f"[{selected_db}] find added id_find={id_find}")
         flash("Find saved.", "success")
+
     except Exception as e:
         conn.rollback()
         logger.exception(f"[{selected_db}] add find failed: {e}")
@@ -259,6 +262,7 @@ def list_finds():
         with conn.cursor() as cur:
             cur.execute(list_finds_sql(), (limit,))
             rows = cur.fetchall()
+
         data = []
         for r in rows:
             data.append(
@@ -274,6 +278,7 @@ def list_finds():
                 )
             )
         return jsonify({"ok": True, "rows": data})
+
     except Exception as e:
         logger.exception(f"[{selected_db}] list finds failed: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -311,8 +316,10 @@ def update_find(id_find: int):
         ref_sj = int(payload.get("ref_sj"))
         count = int(payload.get("count"))
         box = int(payload.get("box"))
+
         ref_geopt = payload.get("ref_geopt")
         ref_geopt = int(ref_geopt) if str(ref_geopt).strip() != "" else None
+
         ref_polygon = (payload.get("ref_polygon") or "").strip() or None
         description = (payload.get("description") or "").strip() or ""
 
@@ -352,6 +359,7 @@ def update_find(id_find: int):
 @require_selected_db
 def add_sample():
     selected_db = session["selected_db"]
+
     try:
         id_sample = _require_int(request.form.get("id_sample"), "Sample ID")
         ref_sample_type = (request.form.get("ref_sample_type") or "").strip().lower()
@@ -380,9 +388,11 @@ def add_sample():
                 insert_sample_sql(),
                 (id_sample, ref_sample_type, description, ref_sj, ref_geopt, ref_polygon),
             )
+
         conn.commit()
         logger.info(f"[{selected_db}] sample added id_sample={id_sample}")
         flash("Sample saved.", "success")
+
     except Exception as e:
         conn.rollback()
         logger.exception(f"[{selected_db}] add sample failed: {e}")
@@ -404,6 +414,7 @@ def list_samples():
         with conn.cursor() as cur:
             cur.execute(list_samples_sql(), (limit,))
             rows = cur.fetchall()
+
         data = []
         for r in rows:
             data.append(
@@ -417,6 +428,7 @@ def list_samples():
                 )
             )
         return jsonify({"ok": True, "rows": data})
+
     except Exception as e:
         logger.exception(f"[{selected_db}] list samples failed: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -452,8 +464,10 @@ def update_sample(id_sample: int):
     try:
         ref_sample_type = (payload.get("ref_sample_type") or "").strip().lower()
         ref_sj = int(payload.get("ref_sj"))
+
         ref_geopt = payload.get("ref_geopt")
         ref_geopt = int(ref_geopt) if str(ref_geopt).strip() != "" else None
+
         ref_polygon = (payload.get("ref_polygon") or "").strip() or None
         description = (payload.get("description") or "").strip() or ""
 
@@ -482,7 +496,7 @@ def update_sample(id_sample: int):
 
 
 # -------------------------
-# Detail endpoints (for QR URL)
+# Detail endpoints (QR URL target)
 # -------------------------
 
 @finds_samples_bp.get("/finds-samples/find/<int:id_find>")
@@ -497,7 +511,6 @@ def find_detail(id_find: int):
         if not r:
             return Response("Not found.", status=404)
 
-        # minimal readable HTML (no extra template needed)
         html = f"""
         <html><head><meta charset="utf-8"><title>Find {id_find}</title></head>
         <body style="font-family: sans-serif">
@@ -570,20 +583,6 @@ def print_find_label(id_find: int):
 
     url = request.url_root.rstrip("/") + url_for("finds_samples.find_detail", id_find=id_find)
 
-    buf = io.BytesIO()
-    w, h = _a6_pagesize()
-    c = canvas.Canvas(buf, pagesize=(w, h))
-
-    # QR
-    d = _qr_widget(url, size_mm=30)
-    renderPDF.draw(d, c, 8 * mm, h - 38 * mm)
-
-    # Text
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(45 * mm, h - 15 * mm, f"FIND {r[0]}")
-
-    c.setFont("Helvetica", 10)
-    y = h - 25 * mm
     lines = [
         f"Type: {_humanize_code(r[1])} ({r[1]})",
         f"SJ: {r[2]}",
@@ -592,23 +591,12 @@ def print_find_label(id_find: int):
         f"Polygon: {r[5] or '—'}",
         f"Geopt: {r[6] or '—'}",
     ]
-    for ln in lines:
-        c.drawString(45 * mm, y, ln)
-        y -= 5 * mm
-
-    c.setFont("Helvetica", 8)
-    c.drawString(8 * mm, 8 * mm, url)
-
-    c.showPage()
-    c.save()
-
-    pdf = buf.getvalue()
-    buf.close()
+    pdf = make_a6_label_pdf_bytes(title=f"FIND {r[0]}", lines=lines, url=url)
 
     return Response(
         pdf,
         mimetype="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="find_{id_find}_label_a6.pdf"'}
+        headers={"Content-Disposition": f'inline; filename="find_{id_find}_label_a6.pdf"'},
     )
 
 
@@ -628,46 +616,23 @@ def print_sample_label(id_sample: int):
 
     url = request.url_root.rstrip("/") + url_for("finds_samples.sample_detail", id_sample=id_sample)
 
-    buf = io.BytesIO()
-    w, h = _a6_pagesize()
-    c = canvas.Canvas(buf, pagesize=(w, h))
-
-    d = _qr_widget(url, size_mm=30)
-    renderPDF.draw(d, c, 8 * mm, h - 38 * mm)
-
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(45 * mm, h - 15 * mm, f"SAMPLE {r[0]}")
-
-    c.setFont("Helvetica", 10)
-    y = h - 25 * mm
     lines = [
         f"Type: {_humanize_code(r[1])} ({r[1]})",
         f"SJ: {r[2]}",
         f"Polygon: {r[3] or '—'}",
         f"Geopt: {r[4] or '—'}",
     ]
-    for ln in lines:
-        c.drawString(45 * mm, y, ln)
-        y -= 5 * mm
-
-    c.setFont("Helvetica", 8)
-    c.drawString(8 * mm, 8 * mm, url)
-
-    c.showPage()
-    c.save()
-
-    pdf = buf.getvalue()
-    buf.close()
+    pdf = make_a6_label_pdf_bytes(title=f"SAMPLE {r[0]}", lines=lines, url=url)
 
     return Response(
         pdf,
         mimetype="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="sample_{id_sample}_label_a6.pdf"'}
+        headers={"Content-Disposition": f'inline; filename="sample_{id_sample}_label_a6.pdf"'},
     )
 
 
 # -------------------------
-# Media uploads (finds/samples) – copied from polygons style
+# Media uploads (copied style from polygons)
 # -------------------------
 
 @finds_samples_bp.post("/finds-samples/find/upload/<media_type>")
@@ -678,7 +643,7 @@ def upload_find_media(media_type: str):
     if media_type not in MEDIA_TABLES:
         flash("Invalid media type.", "danger")
         return redirect(url_for("finds_samples.finds_samples"))
-    if media_type not in LINK_TABLES_FINDS:
+    if media_type not in SUPPORTED_FINDS_MEDIA:
         flash("This media type is not supported for finds.", "danger")
         return redirect(url_for("finds_samples.finds_samples"))
 
@@ -731,36 +696,43 @@ def upload_find_media(media_type: str):
         thumb_path = None
 
         try:
+            # A) temp store
             tmp_path, _ = storage.save_to_uploads(Config.UPLOAD_FOLDER, f)
 
+            # B) pk + ext validation
             pk_name = storage.make_pk(selected_db, f.filename)
             storage.validate_pk(pk_name)
             ext = pk_name.rsplit(".", 1)[-1].lower()
-            validate_extension(ext, Config.ALLOWED_EXTENSIONS)
+            validate_extension(ext, ALLOWED_EXT)
 
-            media_dir = Config.MEDIA_DIRS[media_type]
+            # C) final paths + collision
+            media_dir = MEDIA_DIRS[media_type]
             final_path, thumb_path = storage.final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
             if os.path.exists(final_path):
                 raise ValueError(f"File already exists: {pk_name}")
 
+            # D) move into place then MIME validate
             storage.move_into_place(tmp_path, final_path)
             tmp_path = None
 
             mime = detect_mime(final_path)
-            validate_mime(mime, Config.ALLOWED_MIME)
+            validate_mime(mime, ALLOWED_MIME)
             checksum = sha256_file(final_path)
 
+            # thumb best-effort
             try:
                 make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
             except Exception:
                 pass
 
+            # E) EXIF for photos only (JPEG/TIFF)
             shoot_dt = gps_lat = gps_lon = gps_alt = None
             exif_json = {}
             if media_type == "photos" and mime in ("image/jpeg", "image/tiff"):
                 sdt, la, lo, al, exif = extract_exif(final_path)
                 shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = sdt, la, lo, al, exif
 
+            # F) DB insert + link (commit per file)
             conn2 = get_terrain_connection(selected_db)
             cur2 = conn2.cursor()
             try:
@@ -778,9 +750,8 @@ def upload_find_media(media_type: str):
                             checksum,
                             shoot_dt, gps_lat, gps_lon, gps_alt,
                             Json(exif_json),
-                        )
+                        ),
                     )
-                    # link (idempotent)
                     cur2.execute(link_find_photo_sql(), (id_find, pk_name, id_find, pk_name))
 
                 elif media_type == "sketches":
@@ -795,7 +766,7 @@ def upload_find_media(media_type: str):
                             mime,
                             os.path.getsize(final_path),
                             checksum,
-                        )
+                        ),
                     )
                     cur2.execute(link_find_sketch_sql(), (id_find, pk_name, id_find, pk_name))
 
@@ -834,7 +805,7 @@ def upload_find_media(media_type: str):
     if failed:
         flash(
             f"Uploaded {ok} file(s), {len(failed)} failed: " + "; ".join(failed),
-            "warning" if ok else "danger"
+            "warning" if ok else "danger",
         )
     else:
         flash(f"Uploaded {ok} file(s).", "success")
@@ -851,7 +822,7 @@ def upload_sample_media(media_type: str):
     if media_type not in MEDIA_TABLES:
         flash("Invalid media type.", "danger")
         return redirect(url_for("finds_samples.finds_samples"))
-    if media_type not in LINK_TABLES_SAMPLES:
+    if media_type not in SUPPORTED_SAMPLES_MEDIA:
         flash("This media type is not supported for samples.", "danger")
         return redirect(url_for("finds_samples.finds_samples"))
 
@@ -871,6 +842,7 @@ def upload_sample_media(media_type: str):
         flash("No files provided.", "warning")
         return redirect(url_for("finds_samples.finds_samples"))
 
+    # verify sample exists
     conn = get_terrain_connection(selected_db)
     try:
         with conn.cursor() as cur:
@@ -908,9 +880,9 @@ def upload_sample_media(media_type: str):
             pk_name = storage.make_pk(selected_db, f.filename)
             storage.validate_pk(pk_name)
             ext = pk_name.rsplit(".", 1)[-1].lower()
-            validate_extension(ext, Config.ALLOWED_EXTENSIONS)
+            validate_extension(ext, ALLOWED_EXT)
 
-            media_dir = Config.MEDIA_DIRS[media_type]
+            media_dir = MEDIA_DIRS[media_type]
             final_path, thumb_path = storage.final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
             if os.path.exists(final_path):
                 raise ValueError(f"File already exists: {pk_name}")
@@ -919,7 +891,7 @@ def upload_sample_media(media_type: str):
             tmp_path = None
 
             mime = detect_mime(final_path)
-            validate_mime(mime, Config.ALLOWED_MIME)
+            validate_mime(mime, ALLOWED_MIME)
             checksum = sha256_file(final_path)
 
             try:
@@ -950,7 +922,7 @@ def upload_sample_media(media_type: str):
                             checksum,
                             shoot_dt, gps_lat, gps_lon, gps_alt,
                             Json(exif_json),
-                        )
+                        ),
                     )
                     cur2.execute(link_sample_photo_sql(), (id_sample, pk_name, id_sample, pk_name))
 
@@ -966,7 +938,7 @@ def upload_sample_media(media_type: str):
                             mime,
                             os.path.getsize(final_path),
                             checksum,
-                        )
+                        ),
                     )
                     cur2.execute(link_sample_sketch_sql(), (id_sample, pk_name, id_sample, pk_name))
 
@@ -1005,7 +977,7 @@ def upload_sample_media(media_type: str):
     if failed:
         flash(
             f"Uploaded {ok} file(s), {len(failed)} failed: " + "; ".join(failed),
-            "warning" if ok else "danger"
+            "warning" if ok else "danger",
         )
     else:
         flash(f"Uploaded {ok} file(s).", "success")
