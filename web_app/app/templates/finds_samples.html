@@ -1,272 +1,343 @@
+{# app/templates/finds_samples.html #}
 {% extends "base.html" %}
 {% block content %}
+
+<style>
+  /* Optional tiny polish: make cards stand out on subtle backgrounds */
+  .panel-wrap .card { background: rgba(255,255,255,0.95); }
+  .panel-wrap { min-height: 100%; }
+</style>
 
 <div class="container-fluid mt-3">
   <div class="row g-3">
 
-    <!-- ========== LEFT: FINDS ========== -->
+    <!-- ================= LEFT: FINDS ================= -->
     <div class="col-lg-6">
+      <div class="panel-wrap p-3 rounded-3 bg-primary-subtle border">
 
-      <!-- (a) Form -->
-      <div class="card mb-3">
-        <div class="card-header"><strong>Finds</strong></div>
-        <div class="card-body">
-          <form method="post" action="{{ url_for('finds_samples.add_find') }}">
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label">Find ID</label>
-                <input name="id_find" type="number" class="form-control" required>
-              </div>
+        <!-- (a) Find entry -->
+        <div class="card mb-3 border-start border-4 border-primary">
+          <div class="card-header d-flex align-items-center">
+            <strong>Finds</strong>
 
-              <div class="col-md-4">
-                <label class="form-label">Type</label>
-                <div class="input-group">
-                  <select name="ref_find_type" class="form-select" required>
-                    <option value="" selected>-- select --</option>
-                    {% for t in find_types %}
-                      <option value="{{ t }}">{{ t }}</option>
+            <!-- Help button -->
+            <button type="button"
+                    class="btn btn-sm btn-outline-primary ms-2"
+                    title="Help"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalHelpFinds">
+              ?
+            </button>
+          </div>
+
+          <div class="card-body">
+            <form method="post" action="{{ url_for('finds_samples.add_find') }}">
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="form-label">Find ID</label>
+                  <input name="id_find" type="number" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Type</label>
+                  <div class="input-group">
+                    <select name="ref_find_type" class="form-select" required>
+                      <option value="" selected>-- select --</option>
+                      {% for t in find_types %}
+                        <option value="{{ t }}">{{ t }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bs-toggle="modal" data-bs-target="#modalAddFindType">
+                      Define
+                    </button>
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">SJ</label>
+                  <input name="ref_sj" type="number" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Count</label>
+                  <input name="count" type="number" min="1" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Box</label>
+                  <input name="box" type="number" min="1" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Polygon (optional)</label>
+                  <select name="ref_polygon" class="form-select">
+                    <option value="" selected>-- none --</option>
+                    {% for p in polygons %}
+                      <option value="{{ p }}">{{ p }}</option>
                     {% endfor %}
                   </select>
-                  <button type="button" class="btn btn-outline-secondary"
-                          data-bs-toggle="modal" data-bs-target="#modalAddFindType">
-                    Define
-                  </button>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Geopt (optional)</label>
+                  <input name="ref_geopt" type="number" class="form-control">
+                </div>
+
+                <div class="col-md-8">
+                  <label class="form-label">Description</label>
+                  <input name="description" type="text" class="form-control">
                 </div>
               </div>
 
-              <div class="col-md-4">
-                <label class="form-label">SJ</label>
-                <input name="ref_sj" type="number" class="form-control" required>
-                <div class="form-text">Later we can plug autocomplete here.</div>
+              <div class="mt-2">
+                <button class="btn btn-primary" type="submit">Save find</button>
               </div>
+            </form>
+          </div>
+        </div>
 
-              <div class="col-md-4">
-                <label class="form-label">Count</label>
-                <input name="count" type="number" class="form-control" min="1" required>
-              </div>
+        <!-- (b) Last finds -->
+        <div class="card mb-3 border-start border-4 border-primary">
+          <div class="card-header d-flex align-items-center">
+            <strong>Last finds</strong>
+            <button id="btnReloadFinds" class="btn btn-sm btn-outline-primary ms-auto">Reload</button>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Geopt</th>
+                    <th style="width:240px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodyFinds"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
 
-              <div class="col-md-4">
-                <label class="form-label">Box</label>
-                <input name="box" type="number" class="form-control" min="1" required>
-              </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Polygon (optional)</label>
-                <select name="ref_polygon" class="form-select">
-                  <option value="" selected>-- none --</option>
-                  {% for p in polygons %}
-                    <option value="{{ p }}">{{ p }}</option>
+        <!-- (c) Documentation (finds) -->
+        <div class="card border-start border-4 border-primary">
+          <div class="card-header"><strong>Graphic documentation (finds)</strong></div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end mb-2">
+              <div class="col-md-6">
+                <label class="form-label">Attach to find</label>
+                <select id="findDocSelect" class="form-select">
+                  <option value="" selected>-- select find --</option>
+                  {% for r in last_finds %}
+                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
                   {% endfor %}
                 </select>
               </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Geopt (optional)</label>
-                <input name="ref_geopt" type="number" class="form-control">
-                <div class="form-text">No FK – can be filled before geodesy import.</div>
-              </div>
-
-              <div class="col-md-8">
-                <label class="form-label">Description</label>
-                <input name="description" type="text" class="form-control">
+              <div class="col-md-6">
+                <div class="alert alert-light border mb-0 py-2">
+                  <span class="text-muted">Selected:</span>
+                  <strong id="findDocSelectedLabel" class="ms-1">—</strong>
+                </div>
               </div>
             </div>
 
-            <div class="mt-2">
-              <button class="btn btn-primary" type="submit">Save find</button>
+            <div class="d-flex gap-2 flex-wrap">
+              <button type="button" class="btn btn-primary"
+                      data-bs-toggle="modal" data-bs-target="#modalFindPhotos">
+                Upload photos
+              </button>
+              <button type="button" class="btn btn-secondary"
+                      data-bs-toggle="modal" data-bs-target="#modalFindSketches">
+                Upload sketches
+              </button>
             </div>
-          </form>
-        </div>
-      </div>
 
-      <!-- (b) Last entries -->
-      <div class="card mb-3">
-        <div class="card-header d-flex align-items-center">
-          <strong>Last finds</strong>
-          <button id="btnReloadFinds" class="btn btn-sm btn-outline-primary ms-auto">Reload</button>
-        </div>
-        <div class="card-body">
-          <div class="table-responsive">
-            <table class="table table-sm table-striped align-middle">
-              <thead>
-                <tr>
-                  <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Geopt</th>
-                  <th style="width:220px;">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="tbodyFinds"></tbody>
-            </table>
+            <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
           </div>
         </div>
+
       </div>
-
-      <!-- (c) Documentation -->
-      <div class="card">
-        <div class="card-header"><strong>Graphic documentation (finds)</strong></div>
-        <div class="card-body">
-          <div class="row g-2 align-items-end mb-2">
-            <div class="col-md-6">
-              <label class="form-label">Attach to find</label>
-              <select id="findDocSelect" class="form-select">
-                <option value="" selected>-- select find --</option>
-                {% for r in last_finds %}
-                  <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <div class="alert alert-light border mb-0 py-2">
-                <span class="text-muted">Selected:</span>
-                <strong id="findDocSelectedLabel" class="ms-1">—</strong>
-              </div>
-            </div>
-          </div>
-
-          <div class="d-flex gap-2 flex-wrap">
-            <button type="button" class="btn btn-primary docBtn"
-                    data-bs-toggle="modal" data-bs-target="#modalFindPhotos">
-              Upload photos
-            </button>
-            <button type="button" class="btn btn-secondary docBtn"
-                    data-bs-toggle="modal" data-bs-target="#modalFindSketches">
-              Upload sketches
-            </button>
-          </div>
-
-          <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
-        </div>
-      </div>
-
     </div>
 
 
-    <!-- ========== RIGHT: SAMPLES ========== -->
+    <!-- ================= RIGHT: SAMPLES ================= -->
     <div class="col-lg-6">
+      <div class="panel-wrap p-3 rounded-3 bg-success-subtle border">
 
-      <!-- (a) Form -->
-      <div class="card mb-3">
-        <div class="card-header"><strong>Samples</strong></div>
-        <div class="card-body">
-          <form method="post" action="{{ url_for('finds_samples.add_sample') }}">
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label">Sample ID</label>
-                <input name="id_sample" type="number" class="form-control" required>
-              </div>
+        <!-- (a) Sample entry -->
+        <div class="card mb-3 border-start border-4 border-success">
+          <div class="card-header d-flex align-items-center">
+            <strong>Samples</strong>
 
-              <div class="col-md-4">
-                <label class="form-label">Type</label>
-                <div class="input-group">
-                  <select name="ref_sample_type" class="form-select" required>
-                    <option value="" selected>-- select --</option>
-                    {% for t in sample_types %}
-                      <option value="{{ t }}">{{ t }}</option>
+            <!-- Help button -->
+            <button type="button"
+                    class="btn btn-sm btn-outline-success ms-2"
+                    title="Help"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalHelpSamples">
+              ?
+            </button>
+          </div>
+
+          <div class="card-body">
+            <form method="post" action="{{ url_for('finds_samples.add_sample') }}">
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="form-label">Sample ID</label>
+                  <input name="id_sample" type="number" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Type</label>
+                  <div class="input-group">
+                    <select name="ref_sample_type" class="form-select" required>
+                      <option value="" selected>-- select --</option>
+                      {% for t in sample_types %}
+                        <option value="{{ t }}">{{ t }}</option>
+                      {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-bs-toggle="modal" data-bs-target="#modalAddSampleType">
+                      Define
+                    </button>
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">SJ</label>
+                  <input name="ref_sj" type="number" class="form-control" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Polygon (optional)</label>
+                  <select name="ref_polygon" class="form-select">
+                    <option value="" selected>-- none --</option>
+                    {% for p in polygons %}
+                      <option value="{{ p }}">{{ p }}</option>
                     {% endfor %}
                   </select>
-                  <button type="button" class="btn btn-outline-secondary"
-                          data-bs-toggle="modal" data-bs-target="#modalAddSampleType">
-                    Define
-                  </button>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Geopt (optional)</label>
+                  <input name="ref_geopt" type="number" class="form-control">
+                </div>
+
+                <div class="col-md-8">
+                  <label class="form-label">Description</label>
+                  <input name="description" type="text" class="form-control">
                 </div>
               </div>
 
-              <div class="col-md-4">
-                <label class="form-label">SJ</label>
-                <input name="ref_sj" type="number" class="form-control" required>
+              <div class="mt-2">
+                <button class="btn btn-success" type="submit">Save sample</button>
               </div>
+            </form>
+          </div>
+        </div>
 
-              <div class="col-md-4">
-                <label class="form-label">Polygon (optional)</label>
-                <select name="ref_polygon" class="form-select">
-                  <option value="" selected>-- none --</option>
-                  {% for p in polygons %}
-                    <option value="{{ p }}">{{ p }}</option>
+        <!-- (b) Last samples -->
+        <div class="card mb-3 border-start border-4 border-success">
+          <div class="card-header d-flex align-items-center">
+            <strong>Last samples</strong>
+            <button id="btnReloadSamples" class="btn btn-sm btn-outline-success ms-auto">Reload</button>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Geopt</th>
+                    <th style="width:240px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbodySamples"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- (c) Documentation (samples) -->
+        <div class="card border-start border-4 border-success">
+          <div class="card-header"><strong>Graphic documentation (samples)</strong></div>
+          <div class="card-body">
+            <div class="row g-2 align-items-end mb-2">
+              <div class="col-md-6">
+                <label class="form-label">Attach to sample</label>
+                <select id="sampleDocSelect" class="form-select">
+                  <option value="" selected>-- select sample --</option>
+                  {% for r in last_samples %}
+                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
                   {% endfor %}
                 </select>
               </div>
-
-              <div class="col-md-4">
-                <label class="form-label">Geopt (optional)</label>
-                <input name="ref_geopt" type="number" class="form-control">
-              </div>
-
-              <div class="col-md-8">
-                <label class="form-label">Description</label>
-                <input name="description" type="text" class="form-control">
+              <div class="col-md-6">
+                <div class="alert alert-light border mb-0 py-2">
+                  <span class="text-muted">Selected:</span>
+                  <strong id="sampleDocSelectedLabel" class="ms-1">—</strong>
+                </div>
               </div>
             </div>
 
-            <div class="mt-2">
-              <button class="btn btn-primary" type="submit">Save sample</button>
+            <div class="d-flex gap-2 flex-wrap">
+              <button type="button" class="btn btn-success"
+                      data-bs-toggle="modal" data-bs-target="#modalSamplePhotos">
+                Upload photos
+              </button>
+              <button type="button" class="btn btn-secondary"
+                      data-bs-toggle="modal" data-bs-target="#modalSampleSketches">
+                Upload sketches
+              </button>
             </div>
-          </form>
-        </div>
-      </div>
 
-      <!-- (b) Last entries -->
-      <div class="card mb-3">
-        <div class="card-header d-flex align-items-center">
-          <strong>Last samples</strong>
-          <button id="btnReloadSamples" class="btn btn-sm btn-outline-primary ms-auto">Reload</button>
-        </div>
-        <div class="card-body">
-          <div class="table-responsive">
-            <table class="table table-sm table-striped align-middle">
-              <thead>
-                <tr>
-                  <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Geopt</th>
-                  <th style="width:220px;">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="tbodySamples"></tbody>
-            </table>
+            <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
           </div>
         </div>
+
       </div>
+    </div>
 
-      <!-- (c) Documentation -->
-      <div class="card">
-        <div class="card-header"><strong>Graphic documentation (samples)</strong></div>
-        <div class="card-body">
-          <div class="row g-2 align-items-end mb-2">
-            <div class="col-md-6">
-              <label class="form-label">Attach to sample</label>
-              <select id="sampleDocSelect" class="form-select">
-                <option value="" selected>-- select sample --</option>
-                {% for r in last_samples %}
-                  <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <div class="alert alert-light border mb-0 py-2">
-                <span class="text-muted">Selected:</span>
-                <strong id="sampleDocSelectedLabel" class="ms-1">—</strong>
-              </div>
-            </div>
-          </div>
+  </div>
+</div>
 
-          <div class="d-flex gap-2 flex-wrap">
-            <button type="button" class="btn btn-primary docBtn"
-                    data-bs-toggle="modal" data-bs-target="#modalSamplePhotos">
-              Upload photos
-            </button>
-            <button type="button" class="btn btn-secondary docBtn"
-                    data-bs-toggle="modal" data-bs-target="#modalSampleSketches">
-              Upload sketches
-            </button>
-          </div>
 
-          <small class="text-muted d-block mt-2">Allowed: {{ allowed_ext }}</small>
-        </div>
+<!-- ================= HELP MODALS ================= -->
+
+<div class="modal fade" id="modalHelpFinds" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help — Finds</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
+      <div class="modal-body">
+        {% include "help/finds_help.html" %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
+<div class="modal fade" id="modalHelpSamples" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help — Samples</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% include "help/samples_help.html" %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
     </div>
   </div>
 </div>
 
 
-<!-- ========== MODALS: add types ========== -->
+<!-- ================= MODALS: add types ================= -->
 
 <div class="modal fade" id="modalAddFindType" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -307,7 +378,172 @@
 </div>
 
 
-<!-- ========== MODALS: uploads ========== -->
+<!-- ================= MODAL: delete confirm ================= -->
+
+<div class="modal fade" id="modalDeleteConfirm" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm delete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-0">Delete <strong id="delEntityLabel"></strong> with ID <strong id="delIdLabel"></strong>?</p>
+        <div class="text-muted small mt-2">This will also delete linked media relations (via CASCADE).</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="btnConfirmDelete" type="button" class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= MODAL: edit find ================= -->
+
+<div class="modal fade" id="modalEditFind" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit find</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="editFindId">
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Find ID</label>
+            <input id="editFindIdDisplay" class="form-control" disabled>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Type</label>
+            <select id="editFindType" class="form-select" required>
+              {% for t in find_types %}
+                <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">SJ</label>
+            <input id="editFindSj" type="number" class="form-control" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Count</label>
+            <input id="editFindCount" type="number" min="1" class="form-control" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Box</label>
+            <input id="editFindBox" type="number" min="1" class="form-control" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Polygon</label>
+            <select id="editFindPolygon" class="form-select">
+              <option value="">-- none --</option>
+              {% for p in polygons %}
+                <option value="{{ p }}">{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Geopt</label>
+            <input id="editFindGeopt" type="number" class="form-control">
+          </div>
+
+          <div class="col-md-8">
+            <label class="form-label">Description</label>
+            <input id="editFindDescription" type="text" class="form-control">
+          </div>
+        </div>
+
+        <div class="text-muted small mt-2">
+          Type and polygon are validated by dropdown; geopt is free input (no FK).
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="btnSaveFindEdit" type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= MODAL: edit sample ================= -->
+
+<div class="modal fade" id="modalEditSample" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit sample</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="editSampleId">
+
+        <div class="row g-2">
+          <div class="col-md-4">
+            <label class="form-label">Sample ID</label>
+            <input id="editSampleIdDisplay" class="form-control" disabled>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Type</label>
+            <select id="editSampleType" class="form-select" required>
+              {% for t in sample_types %}
+                <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">SJ</label>
+            <input id="editSampleSj" type="number" class="form-control" required>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Polygon</label>
+            <select id="editSamplePolygon" class="form-select">
+              <option value="">-- none --</option>
+              {% for p in polygons %}
+                <option value="{{ p }}">{{ p }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Geopt</label>
+            <input id="editSampleGeopt" type="number" class="form-control">
+          </div>
+
+          <div class="col-md-8">
+            <label class="form-label">Description</label>
+            <input id="editSampleDescription" type="text" class="form-control">
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button id="btnSaveSampleEdit" type="button" class="btn btn-primary">Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= MODALS: uploads ================= -->
 
 <!-- FIND PHOTOS -->
 <div class="modal fade" id="modalFindPhotos" tabindex="-1" aria-hidden="true">
@@ -315,7 +551,7 @@
     <form method="post"
           action="{{ url_for('finds_samples.upload_find_media', media_type='photos') }}"
           enctype="multipart/form-data"
-          class="modal-content docForm">
+          class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Upload photos to find</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -365,7 +601,7 @@
     <form method="post"
           action="{{ url_for('finds_samples.upload_find_media', media_type='sketches') }}"
           enctype="multipart/form-data"
-          class="modal-content docForm">
+          class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Upload sketches to find</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -415,7 +651,7 @@
     <form method="post"
           action="{{ url_for('finds_samples.upload_sample_media', media_type='photos') }}"
           enctype="multipart/form-data"
-          class="modal-content docForm">
+          class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Upload photos to sample</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -453,7 +689,7 @@
       <div class="modal-footer">
         <span class="text-muted me-auto">Sample: <span id="previewSamplePhotos">—</span></span>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Upload</button>
+        <button type="submit" class="btn btn-success">Upload</button>
       </div>
     </form>
   </div>
@@ -465,7 +701,7 @@
     <form method="post"
           action="{{ url_for('finds_samples.upload_sample_media', media_type='sketches') }}"
           enctype="multipart/form-data"
-          class="modal-content docForm">
+          class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Upload sketches to sample</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -503,7 +739,7 @@
       <div class="modal-footer">
         <span class="text-muted me-auto">Sample: <span id="previewSampleSketches">—</span></span>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Upload</button>
+        <button type="submit" class="btn btn-success">Upload</button>
       </div>
     </form>
   </div>
@@ -514,13 +750,16 @@
   const EP = {
     listFinds: "{{ url_for('finds_samples.list_finds') }}",
     listSamples: "{{ url_for('finds_samples.list_samples') }}",
-    delFindBase: "{{ url_for('finds_samples.delete_find', id_find=0) }}".replace("/0",""),
-    delSampleBase: "{{ url_for('finds_samples.delete_sample', id_sample=0) }}".replace("/0",""),
-    updFindBase: "{{ url_for('finds_samples.update_find', id_find=0) }}".replace("/0",""),
-    updSampleBase: "{{ url_for('finds_samples.update_sample', id_sample=0) }}".replace("/0",""),
-    printFindBase: "{{ url_for('finds_samples.print_find_label', id_find=0) }}".replace("/0",""),
-    printSampleBase: "{{ url_for('finds_samples.print_sample_label', id_sample=0) }}".replace("/0","")
+    delFind: (id) => "{{ url_for('finds_samples.delete_find', id_find=0) }}".replace("/0", "/" + id),
+    delSample: (id) => "{{ url_for('finds_samples.delete_sample', id_sample=0) }}".replace("/0", "/" + id),
+    updFind: (id) => "{{ url_for('finds_samples.update_find', id_find=0) }}".replace("/0", "/" + id),
+    updSample: (id) => "{{ url_for('finds_samples.update_sample', id_sample=0) }}".replace("/0", "/" + id),
+    printFind: (id) => "{{ url_for('finds_samples.print_find_label', id_find=0) }}".replace("/0", "/" + id),
+    printSample: (id) => "{{ url_for('finds_samples.print_sample_label', id_sample=0) }}".replace("/0", "/" + id)
   };
+
+  const cacheFinds = new Map();
+  const cacheSamples = new Map();
 
   function addFileInput(containerId) {
     const div = document.getElementById(containerId);
@@ -533,30 +772,32 @@
     div.appendChild(input);
   }
 
-  function actionButtonsFind(r) {
-    const id = r.id_find;
+  function btnsFind(r) {
     return `
-      <button class="btn btn-sm btn-outline-secondary" onclick="openEditFind(${id})">Edit</button>
-      <button class="btn btn-sm btn-outline-danger" onclick="deleteFind(${id})">Delete</button>
-      <button class="btn btn-sm btn-outline-primary" onclick="printFind(${id})">Print label</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="openEditFind(${r.id_find})">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="openDelete('find', ${r.id_find})">Delete</button>
+      <button class="btn btn-sm btn-outline-primary" onclick="window.open(EP.printFind(${r.id_find}), '_blank')">Print label</button>
     `;
   }
 
-  function actionButtonsSample(r) {
-    const id = r.id_sample;
+  function btnsSample(r) {
     return `
-      <button class="btn btn-sm btn-outline-secondary" onclick="openEditSample(${id})">Edit</button>
-      <button class="btn btn-sm btn-outline-danger" onclick="deleteSample(${id})">Delete</button>
-      <button class="btn btn-sm btn-outline-primary" onclick="printSample(${id})">Print label</button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="openEditSample(${r.id_sample})">Edit</button>
+      <button class="btn btn-sm btn-outline-danger" onclick="openDelete('sample', ${r.id_sample})">Delete</button>
+      <button class="btn btn-sm btn-outline-primary" onclick="window.open(EP.printSample(${r.id_sample}), '_blank')">Print label</button>
     `;
   }
 
   async function reloadFinds() {
     const res = await fetch(EP.listFinds + "?limit=30");
     const data = await res.json();
+    cacheFinds.clear();
+
     const tb = document.getElementById("tbodyFinds");
     tb.innerHTML = "";
+
     (data.rows || []).forEach(r => {
+      cacheFinds.set(r.id_find, r);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.id_find}</td>
@@ -566,7 +807,7 @@
         <td>${r.box}</td>
         <td>${r.ref_polygon || ""}</td>
         <td>${r.ref_geopt || ""}</td>
-        <td>${actionButtonsFind(r)}</td>
+        <td>${btnsFind(r)}</td>
       `;
       tb.appendChild(tr);
     });
@@ -575,9 +816,13 @@
   async function reloadSamples() {
     const res = await fetch(EP.listSamples + "?limit=30");
     const data = await res.json();
+    cacheSamples.clear();
+
     const tb = document.getElementById("tbodySamples");
     tb.innerHTML = "";
+
     (data.rows || []).forEach(r => {
+      cacheSamples.set(r.id_sample, r);
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${r.id_sample}</td>
@@ -585,58 +830,148 @@
         <td>${r.ref_sj}</td>
         <td>${r.ref_polygon || ""}</td>
         <td>${r.ref_geopt || ""}</td>
-        <td>${actionButtonsSample(r)}</td>
+        <td>${btnsSample(r)}</td>
       `;
       tb.appendChild(tr);
     });
   }
 
-  async function deleteFind(id) {
-    if (!confirm(`Delete find ${id}?`)) return;
-    const res = await fetch(EP.delFindBase + "/" + id, { method: "POST" });
+  // ----- delete modal -----
+  let deleteState = { entity: null, id: null };
+
+  function openDelete(entity, id) {
+    deleteState = { entity, id };
+    document.getElementById("delEntityLabel").textContent = entity;
+    document.getElementById("delIdLabel").textContent = id;
+
+    const m = new bootstrap.Modal(document.getElementById("modalDeleteConfirm"));
+    m.show();
+  }
+
+  async function doDelete() {
+    const { entity, id } = deleteState;
+    if (!entity || !id) return;
+
+    const url = (entity === "find") ? EP.delFind(id) : EP.delSample(id);
+    const res = await fetch(url, { method: "POST" });
     const data = await res.json();
-    if (!data.ok) alert(data.error || "Delete failed.");
+
+    if (!data.ok) {
+      alert(data.error || "Delete failed.");
+      return;
+    }
+
+    if (entity === "find") await reloadFinds();
+    else await reloadSamples();
+  }
+
+  document.getElementById("btnConfirmDelete").addEventListener("click", async () => {
+    await doDelete();
+    bootstrap.Modal.getInstance(document.getElementById("modalDeleteConfirm")).hide();
+  });
+
+  // ----- edit modals -----
+  function openEditFind(id) {
+    const r = cacheFinds.get(id);
+    if (!r) return;
+
+    document.getElementById("editFindId").value = id;
+    document.getElementById("editFindIdDisplay").value = id;
+    document.getElementById("editFindType").value = r.ref_find_type || "";
+    document.getElementById("editFindSj").value = r.ref_sj ?? "";
+    document.getElementById("editFindCount").value = r.count ?? "";
+    document.getElementById("editFindBox").value = r.box ?? "";
+    document.getElementById("editFindPolygon").value = r.ref_polygon || "";
+    document.getElementById("editFindGeopt").value = r.ref_geopt ?? "";
+    document.getElementById("editFindDescription").value = r.description || "";
+
+    new bootstrap.Modal(document.getElementById("modalEditFind")).show();
+  }
+
+  async function saveEditFind() {
+    const id = parseInt(document.getElementById("editFindId").value, 10);
+
+    const payload = {
+      ref_find_type: document.getElementById("editFindType").value,
+      ref_sj: document.getElementById("editFindSj").value,
+      count: document.getElementById("editFindCount").value,
+      box: document.getElementById("editFindBox").value,
+      ref_polygon: document.getElementById("editFindPolygon").value,
+      ref_geopt: document.getElementById("editFindGeopt").value,
+      description: document.getElementById("editFindDescription").value
+    };
+
+    const res = await fetch(EP.updFind(id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      alert(data.error || "Update failed.");
+      return;
+    }
     await reloadFinds();
+    bootstrap.Modal.getInstance(document.getElementById("modalEditFind")).hide();
   }
 
-  async function deleteSample(id) {
-    if (!confirm(`Delete sample ${id}?`)) return;
-    const res = await fetch(EP.delSampleBase + "/" + id, { method: "POST" });
+  document.getElementById("btnSaveFindEdit").addEventListener("click", saveEditFind);
+
+  function openEditSample(id) {
+    const r = cacheSamples.get(id);
+    if (!r) return;
+
+    document.getElementById("editSampleId").value = id;
+    document.getElementById("editSampleIdDisplay").value = id;
+    document.getElementById("editSampleType").value = r.ref_sample_type || "";
+    document.getElementById("editSampleSj").value = r.ref_sj ?? "";
+    document.getElementById("editSamplePolygon").value = r.ref_polygon || "";
+    document.getElementById("editSampleGeopt").value = r.ref_geopt ?? "";
+    document.getElementById("editSampleDescription").value = r.description || "";
+
+    new bootstrap.Modal(document.getElementById("modalEditSample")).show();
+  }
+
+  async function saveEditSample() {
+    const id = parseInt(document.getElementById("editSampleId").value, 10);
+
+    const payload = {
+      ref_sample_type: document.getElementById("editSampleType").value,
+      ref_sj: document.getElementById("editSampleSj").value,
+      ref_polygon: document.getElementById("editSamplePolygon").value,
+      ref_geopt: document.getElementById("editSampleGeopt").value,
+      description: document.getElementById("editSampleDescription").value
+    };
+
+    const res = await fetch(EP.updSample(id), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
     const data = await res.json();
-    if (!data.ok) alert(data.error || "Delete failed.");
+    if (!data.ok) {
+      alert(data.error || "Update failed.");
+      return;
+    }
     await reloadSamples();
+    bootstrap.Modal.getInstance(document.getElementById("modalEditSample")).hide();
   }
 
-  function printFind(id) {
-    window.open(EP.printFindBase + "/" + id, "_blank");
-  }
-  function printSample(id) {
-    window.open(EP.printSampleBase + "/" + id, "_blank");
-  }
+  document.getElementById("btnSaveSampleEdit").addEventListener("click", saveEditSample);
 
-  // Minimal edit: use prompt (you can replace with Bootstrap modal later)
-  async function openEditFind(id) {
-    alert("Edit modal: reuse pattern from polygons/SU (to be plugged in next step).");
-  }
-  async function openEditSample(id) {
-    alert("Edit modal: reuse pattern from polygons/SU (to be plugged in next step).");
-  }
-
-  // Documentation selectors -> fill hidden inputs + previews
+  // ----- documentation selectors -> hidden inputs + previews -----
   function syncDocSelectors() {
     const findSel = document.getElementById("findDocSelect");
-    const findLabel = document.getElementById("findDocSelectedLabel");
     const findVal = findSel.value || "";
-    findLabel.textContent = findVal || "—";
+    document.getElementById("findDocSelectedLabel").textContent = findVal || "—";
     document.getElementById("hiddenFindIdPhotos").value = findVal;
     document.getElementById("hiddenFindIdSketches").value = findVal;
     document.getElementById("previewFindPhotos").textContent = findVal || "—";
     document.getElementById("previewFindSketches").textContent = findVal || "—";
 
     const sampleSel = document.getElementById("sampleDocSelect");
-    const sampleLabel = document.getElementById("sampleDocSelectedLabel");
     const sampleVal = sampleSel.value || "";
-    sampleLabel.textContent = sampleVal || "—";
+    document.getElementById("sampleDocSelectedLabel").textContent = sampleVal || "—";
     document.getElementById("hiddenSampleIdPhotos").value = sampleVal;
     document.getElementById("hiddenSampleIdSketches").value = sampleVal;
     document.getElementById("previewSamplePhotos").textContent = sampleVal || "—";
