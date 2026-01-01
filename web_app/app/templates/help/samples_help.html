@@ -1,0 +1,18 @@
+<p>
+  This form creates/defines the evidence of samples in DB table <code>tab_samples</code>.
+  The basix evidence item is probably <code>the bag/sack</code> as a container of one sample from one SU.
+</p>
+
+<ul>
+  <li><strong>Sample ID</strong>: <code>(required)</code> is a unique identifier (primary key).</li>
+  <li><strong>Type</strong>: <code>(required)</code> defines content of bag - use dropodwn list and optionaly define your own type of material.</li>
+  <li><strong>SU</strong>: <code>(required)</code> defines ID of stratigraphic unit where samples were collected from.</li>
+  <li><strong>Polygon</strong>: Sometimes You want to record of excavation polygon where sample was taken. FK to <code>tab_polygons</code></li>
+  <li><strong>Geopt</strong>: Sometimes its usual (healthy) to measure and store the precise position of sample. This field is FK to <code>tab_geopts</code>.</li>
+  <li><strong>Description</strong>: any kind of useful information You would to store along.</li>
+</ul>
+
+<p class="mb-2"><strong>Tips</strong></p>
+<ul class="mb-0">
+  <li>There is a "Print label" button in list of samples bellow. Use it for printing paper labels intended to clue on bag with samples.</li>
+</ul>
