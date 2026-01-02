@@ -1297,3 +1297,137 @@ def link_sample_sketch_sql():
           WHERE ref_sample = %s AND ref_sketch = %s
         );
     """
+
+
+
+# -------------------------
+# SQLs for MEDIA/PHOTO handling (helpers for photos route)
+# -------------------------
+
+def photo_exists_sql():
+    return "SELECT 1 FROM tab_photos WHERE id_photo = %s LIMIT 1;"
+
+
+def checksum_exists_sql():
+    return "SELECT 1 FROM tab_photos WHERE checksum_sha256 = %s LIMIT 1;"
+
+
+def update_photo_sql():
+    """
+    Params: (photo_typ, datum, author, notes, id_photo)
+    """
+    return """
+        UPDATE tab_photos
+           SET photo_typ = %s,
+               datum = %s,
+               author = %s,
+               notes = %s
+         WHERE id_photo = %s;
+    """
+
+
+def delete_photo_sql():
+    return "DELETE FROM tab_photos WHERE id_photo = %s;"
+
+
+def get_photo_sql():
+    return """
+        SELECT
+            id_photo, photo_typ, datum, author, notes,
+            mime_type, file_size, checksum_sha256,
+            shoot_datetime, gps_lat, gps_lon, gps_alt
+        FROM tab_photos
+        WHERE id_photo = %s;
+    """
+
+
+def list_photos_sql(where_sql: str = "", order_sql: str = "", limit_sql: str = ""):
+    base = """
+        SELECT
+            p.id_photo, p.photo_typ, p.datum, p.author, p.notes,
+            p.mime_type, p.file_size, p.checksum_sha256,
+            p.shoot_datetime, p.gps_lat, p.gps_lon, p.gps_alt
+        FROM tab_photos p
+    """
+    return base + "\n" + (where_sql or "") + "\n" + (order_sql or "") + "\n" + (limit_sql or "") + ";"
+
+
+def count_photos_sql(where_sql: str = ""):
+    return "SELECT COUNT(*) FROM tab_photos p " + (where_sql or "") + ";"
+
+
+def stats_basic_sql():
+    return "SELECT COUNT(*)::bigint, COALESCE(SUM(file_size),0)::bigint FROM tab_photos;"
+
+
+def stats_by_type_sql():
+    return """
+        SELECT photo_typ, COUNT(*)::bigint
+        FROM tab_photos
+        GROUP BY photo_typ
+        ORDER BY COUNT(*) DESC, photo_typ;
+    """
+
+
+# -------------------------
+# Search endpoints (AJAX for select2 in media handling)
+# -------------------------
+
+def search_authors_sql():
+    return """
+        SELECT mail
+        FROM gloss_personalia
+        WHERE mail ILIKE %s
+        ORDER BY mail
+        LIMIT %s OFFSET %s;
+    """
+
+
+def search_sj_sql():
+    return """
+        SELECT id_sj
+        FROM tab_sj
+        WHERE CAST(id_sj AS text) ILIKE %s
+        ORDER BY id_sj
+        LIMIT %s OFFSET %s;
+    """
+
+
+def search_polygons_sql():
+    return """
+        SELECT polygon_name
+        FROM tab_polygons
+        WHERE polygon_name ILIKE %s
+        ORDER BY polygon_name
+        LIMIT %s OFFSET %s;
+    """
+
+
+def search_sections_sql():
+    return """
+        SELECT id_section
+        FROM tab_section
+        WHERE CAST(id_section AS text) ILIKE %s
+        ORDER BY id_section
+        LIMIT %s OFFSET %s;
+    """
+
+
+def search_finds_sql():
+    return """
+        SELECT id_find
+        FROM tab_finds
+        WHERE CAST(id_find AS text) ILIKE %s
+        ORDER BY id_find
+        LIMIT %s OFFSET %s;
+    """
+
+
+def search_samples_sql():
+    return """
+        SELECT id_sample
+        FROM tab_samples
+        WHERE CAST(id_sample AS text) ILIKE %s
+        ORDER BY id_sample
+        LIMIT %s OFFSET %s;
+    """
