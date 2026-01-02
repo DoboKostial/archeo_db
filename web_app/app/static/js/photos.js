@@ -25,6 +25,10 @@
   // data-hidden-name="..."
   // ---------------------------
   function initSearchSelect(container) {
+    // ✅ Guard against double initialization (fixes duplicated inputs)
+    if (container.dataset.ssInit === "1") return;
+    container.dataset.ssInit = "1";
+
     const mode = container.dataset.mode || "multi";
     const endpoint = container.dataset.endpoint;
     const hiddenName = container.dataset.hiddenName;
@@ -33,7 +37,10 @@
     container.classList.add("position-relative");
 
     const input = el(`<input type="text" class="form-control" placeholder="${placeholder}">`);
-    const dropdown = el(`<div class="list-group position-absolute w-100 shadow-sm" style="z-index: 50; display:none; max-height:220px; overflow:auto;"></div>`);
+    const dropdown = el(
+      `<div class="list-group position-absolute w-100 shadow-sm"
+            style="z-index: 50; display:none; max-height:220px; overflow:auto;"></div>`
+    );
     const chips = el(`<div class="mt-2 d-flex flex-wrap gap-1"></div>`);
 
     container.appendChild(input);
@@ -49,11 +56,14 @@
       if (mode === "single") {
         chips.innerHTML = "";
         // remove existing hidden inputs
-        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach(n => n.remove());
+        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach((n) =>
+          n.remove()
+        );
       } else {
         // prevent duplicates
-        const exists = [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)]
-          .some(n => n.value === String(id));
+        const exists = [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].some(
+          (n) => n.value === String(id)
+        );
         if (exists) return;
       }
 
@@ -94,7 +104,7 @@
         const results = data.results || [];
 
         dropdown.innerHTML = "";
-        results.forEach(item => {
+        results.forEach((item) => {
           const a = el(`<button type="button" class="list-group-item list-group-item-action"></button>`);
           a.textContent = item.text;
           a.addEventListener("click", () => {
@@ -124,12 +134,14 @@
         addChip(id, text);
       },
       setMulti(values) {
-        values.forEach(v => addChip(v.id, v.text));
+        values.forEach((v) => addChip(v.id, v.text));
       },
       clear() {
         chips.innerHTML = "";
-        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach(n => n.remove());
-      }
+        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach((n) =>
+          n.remove()
+        );
+      },
     };
   }
 
@@ -152,12 +164,12 @@
     const node = el(html);
 
     // Replace name attributes that contain ___IDX__
-    node.querySelectorAll("[name]").forEach(n => {
+    node.querySelectorAll("[name]").forEach((n) => {
       n.name = n.name.replaceAll("___IDX__", "_" + nextIdx);
     });
 
     // Replace search-select hidden-name suffixes
-    node.querySelectorAll(".search-select").forEach(ss => {
+    node.querySelectorAll(".search-select").forEach((ss) => {
       ss.dataset.hiddenName = ss.dataset.hiddenName.replaceAll("___IDX__", "_" + nextIdx);
     });
 
@@ -170,11 +182,12 @@
   }
 
   if (btnAdd) btnAdd.addEventListener("click", addBlock);
-  if (btnReset) btnReset.addEventListener("click", () => {
-    blocksWrap.innerHTML = "";
-    nextIdx = 0;
-    addBlock();
-  });
+  if (btnReset)
+    btnReset.addEventListener("click", () => {
+      blocksWrap.innerHTML = "";
+      nextIdx = 0;
+      addBlock();
+    });
 
   // init first block
   if (blocksWrap && tpl) addBlock();
@@ -190,25 +203,27 @@
 
   function renderBulkSelected() {
     bulkSelectedContainer.innerHTML = "";
-    document.querySelectorAll(".photo-check:checked").forEach(chk => {
+    document.querySelectorAll(".photo-check:checked").forEach((chk) => {
       bulkSelectedContainer.appendChild(el(`<input type="hidden" name="photo_ids" value="${chk.value}">`));
     });
   }
 
-  document.querySelectorAll(".photo-check").forEach(chk => {
+  document.querySelectorAll(".photo-check").forEach((chk) => {
     chk.addEventListener("change", renderBulkSelected);
   });
 
   const btnSelectAll = document.getElementById("btnSelectAll");
   const btnClear = document.getElementById("btnClearSelection");
-  if (btnSelectAll) btnSelectAll.addEventListener("click", () => {
-    document.querySelectorAll(".photo-check").forEach(chk => chk.checked = true);
-    renderBulkSelected();
-  });
-  if (btnClear) btnClear.addEventListener("click", () => {
-    document.querySelectorAll(".photo-check").forEach(chk => chk.checked = false);
-    renderBulkSelected();
-  });
+  if (btnSelectAll)
+    btnSelectAll.addEventListener("click", () => {
+      document.querySelectorAll(".photo-check").forEach((chk) => (chk.checked = true));
+      renderBulkSelected();
+    });
+  if (btnClear)
+    btnClear.addEventListener("click", () => {
+      document.querySelectorAll(".photo-check").forEach((chk) => (chk.checked = false));
+      renderBulkSelected();
+    });
 
   if (bulkForm) bulkForm.addEventListener("submit", () => renderBulkSelected());
 
@@ -248,7 +263,9 @@
     const setMulti = (selector, values, labelPrefix = "") => {
       const ss = editForm.querySelector(selector);
       ss._searchSelect.clear();
-      ss._searchSelect.setMulti(values.map(v => ({ id: String(v), text: labelPrefix ? `${labelPrefix} ${v}` : String(v) })));
+      ss._searchSelect.setMulti(
+        values.map((v) => ({ id: String(v), text: labelPrefix ? `${labelPrefix} ${v}` : String(v) }))
+      );
     };
 
     setMulti('.search-select[data-hidden-name="ref_sj"]', data.links.sj_ids, "SJ");
@@ -266,11 +283,11 @@
     bsDelete.show();
   }
 
-  document.querySelectorAll(".btnEdit").forEach(btn => {
+  document.querySelectorAll(".btnEdit").forEach((btn) => {
     btn.addEventListener("click", () => openEdit(btn.dataset.id));
   });
 
-  document.querySelectorAll(".btnDelete").forEach(btn => {
+  document.querySelectorAll(".btnDelete").forEach((btn) => {
     btn.addEventListener("click", () => openDelete(btn.dataset.id));
   });
 })();

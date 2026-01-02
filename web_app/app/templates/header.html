@@ -21,7 +21,20 @@
         <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('sections.sections') }}">TE:SECTIONS</a></li>
         <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('geodesy.geodesy') }}">DE:GEODESY</a></li>
         <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('finds_samples.finds_samples') }}">TE: FINDS</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('terr_photo.upload_foto') }}">DE:TERRAIN PHOTOS</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle text-danger"
+          href="#"
+          id="navMediaDropdown"
+          role="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false">
+            MEDIA
+          </a>
+          <ul class="dropdown-menu" aria-labelledby="navMediaDropdown">
+            <li><a class="dropdown-item text-danger" href="{{ url_for('photos.photos') }}">PHOTOS</a></li>
+          </ul>
+        </li>
+
       </ul>
 
       <!-- User info and logout -->
