@@ -5,7 +5,7 @@ from .admin import admin_bp
 from .su import su_bp
 from .archeo_objects import archeo_objects_bp
 from .polygons import polygons_bp
-from .terr_photo import terr_photo_bp
 from .sections import sections_bp
 from .geodesy import geodesy_bp
 from .finds_samples import finds_samples_bp
+from .photos import photos_bp
