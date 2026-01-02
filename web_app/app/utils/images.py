@@ -16,16 +16,65 @@ Image.MAX_IMAGE_PIXELS = 80_000_000  # ~80 MPx
 try:
     import magic  # python-magic
     _HAS_MAGIC = True
+    _MAGIC = magic.Magic(mime=True)  # create once
 except Exception:
     _HAS_MAGIC = False
+    _MAGIC = None
+
+
+def _sniff_mime_by_header(file_path: str) -> str | None:
+    """Fallback only for types we already allow in Config.ALLOWED_MIME."""
+    try:
+        with open(file_path, "rb") as f:
+            head = f.read(8192)
+    except Exception:
+        return None
+
+    if head.startswith(b"%PDF-"):
+        return "application/pdf"
+    if len(head) >= 3 and head[0:3] == b"\xFF\xD8\xFF":
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"II*\x00") or head.startswith(b"MM\x00*"):
+        return "image/tiff"
+
+    # SVG (XML text)
+    try:
+        txt = head.decode("utf-8", errors="ignore").lower()
+        if "<svg" in txt:
+            return "image/svg+xml"
+    except Exception:
+        pass
+
+    return None
+
 
 def detect_mime(file_path: str) -> str:
-    if _HAS_MAGIC:
-        # Magic objekt create only once
-        m = magic.Magic(mime=True)
-        return m.from_file(file_path)
+    """
+    Backward compatible:
+    - if libmagic returns a concrete MIME -> return it (same as before)
+    - if libmagic returns application/octet-stream (unknown) -> fallback sniff + mimetypes
+    """
+    if _HAS_MAGIC and _MAGIC is not None:
+        try:
+            t = _MAGIC.from_file(file_path)
+            if t == "image/jpg":
+                t = "image/jpeg"
+            if t and t != "application/octet-stream":
+                return t
+        except Exception:
+            pass
+
+    sniffed = _sniff_mime_by_header(file_path)
+    if sniffed:
+        return sniffed
+
     mt, _ = mimetypes.guess_type(file_path)
+    if mt == "image/jpg":
+        mt = "image/jpeg"
     return mt or "application/octet-stream"
+
 
 
 # --- Thumbnails ---
