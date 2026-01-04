@@ -9,3 +9,4 @@ from .sections import sections_bp
 from .geodesy import geodesy_bp
 from .finds_samples import finds_samples_bp
 from .photos import photos_bp
+from .photograms import photograms_bp

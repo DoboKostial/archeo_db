@@ -11,7 +11,7 @@ def create_app():
     app.secret_key = Config.SECRET_KEY  # for Flask sessions
 
     # Bluprints registration, so far only routes
-    from app.routes import main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp, sections_bp, geodesy_bp, finds_samples_bp, photos_bp
+    from app.routes import main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp, sections_bp, geodesy_bp, finds_samples_bp, photos_bp, photograms_bp
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
@@ -22,7 +22,7 @@ def create_app():
     app.register_blueprint(geodesy_bp)
     app.register_blueprint(finds_samples_bp)
     app.register_blueprint(photos_bp)
-
+    app.register_blueprint(photograms_bp)
 
     @app.context_processor
     def inject_user_info():

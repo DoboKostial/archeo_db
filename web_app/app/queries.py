@@ -615,7 +615,7 @@ def polygons_hierarchy_sql():
     """
 
 # ----------------------------------------------------
-# Sections: SQL helpers (manual create + bindings + SJ links)
+# Sections: SQL helpers (manual create + bindings + SU links)
 # ----------------------------------------------------
 
 def get_sections_list_sql():
@@ -623,7 +623,7 @@ def get_sections_list_sql():
     Listing for /sections:
       - srid_txt: SRID inferred from geopts used by section (— / <srid> / mixed)
       - ranges_txt: e.g. "1-4, 7-9, 12-13"
-      - sj_nr: count of linked SJs
+      - sj_nr: count of linked SUs
     """
     return """
         WITH r AS (
@@ -669,7 +669,7 @@ def get_sections_list_sql():
 
 
 def list_sj_ids_sql():
-    """Simple list of SJ IDs for multi-select."""
+    """Simple list of SUs IDs for multi-select."""
     return "SELECT id_sj FROM tab_sj ORDER BY id_sj;"
 
 
@@ -703,13 +703,13 @@ def insert_section_geopts_binding_sql():
 
 
 def delete_section_sj_links_sql():
-    """Delete M:N links SECTION→SJ. Params: (id_section,)"""
+    """Delete M:N links SECTION→SU. Params: (id_section,)"""
     return "DELETE FROM tabaid_sj_section WHERE ref_section = %s;"
 
 
 def insert_section_sj_link_sql():
     """
-    Insert one SECTION↔SJ link.
+    Insert one SECTION↔SU link.
     Params: (ref_sj, ref_section)
     Tip: if you add UNIQUE(ref_sj, ref_section), you can safely DO NOTHING on conflict.
     """
@@ -1430,4 +1430,221 @@ def search_samples_sql():
         WHERE CAST(id_sample AS text) ILIKE %s
         ORDER BY id_sample
         LIMIT %s OFFSET %s;
+    """
+
+
+# -------------------------
+# SQLs for photograms handling
+# -------------------------
+
+def insert_photogram_sql():
+    return """
+        INSERT INTO tab_photograms (
+            id_photogram, photogram_typ, ref_sketch, notes,
+            mime_type, file_size, checksum_sha256,
+            ref_photo_from, ref_photo_to
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+    """
+
+def update_photogram_sql():
+    return """
+        UPDATE tab_photograms
+        SET photogram_typ=%s,
+            ref_sketch=%s,
+            notes=%s,
+            mime_type=%s,
+            file_size=%s,
+            checksum_sha256=%s,
+            ref_photo_from=%s,
+            ref_photo_to=%s
+        WHERE id_photogram=%s;
+    """
+
+def delete_photogram_sql():
+    return "DELETE FROM tab_photograms WHERE id_photogram=%s;"
+
+def photogram_checksum_exists_sql():
+    return "SELECT 1 FROM tab_photograms WHERE checksum_sha256=%s LIMIT 1;"
+
+def photogram_exists_sql():
+    return "SELECT 1 FROM tab_photograms WHERE id_photogram=%s LIMIT 1;"
+
+
+# --- link tables (SU / polygon / section) ---
+def link_photogram_sj_sql():
+    return """
+        INSERT INTO tabaid_photogram_sj (ref_photogram, ref_sj)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+def unlink_photogram_sj_sql():
+    return "DELETE FROM tabaid_photogram_sj WHERE ref_photogram=%s AND ref_sj=%s;"
+
+def link_photogram_polygon_sql():
+    return """
+        INSERT INTO tabaid_polygon_photograms (ref_polygon, ref_photogram)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+def unlink_photogram_polygon_sql():
+    return "DELETE FROM tabaid_polygon_photograms WHERE ref_polygon=%s AND ref_photogram=%s;"
+
+def link_photogram_section_sql():
+    return """
+        INSERT INTO tabaid_section_photograms (ref_section, ref_photogram)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+def unlink_photogram_section_sql():
+    return "DELETE FROM tabaid_section_photograms WHERE ref_section=%s AND ref_photogram=%s;"
+
+
+# --- geopts ranges ---
+def insert_photogram_geopts_range_sql():
+    return """
+        INSERT INTO tabaid_photogram_geopts (ref_photogram, ref_geopt_from, ref_geopt_to)
+        VALUES (%s, %s, %s)
+        ON CONFLICT DO NOTHING;
+    """
+
+def delete_photogram_geopts_ranges_sql():
+    return "DELETE FROM tabaid_photogram_geopts WHERE ref_photogram=%s;"
+
+def select_photogram_geopts_ranges_sql():
+    return """
+        SELECT ref_geopt_from, ref_geopt_to
+        FROM tabaid_photogram_geopts
+        WHERE ref_photogram=%s
+        ORDER BY ref_geopt_from, ref_geopt_to;
+    """
+
+
+# --- list / detail / links / stats ---
+def select_photograms_page_sql(*, orphan_only: bool, has_typ: bool, has_sketch: bool, has_pf: bool, has_pt: bool):
+    # dynamic flags keep query parameterized
+    where = ["1=1"]
+    if orphan_only:
+        where.append("""
+          NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj s WHERE s.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_photograms pp WHERE pp.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram)
+        """)
+    if has_typ:
+        where.append("p.photogram_typ = ANY(%(typ_list)s)")
+    if has_sketch:
+        where.append("p.ref_sketch = %(ref_sketch)s")
+    if has_pf:
+        where.append("p.ref_photo_from = %(ref_photo_from)s")
+    if has_pt:
+        where.append("p.ref_photo_to = %(ref_photo_to)s")
+
+    where_sql = " AND ".join(f"({w})" for w in where)
+
+    return f"""
+      SELECT
+        p.id_photogram,
+        p.photogram_typ,
+        p.ref_sketch,
+        p.notes,
+        p.ref_photo_from,
+        p.ref_photo_to,
+        json_build_object(
+          'sj',      (SELECT COUNT(*) FROM tabaid_photogram_sj s WHERE s.ref_photogram=p.id_photogram),
+          'polygon', (SELECT COUNT(*) FROM tabaid_polygon_photograms pp WHERE pp.ref_photogram=p.id_photogram),
+          'section', (SELECT COUNT(*) FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram),
+          'ranges',  (SELECT COUNT(*) FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram)
+        ) AS link_counts
+      FROM tab_photograms p
+      WHERE {where_sql}
+      ORDER BY p.id_photogram DESC
+      LIMIT %(limit)s OFFSET %(offset)s;
+    """
+
+def select_photogram_detail_sql():
+    return """
+      SELECT id_photogram, photogram_typ, ref_sketch, notes, ref_photo_from, ref_photo_to
+      FROM tab_photograms
+      WHERE id_photogram=%s;
+    """
+
+def select_photogram_links_sql():
+    return """
+      SELECT
+        ARRAY(SELECT ref_sj      FROM tabaid_photogram_sj       WHERE ref_photogram=%s ORDER BY ref_sj),
+        ARRAY(SELECT ref_polygon FROM tabaid_polygon_photograms WHERE ref_photogram=%s ORDER BY ref_polygon),
+        ARRAY(SELECT ref_section FROM tabaid_section_photograms WHERE ref_photogram=%s ORDER BY ref_section);
+    """
+
+def photograms_stats_sql():
+    return """
+      SELECT
+        (SELECT COUNT(*) FROM tab_photograms) AS total_cnt,
+        (SELECT COALESCE(SUM(file_size),0) FROM tab_photograms) AS total_bytes,
+        (SELECT COUNT(*) FROM tab_photograms p
+          WHERE
+            NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj s WHERE s.ref_photogram=p.id_photogram)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_photograms pp WHERE pp.ref_photogram=p.id_photogram)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram)
+        ) AS orphan_cnt;
+    """
+
+def photograms_stats_by_type_sql():
+    return """
+      SELECT photogram_typ, COUNT(*)
+      FROM tab_photograms
+      GROUP BY photogram_typ
+      ORDER BY COUNT(*) DESC, photogram_typ;
+    """
+
+
+# --- search SQLs (SearchSelect) ---
+def search_sj_sql():
+    return """
+      SELECT id_sj::text AS id, ('SU ' || id_sj::text) AS text
+      FROM tab_sj
+      WHERE id_sj::text ILIKE %s
+      ORDER BY id_sj
+      LIMIT %s OFFSET %s;
+    """
+
+def search_polygons_sql():
+    return """
+      SELECT polygon_name AS id, polygon_name AS text
+      FROM tab_polygons
+      WHERE polygon_name ILIKE %s
+      ORDER BY polygon_name
+      LIMIT %s OFFSET %s;
+    """
+
+def search_sections_sql():
+    return """
+      SELECT id_section::text AS id, ('Section ' || id_section::text) AS text
+      FROM tab_section
+      WHERE id_section::text ILIKE %s
+      ORDER BY id_section
+      LIMIT %s OFFSET %s;
+    """
+
+def search_sketches_sql():
+    return """
+      SELECT id_sketch AS id, id_sketch AS text
+      FROM tab_sketches
+      WHERE id_sketch ILIKE %s
+      ORDER BY id_sketch
+      LIMIT %s OFFSET %s;
+    """
+
+def search_photos_sql():
+    return """
+      SELECT id_photo AS id, id_photo AS text
+      FROM tab_photos
+      WHERE id_photo ILIKE %s
+      ORDER BY id_photo DESC
+      LIMIT %s OFFSET %s;
     """
