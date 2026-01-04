@@ -503,7 +503,7 @@ def upload_photos():
 
                 for sj in b["sj_ids"]:
                     _assert_exists("SELECT 1 FROM tab_sj WHERE id_sj=%s LIMIT 1;", sj,
-                                  f"Block {b['idx']}: SJ not found: {sj}")
+                                  f"Block {b['idx']}: SU not found: {sj}")
                 for poly in b["polygon_names"]:
                     _assert_exists("SELECT 1 FROM tab_polygons WHERE polygon_name=%s LIMIT 1;", poly,
                                   f"Block {b['idx']}: polygon not found: {poly}")
@@ -923,7 +923,7 @@ def api_search_sj():
         except Exception:
             pass
 
-    items = [(str(r[0]), f"SJ {r[0]}") for r in rows]
+    items = [(str(r[0]), f"SU {r[0]}") for r in rows]
     return jsonify(_select2_payload(items, more=(len(items) == limit)))
 
 

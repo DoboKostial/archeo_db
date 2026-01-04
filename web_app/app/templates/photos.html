@@ -180,7 +180,7 @@
              data-mode="multi"
              data-endpoint="{{ url_for('photos.api_search_sj') }}"
              data-hidden-name="ref_sj"
-             data-placeholder="Bulk: SJ">
+             data-placeholder="Bulk: SU">
         </div>
 
         <div class="search-select"
@@ -246,11 +246,11 @@
               {% endif %}
               <span class="badge text-bg-light">
                 Links:
-                SJ({{ p.link_counts.sj }}),
-                P({{ p.link_counts.polygon }}),
-                S({{ p.link_counts.section }}),
-                F({{ p.link_counts.find }}),
-                Sa({{ p.link_counts.sample }})
+                SUs ({{ p.link_counts.sj }}),
+                Polygons ({{ p.link_counts.polygon }}),
+                Sections ({{ p.link_counts.section }})<br>
+                Finds ({{ p.link_counts.find }}),
+                Samples ({{ p.link_counts.sample }})
               </span>
             </div>
             {% if p.notes %}
@@ -371,12 +371,12 @@
                   <div class="fw-semibold mb-2">Entities</div>
 
                   <div class="mb-2">
-                    <label class="form-label">SJs</label>
+                    <label class="form-label">SUs</label>
                     <div class="search-select"
                          data-mode="multi"
                          data-endpoint="{{ url_for('photos.api_search_sj') }}"
                          data-hidden-name="sj_ids"
-                         data-placeholder="Filter: SJ">
+                         data-placeholder="Filter: SU">
                     </div>
                   </div>
 
