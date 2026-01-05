@@ -1,5 +1,8 @@
 // static/js/photograms.js
 (function () {
+  // ---------------------------
+  // small helpers
+  // ---------------------------
   const debounce = (fn, ms) => {
     let t = null;
     return (...args) => {
@@ -14,13 +17,21 @@
     return t.content.firstChild;
   };
 
+  const q = (root, sel) => (root ? root.querySelector(sel) : null);
+
+  // safe set value
+  const setVal = (root, sel, value) => {
+    const n = q(root, sel);
+    if (n) n.value = value ?? "";
+  };
+
   // ---------------------------
-  // SearchSelect (same as photos.js) – idempotent init
+  // SearchSelect component
+  // data-mode="single|multi"
+  // data-endpoint="..."
+  // data-hidden-name="..."
   // ---------------------------
   function initSearchSelect(container) {
-    if (container.dataset.ssInit === "1") return;
-    container.dataset.ssInit = "1";
-
     const mode = container.dataset.mode || "multi";
     const endpoint = container.dataset.endpoint;
     const hiddenName = container.dataset.hiddenName;
@@ -30,8 +41,7 @@
 
     const input = el(`<input type="text" class="form-control" placeholder="${placeholder}">`);
     const dropdown = el(
-      `<div class="list-group position-absolute w-100 shadow-sm"
-            style="z-index: 50; display:none; max-height:220px; overflow:auto;"></div>`
+      `<div class="list-group position-absolute w-100 shadow-sm" style="z-index: 50; display:none; max-height:220px; overflow:auto;"></div>`
     );
     const chips = el(`<div class="mt-2 d-flex flex-wrap gap-1"></div>`);
 
@@ -47,10 +57,10 @@
     const addChip = (id, text) => {
       if (mode === "single") {
         chips.innerHTML = "";
-        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach((n) => n.remove());
+        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach(n => n.remove());
       } else {
         const exists = [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)]
-          .some((n) => n.value === String(id));
+          .some(n => n.value === String(id));
         if (exists) return;
       }
 
@@ -74,14 +84,14 @@
     };
 
     const fetchItems = debounce(async () => {
-      const q = input.value.trim();
-      if (!q) {
+      const qq = input.value.trim();
+      if (!qq) {
         clearDropdown();
         return;
       }
       try {
         const url = new URL(endpoint, window.location.origin);
-        url.searchParams.set("q", q);
+        url.searchParams.set("q", qq);
         url.searchParams.set("limit", "20");
         url.searchParams.set("page", "1");
 
@@ -91,7 +101,7 @@
         const results = data.results || [];
 
         dropdown.innerHTML = "";
-        results.forEach((item) => {
+        results.forEach(item => {
           const a = el(`<button type="button" class="list-group-item list-group-item-action"></button>`);
           a.textContent = item.text;
           a.addEventListener("click", () => {
@@ -109,17 +119,18 @@
     }, 250);
 
     input.addEventListener("input", fetchItems);
+
     document.addEventListener("click", (ev) => {
       if (!container.contains(ev.target)) clearDropdown();
     });
 
     container._searchSelect = {
       setSingle(id, text) { addChip(id, text); },
-      setMulti(values) { values.forEach((v) => addChip(v.id, v.text)); },
+      setMulti(values) { values.forEach(v => addChip(v.id, v.text)); },
       clear() {
         chips.innerHTML = "";
-        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach((n) => n.remove());
-      },
+        [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach(n => n.remove());
+      }
     };
   }
 
@@ -127,97 +138,70 @@
     root.querySelectorAll(".search-select").forEach(initSearchSelect);
   }
 
-  // ---------------------------
-  // Upload blocks
-  // ---------------------------
-  const blocksWrap = document.getElementById("photogramBlocks");
-  const tpl = document.getElementById("photogramBlockTemplate");
-  const btnAdd = document.getElementById("btnAddBlock");
-  const btnReset = document.getElementById("btnResetBlocks");
-  let nextIdx = 0;
-
-  function addRangeRow(rangesHost, idx) {
-    const row = el(`
-      <div class="row g-2 align-items-end range-row mt-2">
-        <div class="col-5">
-          <input type="number" class="form-control" name="geopt_from_${idx}[]" min="1" placeholder="FROM">
-        </div>
-        <div class="col-5">
-          <input type="number" class="form-control" name="geopt_to_${idx}[]" min="1" placeholder="TO">
-        </div>
-        <div class="col-2 d-grid">
-          <button type="button" class="btn btn-outline-danger btnRemoveRange">x</button>
-        </div>
-      </div>
-    `);
-    row.querySelector(".btnRemoveRange").addEventListener("click", () => row.remove());
-    rangesHost.appendChild(row);
-  }
-
-  function addBlock() {
-    const html = tpl.innerHTML.replaceAll("__IDX__", String(nextIdx));
-    const node = el(html);
-
-    // Replace name attributes
-    node.querySelectorAll("[name]").forEach((n) => {
-      n.name = n.name.replaceAll("___IDX__", "_" + nextIdx);
-    });
-
-    // Replace search-select hidden-name suffixes
-    node.querySelectorAll(".search-select").forEach((ss) => {
-      ss.dataset.hiddenName = ss.dataset.hiddenName.replaceAll("___IDX__", "_" + nextIdx);
-    });
-
-    node.querySelector(".btnRemoveBlock").addEventListener("click", () => node.remove());
-
-    // ranges add button
-    const rangesHost = node.querySelector(".geoptsRanges");
-    const addBtn = node.querySelector(".btnAddRange");
-    if (addBtn && rangesHost) {
-      addBtn.addEventListener("click", () => addRangeRow(rangesHost, nextIdx));
-    }
-
-    blocksWrap.appendChild(node);
-    initAllSearchSelect(node);
-
-    nextIdx += 1;
-  }
-
-  if (btnAdd) btnAdd.addEventListener("click", addBlock);
-  if (btnReset) btnReset.addEventListener("click", () => {
-    blocksWrap.innerHTML = "";
-    nextIdx = 0;
-    addBlock();
-  });
-
-  if (blocksWrap && tpl) addBlock();
+  // init search-select everywhere (upload + bulk/filter + edit)
   initAllSearchSelect(document);
 
   // ---------------------------
-  // Bulk selection
+  // Upload: add more file inputs
+  // ---------------------------
+  const btnAddFile = document.getElementById("btnAddFile");
+  const extraFiles = document.getElementById("extraFiles");
+
+  const makeFileRow = () => {
+    const row = document.createElement("div");
+    row.className = "input-group mb-2";
+    row.innerHTML = `
+      <input type="file"
+             name="files"
+             class="form-control"
+             accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
+             required>
+      <button type="button" class="btn btn-outline-danger">Remove</button>
+    `;
+    row.querySelector("button").addEventListener("click", () => row.remove());
+    return row;
+  };
+
+  if (btnAddFile && extraFiles) {
+    btnAddFile.addEventListener("click", () => {
+      extraFiles.appendChild(makeFileRow());
+    });
+  }
+
+  // ---------------------------
+  // Bulk selection wiring
   // ---------------------------
   const bulkForm = document.getElementById("bulkForm");
   const bulkSelectedContainer = document.getElementById("bulkSelectedContainer");
 
+  // allow different checkbox class names (robust)
+  const checkboxSelector = ".photogram-check, .photo-check, .item-check";
+  const hiddenInputName = "photogram_ids"; // adjust in template/backend if needed
+
   function renderBulkSelected() {
+    if (!bulkSelectedContainer) return;
     bulkSelectedContainer.innerHTML = "";
-    document.querySelectorAll(".photogram-check:checked").forEach((chk) => {
-      bulkSelectedContainer.appendChild(el(`<input type="hidden" name="photogram_ids" value="${chk.value}">`));
+    document.querySelectorAll(`${checkboxSelector}:checked`).forEach(chk => {
+      bulkSelectedContainer.appendChild(el(`<input type="hidden" name="${hiddenInputName}" value="${chk.value}">`));
     });
   }
 
-  document.querySelectorAll(".photogram-check").forEach((chk) => chk.addEventListener("change", renderBulkSelected));
+  document.querySelectorAll(checkboxSelector).forEach(chk => {
+    chk.addEventListener("change", renderBulkSelected);
+  });
 
   const btnSelectAll = document.getElementById("btnSelectAll");
   const btnClear = document.getElementById("btnClearSelection");
+
   if (btnSelectAll) btnSelectAll.addEventListener("click", () => {
-    document.querySelectorAll(".photogram-check").forEach((chk) => chk.checked = true);
+    document.querySelectorAll(checkboxSelector).forEach(chk => chk.checked = true);
     renderBulkSelected();
   });
   if (btnClear) btnClear.addEventListener("click", () => {
-    document.querySelectorAll(".photogram-check").forEach((chk) => chk.checked = false);
+    document.querySelectorAll(checkboxSelector).forEach(chk => chk.checked = false);
     renderBulkSelected();
   });
+
   if (bulkForm) bulkForm.addEventListener("submit", () => renderBulkSelected());
 
   // ---------------------------
@@ -227,33 +211,36 @@
   const modalDeleteEl = document.getElementById("modalDelete");
   const editForm = document.getElementById("editForm");
   const deleteForm = document.getElementById("deleteForm");
-  const editId = document.getElementById("editId");
-  const deleteId = document.getElementById("deleteId");
-  const editRanges = document.getElementById("editRanges");
-  const btnEditAddRange = document.getElementById("btnEditAddRange");
+  const editId = document.getElementById("editIdPhotogram") || document.getElementById("editId");
+  const deleteId = document.getElementById("deleteIdPhotogram") || document.getElementById("deleteId");
 
   const bsEdit = modalEditEl ? new bootstrap.Modal(modalEditEl) : null;
   const bsDelete = modalDeleteEl ? new bootstrap.Modal(modalDeleteEl) : null;
 
-  function addEditRangeRow(a = "", b = "") {
-    const row = el(`
-      <div class="row g-2 align-items-end mb-2 edit-range-row">
-        <div class="col-5">
-          <input type="number" class="form-control" name="geopt_from[]" min="1" placeholder="FROM" value="${a}">
-        </div>
-        <div class="col-5">
-          <input type="number" class="form-control" name="geopt_to[]" min="1" placeholder="TO" value="${b}">
-        </div>
-        <div class="col-2 d-grid">
-          <button type="button" class="btn btn-outline-danger btnRemoveRange">x</button>
-        </div>
-      </div>
-    `);
-    row.querySelector(".btnRemoveRange").addEventListener("click", () => row.remove());
-    editRanges.appendChild(row);
-  }
+  const ssGet = (root, hiddenName) =>
+    root ? root.querySelector(`.search-select[data-hidden-name="${hiddenName}"]`) : null;
 
-  if (btnEditAddRange) btnEditAddRange.addEventListener("click", () => addEditRangeRow());
+  const ssSetSingle = (root, hiddenName, id, text) => {
+    const ss = ssGet(root, hiddenName);
+    if (!ss || !ss._searchSelect) return;
+    ss._searchSelect.clear();
+    if (id !== null && id !== undefined && String(id) !== "") {
+      ss._searchSelect.setSingle(String(id), text ?? String(id));
+    }
+  };
+
+  const ssSetMulti = (root, hiddenName, values, labelPrefix = "") => {
+    const ss = ssGet(root, hiddenName);
+    if (!ss || !ss._searchSelect) return;
+    ss._searchSelect.clear();
+    const vv = Array.isArray(values) ? values : [];
+    ss._searchSelect.setMulti(
+      vv.map(v => ({
+        id: String(v),
+        text: labelPrefix ? `${labelPrefix} ${v}` : String(v),
+      }))
+    );
+  };
 
   async function openEdit(idPhotogram) {
     const url = `/photograms/api/detail/${encodeURIComponent(idPhotogram)}`;
@@ -261,49 +248,99 @@
     if (!resp.ok) return;
     const data = await resp.json();
 
-    editId.textContent = data.id_photogram;
-    editForm.action = `/photograms/edit/${encodeURIComponent(data.id_photogram)}`;
+    if (editId) editId.textContent = data.id_photogram;
+    if (editForm) editForm.action = `/photograms/edit/${encodeURIComponent(data.id_photogram)}`;
 
-    editForm.querySelector('select[name="photogram_typ"]').value = data.photogram_typ;
-    editForm.querySelector('input[name="notes"]').value = data.notes || "";
+    // basic fields
+    setVal(editForm, 'select[name="photogram_typ"]', data.photogram_typ);
+    setVal(editForm, 'input[name="notes"]', data.notes || "");
 
-    // ref_sketch (single)
-    const ssSketch = editForm.querySelector('.search-select[data-hidden-name="ref_sketch"]');
-    ssSketch._searchSelect.clear();
-    if (data.ref_sketch) ssSketch._searchSelect.setSingle(data.ref_sketch, data.ref_sketch);
-
-    // photos from/to (single)
-    const ssPF = editForm.querySelector('.search-select[data-hidden-name="ref_photo_from"]');
-    ssPF._searchSelect.clear();
-    if (data.ref_photo_from) ssPF._searchSelect.setSingle(data.ref_photo_from, data.ref_photo_from);
-
-    const ssPT = editForm.querySelector('.search-select[data-hidden-name="ref_photo_to"]');
-    ssPT._searchSelect.clear();
-    if (data.ref_photo_to) ssPT._searchSelect.setSingle(data.ref_photo_to, data.ref_photo_to);
+    // optional FK fields (if you use search-selects for them)
+    ssSetSingle(editForm, "ref_sketch", data.ref_sketch, data.ref_sketch);
+    ssSetSingle(editForm, "ref_photo_from", data.ref_photo_from, data.ref_photo_from);
+    ssSetSingle(editForm, "ref_photo_to", data.ref_photo_to, data.ref_photo_to);
 
     // links
-    const setMulti = (selector, values, prefix = "") => {
-      const ss = editForm.querySelector(selector);
-      ss._searchSelect.clear();
-      ss._searchSelect.setMulti(values.map(v => ({ id: String(v), text: prefix ? `${prefix} ${v}` : String(v) })));
-    };
-    setMulti('.search-select[data-hidden-name="ref_sj"]', data.links.sj_ids, "SU");
-    setMulti('.search-select[data-hidden-name="ref_polygon"]', data.links.polygon_names, "");
-    setMulti('.search-select[data-hidden-name="ref_section"]', data.links.section_ids, "Section");
+    const links = data.links || {};
+    ssSetMulti(editForm, "ref_sj", links.sj_ids || [], "SU");
+    ssSetMulti(editForm, "ref_polygon", links.polygon_names || [], "");
+    ssSetMulti(editForm, "ref_section", links.section_ids || [], "Section");
 
-    // ranges
-    editRanges.innerHTML = "";
-    (data.geopts_ranges || []).forEach(r => addEditRangeRow(String(r.from), String(r.to)));
+    // geopts ranges are often edited by special UI (not SearchSelect),
+    // so we intentionally do not auto-fill them here unless modal has a dedicated field.
 
-    bsEdit.show();
+    if (bsEdit) bsEdit.show();
   }
+  
+
+  
+
+  // ---- Geopts ranges: add/remove rows (Photograms upload) ----
+(function () {
+  const wrap = document.getElementById("geoptsRanges");
+  if (!wrap) return;
+
+  const makeRow = () => {
+    const row = document.createElement("div");
+    row.className = "row g-2 align-items-end range-row mt-2";
+    row.innerHTML = `
+      <div class="col-5">
+        <label class="form-label">FROM</label>
+        <input type="number" class="form-control" name="geopt_from[]" min="1">
+      </div>
+      <div class="col-5">
+        <label class="form-label">TO</label>
+        <input type="number" class="form-control" name="geopt_to[]" min="1">
+      </div>
+      <div class="col-2 d-grid gap-1">
+        <button type="button" class="btn btn-outline-secondary btnAddRange">+</button>
+        <button type="button" class="btn btn-outline-danger btnRemoveRange">-</button>
+      </div>
+    `;
+    return row;
+  };
+
+  // event delegation: works for existing + future rows
+  wrap.addEventListener("click", (ev) => {
+    const addBtn = ev.target.closest(".btnAddRange");
+    if (addBtn) {
+      ev.preventDefault();
+      wrap.appendChild(makeRow());
+      return;
+    }
+
+    const rmBtn = ev.target.closest(".btnRemoveRange");
+    if (rmBtn) {
+      ev.preventDefault();
+      const row = rmBtn.closest(".range-row");
+      if (!row) return;
+
+      // keep at least one row
+      const rows = wrap.querySelectorAll(".range-row");
+      if (rows.length <= 1) {
+        // just clear values
+        row.querySelectorAll('input[type="number"]').forEach(i => (i.value = ""));
+        return;
+      }
+      row.remove();
+    }
+  });
+})();
+
+
+
 
   function openDelete(idPhotogram) {
-    deleteId.textContent = idPhotogram;
-    deleteForm.action = `/photograms/delete/${encodeURIComponent(idPhotogram)}`;
-    bsDelete.show();
+    if (deleteId) deleteId.textContent = idPhotogram;
+    if (deleteForm) deleteForm.action = `/photograms/delete/${encodeURIComponent(idPhotogram)}`;
+    if (bsDelete) bsDelete.show();
   }
 
-  document.querySelectorAll(".btnEdit").forEach(btn => btn.addEventListener("click", () => openEdit(btn.dataset.id)));
-  document.querySelectorAll(".btnDelete").forEach(btn => btn.addEventListener("click", () => openDelete(btn.dataset.id)));
+  document.querySelectorAll(".btnEdit").forEach(btn => {
+    btn.addEventListener("click", () => openEdit(btn.dataset.id));
+  });
+
+  document.querySelectorAll(".btnDelete").forEach(btn => {
+    btn.addEventListener("click", () => openDelete(btn.dataset.id));
+  });
 })();

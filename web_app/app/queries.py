@@ -1373,14 +1373,14 @@ def stats_by_type_sql():
 # Search endpoints (AJAX for select2 in media handling)
 # -------------------------
 
-def search_authors_sql():
-    return """
-        SELECT mail
-        FROM gloss_personalia
-        WHERE mail ILIKE %s
-        ORDER BY mail
-        LIMIT %s OFFSET %s;
-    """
+#def search_authors_sql():
+#    return """
+#        SELECT mail
+#        FROM gloss_personalia
+#        WHERE mail ILIKE %s
+#        ORDER BY mail
+#        LIMIT %s OFFSET %s;
+#    """
 
 
 def search_sj_sql():
@@ -1647,4 +1647,376 @@ def search_photos_sql():
       WHERE id_photo ILIKE %s
       ORDER BY id_photo DESC
       LIMIT %s OFFSET %s;
+    """
+
+
+# -------------------------
+# SQLs for sketches handling
+# -------------------------
+
+def insert_sketch_sql():
+    return """
+        INSERT INTO tab_sketches (
+            id_sketch, sketch_typ, author, datum, notes,
+            mime_type, file_size, checksum_sha256
+        )
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+    """
+
+def update_sketch_sql():
+    return """
+        UPDATE tab_sketches
+        SET sketch_typ=%s,
+            author=%s,
+            datum=%s,
+            notes=%s,
+            mime_type=%s,
+            file_size=%s,
+            checksum_sha256=%s
+        WHERE id_sketch=%s;
+    """
+
+def delete_sketch_sql():
+    return "DELETE FROM tab_sketches WHERE id_sketch=%s;"
+
+def sketch_exists_sql():
+    return "SELECT 1 FROM tab_sketches WHERE id_sketch=%s LIMIT 1;"
+
+def sketch_checksum_exists_sql():
+    return "SELECT 1 FROM tab_sketches WHERE checksum_sha256=%s LIMIT 1;"
+
+
+# --- link tables ---
+def link_sketch_sj_sql():
+    return """
+      INSERT INTO tabaid_sj_sketch (ref_sj, ref_sketch)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_sketch_sj_sql():
+    return "DELETE FROM tabaid_sj_sketch WHERE ref_sj=%s AND ref_sketch=%s;"
+
+def link_sketch_polygon_sql():
+    return """
+      INSERT INTO tabaid_polygon_sketches (ref_polygon, ref_sketch)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_sketch_polygon_sql():
+    return "DELETE FROM tabaid_polygon_sketches WHERE ref_polygon=%s AND ref_sketch=%s;"
+
+def link_sketch_section_sql():
+    return """
+      INSERT INTO tabaid_section_sketches (ref_section, ref_sketch)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_sketch_section_sql():
+    return "DELETE FROM tabaid_section_sketches WHERE ref_section=%s AND ref_sketch=%s;"
+
+def link_sketch_find_sql():
+    return """
+      INSERT INTO tabaid_finds_sketches (ref_find, ref_sketch)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_sketch_find_sql():
+    return "DELETE FROM tabaid_finds_sketches WHERE ref_find=%s AND ref_sketch=%s;"
+
+def link_sketch_sample_sql():
+    return """
+      INSERT INTO tabaid_samples_sketches (ref_sample, ref_sketch)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_sketch_sample_sql():
+    return "DELETE FROM tabaid_samples_sketches WHERE ref_sample=%s AND ref_sketch=%s;"
+
+
+# --- list/detail/links/stats ---
+def select_sketches_page_sql(*, orphan_only: bool, has_typ: bool, has_author: bool, has_df: bool, has_dt: bool):
+    where = ["1=1"]
+    if orphan_only:
+        where.append("""
+          NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch s WHERE s.ref_sketch=k.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_sketches p WHERE p.ref_sketch=k.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_sketches sc WHERE sc.ref_sketch=k.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_finds_sketches f WHERE f.ref_sketch=k.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_samples_sketches sa WHERE sa.ref_sketch=k.id_sketch)
+        """)
+    if has_typ:
+        where.append("k.sketch_typ = ANY(%(typ_list)s)")
+    if has_author:
+        where.append("k.author = %(author)s")
+    if has_df:
+        where.append("k.datum >= %(date_from)s::date")
+    if has_dt:
+        where.append("k.datum <= %(date_to)s::date")
+
+    where_sql = " AND ".join(f"({w})" for w in where)
+
+    return f"""
+      SELECT
+        k.id_sketch,
+        k.sketch_typ,
+        k.author,
+        k.datum,
+        k.notes,
+        json_build_object(
+          'sj',      (SELECT COUNT(*) FROM tabaid_sj_sketch s WHERE s.ref_sketch=k.id_sketch),
+          'polygon', (SELECT COUNT(*) FROM tabaid_polygon_sketches p WHERE p.ref_sketch=k.id_sketch),
+          'section', (SELECT COUNT(*) FROM tabaid_section_sketches sc WHERE sc.ref_sketch=k.id_sketch),
+          'find',    (SELECT COUNT(*) FROM tabaid_finds_sketches f WHERE f.ref_sketch=k.id_sketch),
+          'sample',  (SELECT COUNT(*) FROM tabaid_samples_sketches sa WHERE sa.ref_sketch=k.id_sketch)
+        ) AS link_counts
+      FROM tab_sketches k
+      WHERE {where_sql}
+      ORDER BY k.id_sketch DESC
+      LIMIT %(limit)s OFFSET %(offset)s;
+    """
+
+def select_sketch_detail_sql():
+    return """
+      SELECT id_sketch, sketch_typ, author, datum, notes
+      FROM tab_sketches
+      WHERE id_sketch=%s;
+    """
+
+def select_sketch_links_sql():
+    return """
+      SELECT
+        ARRAY(SELECT ref_sj      FROM tabaid_sj_sketch         WHERE ref_sketch=%s ORDER BY ref_sj),
+        ARRAY(SELECT ref_polygon FROM tabaid_polygon_sketches  WHERE ref_sketch=%s ORDER BY ref_polygon),
+        ARRAY(SELECT ref_section FROM tabaid_section_sketches  WHERE ref_sketch=%s ORDER BY ref_section),
+        ARRAY(SELECT ref_find    FROM tabaid_finds_sketches    WHERE ref_sketch=%s ORDER BY ref_find),
+        ARRAY(SELECT ref_sample  FROM tabaid_samples_sketches  WHERE ref_sketch=%s ORDER BY ref_sample);
+    """
+
+def sketches_stats_sql():
+    return """
+      SELECT
+        (SELECT COUNT(*) FROM tab_sketches) AS total_cnt,
+        (SELECT COALESCE(SUM(file_size),0) FROM tab_sketches) AS total_bytes,
+        (SELECT COUNT(*) FROM tab_sketches k
+          WHERE
+            NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch s WHERE s.ref_sketch=k.id_sketch)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_sketches p WHERE p.ref_sketch=k.id_sketch)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_section_sketches sc WHERE sc.ref_sketch=k.id_sketch)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_finds_sketches f WHERE f.ref_sketch=k.id_sketch)
+            AND NOT EXISTS (SELECT 1 FROM tabaid_samples_sketches sa WHERE sa.ref_sketch=k.id_sketch)
+        ) AS orphan_cnt;
+    """
+
+def sketches_stats_by_type_sql():
+    return """
+      SELECT sketch_typ, COUNT(*)
+      FROM tab_sketches
+      GROUP BY sketch_typ
+      ORDER BY COUNT(*) DESC, sketch_typ;
+    """
+
+
+# --- search SQLs for sketches module ---
+def search_finds_sql():
+    return """
+      SELECT id_find::text AS id, ('Find ' || id_find::text) AS text
+      FROM tab_finds
+      WHERE id_find::text ILIKE %s
+      ORDER BY id_find DESC
+      LIMIT %s OFFSET %s;
+    """
+
+def search_samples_sql():
+    return """
+      SELECT id_sample::text AS id, ('Sample ' || id_sample::text) AS text
+      FROM tab_samples
+      WHERE id_sample::text ILIKE %s
+      ORDER BY id_sample DESC
+      LIMIT %s OFFSET %s;
+    """
+
+def search_authors_sql():
+    return """
+      SELECT mail AS id, mail AS text
+      FROM gloss_personalia
+      WHERE mail ILIKE %s
+      ORDER BY mail
+      LIMIT %s OFFSET %s;
+    """
+
+
+# -------------------------
+# DRAWINGS (tab_drawings)
+# -------------------------
+
+def insert_drawing_sql():
+    """
+    Params:
+      (id_drawing, author, datum, notes, mime_type, file_size, checksum_sha256)
+    """
+    return """
+        INSERT INTO tab_drawings (
+            id_drawing, author, datum, notes,
+            mime_type, file_size, checksum_sha256
+        )
+        VALUES (
+            %s, %s, %s, %s,
+            %s, %s, %s
+        );
+    """
+
+def drawing_exists_sql():
+    return "SELECT 1 FROM tab_drawings WHERE id_drawing=%s LIMIT 1;"
+
+def drawing_checksum_exists_sql():
+    return "SELECT 1 FROM tab_drawings WHERE checksum_sha256=%s LIMIT 1;"
+
+def select_drawings_page_sql(orphan_only: bool = False, has_author: bool = False, has_df: bool = False, has_dt: bool = False):
+    """
+    Returns:
+      id_drawing, author, datum, notes, mime_type, file_size, link_counts_json
+    link_counts_json = {"sj":N,"section":N}
+    """
+    where = ["1=1"]
+    if orphan_only:
+        where.append("(COALESCE(lc.sj,0) + COALESCE(lc.section,0)) = 0")
+    if has_author:
+        where.append("d.author = %(author)s")
+    if has_df:
+        where.append("d.datum >= %(date_from)s")
+    if has_dt:
+        where.append("d.datum <= %(date_to)s")
+
+    return f"""
+        SELECT
+          d.id_drawing,
+          d.author,
+          to_char(d.datum, 'YYYY-MM-DD') AS datum,
+          d.notes,
+          d.mime_type,
+          d.file_size,
+          jsonb_build_object(
+            'sj', COALESCE(lc.sj,0),
+            'section', COALESCE(lc.section,0)
+          ) AS link_counts
+        FROM tab_drawings d
+        LEFT JOIN LATERAL (
+          SELECT
+            (SELECT COUNT(*) FROM tabaid_sj_drawings x WHERE x.ref_drawing = d.id_drawing) AS sj,
+            (SELECT COUNT(*) FROM tabaid_section_drawings y WHERE y.ref_drawing = d.id_drawing) AS section
+        ) lc ON TRUE
+        WHERE {" AND ".join(where)}
+        ORDER BY d.datum DESC, d.id_drawing DESC
+        LIMIT %(limit)s OFFSET %(offset)s;
+    """
+
+def drawings_stats_sql():
+    """
+    total count, sum bytes, orphan count
+    """
+    return """
+        WITH lc AS (
+          SELECT
+            d.id_drawing,
+            (SELECT COUNT(*) FROM tabaid_sj_drawings x WHERE x.ref_drawing = d.id_drawing) AS sj,
+            (SELECT COUNT(*) FROM tabaid_section_drawings y WHERE y.ref_drawing = d.id_drawing) AS section
+          FROM tab_drawings d
+        )
+        SELECT
+          (SELECT COUNT(*) FROM tab_drawings) AS total_cnt,
+          COALESCE((SELECT SUM(file_size) FROM tab_drawings), 0) AS total_bytes,
+          COALESCE((SELECT COUNT(*) FROM lc WHERE (COALESCE(sj,0)+COALESCE(section,0))=0), 0) AS orphan_cnt;
+    """
+
+def select_drawing_detail_sql():
+    """
+    Returns: id_drawing, author, datum(YYYY-MM-DD), notes, mime_type, file_size
+    """
+    return """
+        SELECT
+          id_drawing,
+          author,
+          to_char(datum, 'YYYY-MM-DD') AS datum,
+          notes,
+          mime_type,
+          file_size
+        FROM tab_drawings
+        WHERE id_drawing=%s
+        LIMIT 1;
+    """
+
+def select_drawing_links_sql():
+    """
+    Returns arrays: sj_ids, section_ids
+    """
+    return """
+      SELECT
+        COALESCE((SELECT array_agg(ref_sj ORDER BY ref_sj) FROM tabaid_sj_drawings WHERE ref_drawing=%s), '{}'::int[]) AS sj_ids,
+        COALESCE((SELECT array_agg(ref_section ORDER BY ref_section) FROM tabaid_section_drawings WHERE ref_drawing=%s), '{}'::int[]) AS section_ids;
+    """
+
+def delete_drawing_sql():
+    return "DELETE FROM tab_drawings WHERE id_drawing=%s;"
+
+def link_drawing_sj_sql():
+    # unique index prevents dupes; ON CONFLICT for safety
+    return """
+      INSERT INTO tabaid_sj_drawings (ref_drawing, ref_sj)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def link_drawing_section_sql():
+    return """
+      INSERT INTO tabaid_section_drawings (ref_section, ref_drawing)
+      VALUES (%s, %s)
+      ON CONFLICT DO NOTHING;
+    """
+
+def unlink_all_drawing_sj_sql():
+    return "DELETE FROM tabaid_sj_drawings WHERE ref_drawing=%s;"
+
+def unlink_all_drawing_section_sql():
+    return "DELETE FROM tabaid_section_drawings WHERE ref_drawing=%s;"
+
+def update_drawing_meta_sql():
+    """
+    author, datum, notes
+    """
+    return """
+      UPDATE tab_drawings
+      SET author=%s, datum=%s, notes=%s
+      WHERE id_drawing=%s;
+    """
+
+def update_drawing_file_sql():
+    """
+    mime_type, file_size, checksum_sha256
+    """
+    return """
+      UPDATE tab_drawings
+      SET mime_type=%s, file_size=%s, checksum_sha256=%s
+      WHERE id_drawing=%s;
+    """
+
+def bulk_delete_drawings_sql():
+    return "DELETE FROM tab_drawings WHERE id_drawing = ANY(%s);"
+
+def bulk_update_drawings_meta_sql(set_author: bool, set_date: bool, set_notes: bool):
+    sets = []
+    if set_author: sets.append("author=%(author)s")
+    if set_date: sets.append("datum=%(datum)s")
+    if set_notes: sets.append("notes=%(notes)s")
+    if not sets:
+        # no-op safe
+        return "SELECT 1;"
+    return f"""
+      UPDATE tab_drawings
+      SET {", ".join(sets)}
+      WHERE id_drawing = ANY(%(ids)s);
     """

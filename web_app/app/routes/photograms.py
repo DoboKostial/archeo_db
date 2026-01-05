@@ -220,160 +220,212 @@ def photograms():
 def upload_photograms():
     selected_db = session["selected_db"]
 
-    # blocks: index list (hidden idx fields)
-    idx_list = request.form.getlist("idx")
-    if not idx_list:
-        flash("No photogram blocks provided.", "warning")
+    # ---- 1) read shared fields (single form, many files) ----
+    typ = (request.form.get("photogram_typ") or "").strip()
+    notes = (request.form.get("notes") or "").strip() or None
+
+    ref_sketch = (request.form.get("ref_sketch") or "").strip() or None
+    ref_photo_from = (request.form.get("ref_photo_from") or "").strip() or None
+    ref_photo_to = (request.form.get("ref_photo_to") or "").strip() or None
+
+    sj_ids = request.form.getlist("ref_sj")
+    polygons = request.form.getlist("ref_polygon")
+    sections = request.form.getlist("ref_section")
+
+    # geopts ranges (arrays) - now not indexed
+    try:
+        ranges = _read_range_pairs(request.form, "geopt_from[]", "geopt_to[]")
+    except Exception as e:
+        flash(f"Upload failed: {e}", "danger")
         return redirect(url_for("photograms.photograms"))
 
-    ok, failed = 0, []
+    # validate typ
+    if typ not in PHOTOGRAM_TYP_CHOICES:
+        flash("Upload failed: Invalid photogram_typ.", "danger")
+        return redirect(url_for("photograms.photograms"))
 
-    for idx in idx_list:
-        idx = str(idx).strip()
+    files = request.files.getlist("files")
+    files = [f for f in files if f and f.filename]
+    if not files:
+        flash("Upload failed: No files provided.", "danger")
+        return redirect(url_for("photograms.photograms"))
 
-        # per-block fields
-        file_field = f"file_{idx}"
-        typ = (request.form.get(f"photogram_typ_{idx}") or "").strip()
-        notes = (request.form.get(f"notes_{idx}") or "").strip() or None
+    # ---- 2) stage / validate all first ----
+    staged_paths = []
+    final_pairs = []  # (final_path, thumb_path)
+    items = []        # per file
+    batch_checksums = set()
 
-        ref_sketch = (request.form.get(f"ref_sketch_{idx}") or "").strip() or None
-        ref_photo_from = (request.form.get(f"ref_photo_from_{idx}") or "").strip() or None
-        ref_photo_to = (request.form.get(f"ref_photo_to_{idx}") or "").strip() or None
+    conn = get_terrain_connection(selected_db)
+    conn.autocommit = False
 
-        # links via hidden inputs (search-select)
-        sj_ids = request.form.getlist(f"ref_sj_{idx}")
-        polygons = request.form.getlist(f"ref_polygon_{idx}")
-        sections = request.form.getlist(f"ref_section_{idx}")
+    try:
+        with conn.cursor() as cur:
+            # ---- 2a) validate referenced entities (fail-fast) ----
+            def _assert_exists(sql: str, value, err: str):
+                cur.execute(sql, (value,))
+                if not cur.fetchone():
+                    raise ValueError(err)
 
-        # geopts ranges (arrays)
+            if ref_sketch:
+                _assert_exists("SELECT 1 FROM tab_sketches WHERE id_sketch=%s LIMIT 1;",
+                              ref_sketch, f"Ref sketch not found: {ref_sketch}")
+
+            if ref_photo_from:
+                _assert_exists("SELECT 1 FROM tab_photos WHERE id_photo=%s LIMIT 1;",
+                              ref_photo_from, f"Ref photo_from not found: {ref_photo_from}")
+
+            if ref_photo_to:
+                _assert_exists("SELECT 1 FROM tab_photos WHERE id_photo=%s LIMIT 1;",
+                              ref_photo_to, f"Ref photo_to not found: {ref_photo_to}")
+
+            for sj in sj_ids:
+                sj_i = _as_int(sj)
+                if sj_i is None:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_sj WHERE id_sj=%s LIMIT 1;",
+                              sj_i, f"SU not found: {sj_i}")
+
+            for p in polygons:
+                p = (p or "").strip()
+                if not p:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_polygons WHERE polygon_name=%s LIMIT 1;",
+                              p, f"Polygon not found: {p}")
+
+            for s in sections:
+                s_i = _as_int(s)
+                if s_i is None:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_section WHERE id_section=%s LIMIT 1;",
+                              s_i, f"Section not found: {s_i}")
+
+            # ---- 2b) stage each file + validate ----
+            for f in files:
+                tmp_path, _ = save_to_uploads(Config.UPLOAD_FOLDER, f)
+                staged_paths.append(tmp_path)
+
+                pk_name = make_pk(selected_db, f.filename)
+                validate_pk(pk_name)
+                ext = pk_name.rsplit(".", 1)[-1].lower()
+                validate_extension(ext, Config.ALLOWED_EXTENSIONS)
+
+                media_dir = Config.MEDIA_DIRS["photograms"]
+                final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
+
+                # FS collision
+                if os.path.exists(final_path):
+                    raise ValueError(f"File already exists on FS: {pk_name}")
+
+                # DB collision on id
+                cur.execute("SELECT 1 FROM tab_photograms WHERE id_photogram=%s LIMIT 1;", (pk_name,))
+                if cur.fetchone():
+                    raise ValueError(f"Photogram already exists in DB: {pk_name}")
+
+                # MIME + checksum from staged file
+                mime = detect_mime(tmp_path)
+                validate_mime(mime, Config.ALLOWED_MIME)
+                checksum = sha256_file(tmp_path)
+
+                # no duplicate content in DB
+                cur.execute(photogram_checksum_exists_sql(), (checksum,))
+                if cur.fetchone():
+                    raise ValueError(f"Duplicate content (checksum already exists): {pk_name}")
+
+                # no duplicate content inside batch
+                if checksum in batch_checksums:
+                    raise ValueError(f"Duplicate content within this upload batch: {pk_name}")
+                batch_checksums.add(checksum)
+
+                items.append({
+                    "pk_name": pk_name,
+                    "tmp_path": tmp_path,
+                    "final_path": final_path,
+                    "thumb_path": thumb_path,
+                    "mime": mime,
+                    "checksum": checksum,
+                })
+
+            # ---- 3) move -> thumbnail -> DB insert + links in ONE transaction ----
+            for it in items:
+                move_into_place(it["tmp_path"], it["final_path"])
+                it["tmp_path"] = None
+                final_pairs.append((it["final_path"], it["thumb_path"]))
+
+                # thumbnail is part of transaction: if it fails, rollback + cleanup
+                make_thumbnail(it["final_path"], it["thumb_path"], Config.THUMB_MAX_SIDE)
+
+                cur.execute(
+                    insert_photogram_sql(),
+                    (
+                        it["pk_name"],
+                        typ,
+                        ref_sketch,
+                        notes,
+                        it["mime"],
+                        os.path.getsize(it["final_path"]),
+                        it["checksum"],
+                        ref_photo_from,
+                        ref_photo_to,
+                    ),
+                )
+
+                # links (same for all uploaded files)
+                for sj in sj_ids:
+                    sj_i = _as_int(sj)
+                    if sj_i is not None:
+                        cur.execute(link_photogram_sj_sql(), (it["pk_name"], sj_i))
+
+                for p in polygons:
+                    p = (p or "").strip()
+                    if p:
+                        cur.execute(link_photogram_polygon_sql(), (p, it["pk_name"]))
+
+                for s in sections:
+                    s_i = _as_int(s)
+                    if s_i is not None:
+                        cur.execute(link_photogram_section_sql(), (s_i, it["pk_name"]))
+
+                # ranges (same for all uploaded files)
+                for a, b in ranges:
+                    cur.execute(insert_photogram_geopts_range_sql(), (it["pk_name"], a, b))
+
+            conn.commit()
+            flash(f"Uploaded {len(items)} photogram(s).", "success")
+            logger.info(f"[{selected_db}] photograms upload ok: count={len(items)}")
+
+    except Exception as e:
         try:
-            ranges = _read_range_pairs(request.form, f"geopt_from_{idx}[]", f"geopt_to_{idx}[]")
-        except Exception as e:
-            failed.append(f"Block {idx}: {e}")
-            continue
+            conn.rollback()
+        except Exception:
+            pass
 
-        # validate typ
-        if typ not in PHOTOGRAM_TYP_CHOICES:
-            failed.append(f"Block {idx}: Invalid photogram_typ.")
-            continue
-
-        f = request.files.get(file_field)
-        if not f or not f.filename:
-            failed.append(f"Block {idx}: Missing file.")
-            continue
-
-        tmp_path = None
-        final_path = None
-        thumb_path = None
-
-        try:
-            # A) temp store
-            tmp_path, _tmp_size = save_to_uploads(Config.UPLOAD_FOLDER, f)
-
-            # B) pk + extension validate
-            pk_name = make_pk(selected_db, f.filename)
-            validate_pk(pk_name)
-            ext = pk_name.rsplit(".", 1)[-1].lower()
-            validate_extension(ext, Config.ALLOWED_EXTENSIONS)
-
-            # C) final paths + collision
-            media_dir = Config.MEDIA_DIRS["photograms"]
-            final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
-            if os.path.exists(final_path):
-                raise ValueError(f"File already exists: {pk_name}")
-
-            # D) move into place then MIME validate + checksum
-            move_into_place(tmp_path, final_path)
-            tmp_path = None
-
-            mime = detect_mime(final_path)
-            validate_mime(mime, Config.ALLOWED_MIME)
-            checksum = sha256_file(final_path)
-
-            # E) DB transaction (one per photogram) + thumbnail best-effort inside try
-            with get_terrain_connection(selected_db) as conn:
-                with conn.cursor() as cur:
-                    # reject duplicate content (checksum)
-                    cur.execute(photogram_checksum_exists_sql(), (checksum,))
-                    if cur.fetchone():
-                        raise ValueError("Duplicate content (checksum already exists).")
-
-                    # insert photogram row
-                    cur.execute(
-                        insert_photogram_sql(),
-                        (
-                            pk_name,
-                            typ,
-                            ref_sketch,
-                            notes,
-                            mime,
-                            os.path.getsize(final_path),
-                            checksum,
-                            ref_photo_from,
-                            ref_photo_to,
-                        ),
-                    )
-
-                    # link tables (optional; multiple)
-                    for sj in sj_ids:
-                        sj_i = _as_int(sj)
-                        if sj_i is None:
-                            continue
-                        cur.execute(link_photogram_sj_sql(), (pk_name, sj_i))
-
-                    for p in polygons:
-                        p = (p or "").strip()
-                        if not p:
-                            continue
-                        cur.execute(link_photogram_polygon_sql(), (p, pk_name))
-
-                    for s in sections:
-                        s_i = _as_int(s)
-                        if s_i is None:
-                            continue
-                        cur.execute(link_photogram_section_sql(), (s_i, pk_name))
-
-                    # ranges
-                    for a, b in ranges:
-                        cur.execute(insert_photogram_geopts_range_sql(), (pk_name, a, b))
-
-                conn.commit()
-
-            # thumbnail after DB success; if thumb fails, do NOT fail upload
+        # cleanup any moved files + thumbs
+        for fp, tp in final_pairs:
             try:
-                make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
+                delete_media_files(fp, tp)
             except Exception:
                 pass
 
-            ok += 1
-
-        except Exception as e:
-            failed.append(f"{f.filename}: {e}")
-            logger.warning(f"[{selected_db}] photogram upload failed {f.filename}: {e}")
-
-            # cleanup FS on failure
+        # cleanup staged uploads
+        for sp in staged_paths:
             try:
-                if final_path:
-                    delete_media_files(final_path, thumb_path)
+                cleanup_upload(sp)
             except Exception:
                 pass
 
-        finally:
-            if tmp_path:
-                try:
-                    cleanup_upload(tmp_path)
-                except Exception:
-                    pass
+        logger.warning(f"[{selected_db}] photograms upload failed: {e}")
+        flash(f"Upload failed: {e}", "danger")
+        return redirect(url_for("photograms.photograms"))
 
-    if failed:
-        flash(
-            f"Uploaded {ok} photogram(s), {len(failed)} failed: " + "; ".join(failed),
-            "warning" if ok else "danger",
-        )
-    else:
-        flash(f"Uploaded {ok} photogram(s).", "success")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
     return redirect(url_for("photograms.photograms"))
+
 
 
 # ---------------------------------------

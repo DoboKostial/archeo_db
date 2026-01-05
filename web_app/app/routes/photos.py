@@ -400,13 +400,38 @@ def photos():
 def upload_photos():
     selected_db = session["selected_db"]
 
-    idx_list = request.form.getlist("idx")
-    if not idx_list:
-        flash("No photo blocks provided.", "warning")
+    # --- shared metadata (applies to all uploaded files) ---
+    photo_typ = (request.form.get("photo_typ") or "").strip()
+    datum = (request.form.get("datum") or "").strip()
+    author = (request.form.get("author") or "").strip()
+    notes = (request.form.get("notes") or "").strip() or None
+
+    _validate_photo_typ(photo_typ)
+    if not datum:
+        flash("Date is required.", "danger")
+        return redirect(url_for("photos.photos"))
+    if not author:
+        flash("Author is required.", "danger")
+        return redirect(url_for("photos.photos"))
+
+    # --- shared links (optional, multi) ---
+    sj_ids = _parse_int_list(request.form.getlist("ref_sj"))
+    polygon_names = _parse_text_list(request.form.getlist("ref_polygon"))
+    section_ids = _parse_int_list(request.form.getlist("ref_section"))
+    find_ids = _parse_int_list(request.form.getlist("ref_find"))
+    sample_ids = _parse_int_list(request.form.getlist("ref_sample"))
+
+    # --- files: multiple inputs with same name="files" ---
+    files = request.files.getlist("files")
+    # filter out empty inputs
+    files = [f for f in files if f and getattr(f, "filename", None)]
+    if not files:
+        flash("No files provided.", "warning")
         return redirect(url_for("photos.photos"))
 
     staged_paths: List[str] = []
-    final_pairs: List[Tuple[str, str]] = []  # (final_path, thumb_path)
+    moved_files: List[str] = []          # final_paths that were moved into place
+    thumbs_planned: List[Tuple[str, str]] = []  # (final_path, thumb_path) for post-commit thumb generation
     blocks: List[Dict[str, Any]] = []
 
     conn = get_terrain_connection(selected_db)
@@ -415,129 +440,109 @@ def upload_photos():
     try:
         cur = conn.cursor()
         try:
-            # A) stage + validate
-            for idx in idx_list:
-                idx = str(idx).strip()
-                if not idx:
-                    continue
+            # ------------------------------------------------------------
+            # A) stage + validate each file (fail-fast)
+            # ------------------------------------------------------------
+            seen_pk: set[str] = set()
+            seen_checksum: set[str] = set()
 
-                f = request.files.get(f"file_{idx}")
-                if not f or not f.filename:
-                    raise ValueError(f"Block {idx}: missing file")
-
-                photo_typ = (request.form.get(f"photo_typ_{idx}") or "").strip()
-                datum = (request.form.get(f"datum_{idx}") or "").strip()
-                author = (request.form.get(f"author_{idx}") or "").strip()
-                notes = (request.form.get(f"notes_{idx}") or "").strip() or None
-
-                _validate_photo_typ(photo_typ)
-                if not datum:
-                    raise ValueError(f"Block {idx}: date is required")
-                if not author:
-                    raise ValueError(f"Block {idx}: author is required")
-
+            for f in files:
+                # pk + ext validation
                 pk_name = storage.make_pk(selected_db, f.filename)
                 storage.validate_pk(pk_name)
+
+                if pk_name in seen_pk:
+                    raise ValueError(f"Duplicate filename in this upload: {pk_name}")
+                seen_pk.add(pk_name)
+
                 ext = pk_name.rsplit(".", 1)[-1].lower()
                 validate_extension(ext, Config.ALLOWED_EXTENSIONS)
 
                 final_path, thumb_path = _final_paths(selected_db, pk_name)
 
+                # collisions (FS + DB)
                 if os.path.exists(final_path):
-                    raise ValueError(f"Block {idx}: file already exists on FS: {pk_name}")
+                    raise ValueError(f"File already exists on FS: {pk_name}")
                 cur.execute(photo_exists_sql(), (pk_name,))
                 if cur.fetchone():
-                    raise ValueError(f"Block {idx}: photo already exists in DB: {pk_name}")
+                    raise ValueError(f"Photo already exists in DB: {pk_name}")
 
+                # stage to uploads
                 tmp_path, _ = storage.save_to_uploads(Config.UPLOAD_FOLDER, f)
                 staged_paths.append(tmp_path)
 
+                # validate content by MIME + checksum (on staged file)
                 mime = detect_mime(tmp_path)
                 validate_mime(mime, Config.ALLOWED_MIME)
+
                 checksum = sha256_file(tmp_path)
+                if checksum in seen_checksum:
+                    raise ValueError("Duplicate content among selected files (same checksum).")
+                seen_checksum.add(checksum)
 
                 cur.execute(checksum_exists_sql(), (checksum,))
                 if cur.fetchone():
-                    raise ValueError(f"Block {idx}: duplicate content (checksum already exists)")
-
-                sj_ids = _parse_int_list(request.form.getlist(f"ref_sj_{idx}"))
-                polygon_names = _parse_text_list(request.form.getlist(f"ref_polygon_{idx}"))
-                section_ids = _parse_int_list(request.form.getlist(f"ref_section_{idx}"))
-                find_ids = _parse_int_list(request.form.getlist(f"ref_find_{idx}"))
-                sample_ids = _parse_int_list(request.form.getlist(f"ref_sample_{idx}"))
+                    raise ValueError(f"Duplicate content (checksum already exists) for file: {pk_name}")
 
                 blocks.append({
-                    "idx": idx,
                     "pk_name": pk_name,
                     "tmp_path": tmp_path,
                     "final_path": final_path,
                     "thumb_path": thumb_path,
                     "mime": mime,
                     "checksum": checksum,
-                    "photo_typ": photo_typ,
-                    "datum": datum,
-                    "author": author,
-                    "notes": notes,
-                    "sj_ids": sj_ids,
-                    "polygon_names": polygon_names,
-                    "section_ids": section_ids,
-                    "find_ids": find_ids,
-                    "sample_ids": sample_ids,
                 })
 
-            if not blocks:
-                raise ValueError("No valid photo blocks found.")
-
-            # B) existence checks for references (fail-fast)
+            # ------------------------------------------------------------
+            # B) existence checks for references (shared, fail-fast)
+            # ------------------------------------------------------------
             def _assert_exists(sql: str, value: Any, err: str):
                 cur.execute(sql, (value,))
                 if not cur.fetchone():
                     raise ValueError(err)
 
-            for b in blocks:
-                _assert_exists(
-                    "SELECT 1 FROM gloss_personalia WHERE mail=%s LIMIT 1;",
-                    b["author"],
-                    f"Block {b['idx']}: author not found: {b['author']}"
-                )
+            _assert_exists(
+                "SELECT 1 FROM gloss_personalia WHERE mail=%s LIMIT 1;",
+                author,
+                f"Author not found: {author}"
+            )
 
-                for sj in b["sj_ids"]:
-                    _assert_exists("SELECT 1 FROM tab_sj WHERE id_sj=%s LIMIT 1;", sj,
-                                  f"Block {b['idx']}: SU not found: {sj}")
-                for poly in b["polygon_names"]:
-                    _assert_exists("SELECT 1 FROM tab_polygons WHERE polygon_name=%s LIMIT 1;", poly,
-                                  f"Block {b['idx']}: polygon not found: {poly}")
-                for sec in b["section_ids"]:
-                    _assert_exists("SELECT 1 FROM tab_section WHERE id_section=%s LIMIT 1;", sec,
-                                  f"Block {b['idx']}: section not found: {sec}")
-                for fid in b["find_ids"]:
-                    _assert_exists("SELECT 1 FROM tab_finds WHERE id_find=%s LIMIT 1;", fid,
-                                  f"Block {b['idx']}: find not found: {fid}")
-                for sid in b["sample_ids"]:
-                    _assert_exists("SELECT 1 FROM tab_samples WHERE id_sample=%s LIMIT 1;", sid,
-                                  f"Block {b['idx']}: sample not found: {sid}")
+            for sj in sj_ids:
+                _assert_exists("SELECT 1 FROM tab_sj WHERE id_sj=%s LIMIT 1;", sj, f"SU not found: {sj}")
+            for poly in polygon_names:
+                _assert_exists("SELECT 1 FROM tab_polygons WHERE polygon_name=%s LIMIT 1;", poly, f"Polygon not found: {poly}")
+            for sec in section_ids:
+                _assert_exists("SELECT 1 FROM tab_section WHERE id_section=%s LIMIT 1;", sec, f"Section not found: {sec}")
+            for fid in find_ids:
+                _assert_exists("SELECT 1 FROM tab_finds WHERE id_find=%s LIMIT 1;", fid, f"Find not found: {fid}")
+            for sid in sample_ids:
+                _assert_exists("SELECT 1 FROM tab_samples WHERE id_sample=%s LIMIT 1;", sid, f"Sample not found: {sid}")
 
-            # C) move + thumb + DB insert + links (single DB transaction)
+            # ------------------------------------------------------------
+            # C) move into place + DB inserts + links (single DB transaction)
+            #    - thumbnails are NOT created here (only after commit)
+            # ------------------------------------------------------------
             for b in blocks:
                 storage.move_into_place(b["tmp_path"], b["final_path"])
-                final_pairs.append((b["final_path"], b["thumb_path"]))
+                moved_files.append(b["final_path"])
+                thumbs_planned.append((b["final_path"], b["thumb_path"]))
 
                 shoot_dt = gps_lat = gps_lon = gps_alt = None
                 exif_json = {}
+
+                # EXIF only for JPEG/TIFF
                 if b["mime"] in ("image/jpeg", "image/tiff"):
                     sdt, la, lo, al, exif = extract_exif(b["final_path"])
                     shoot_dt, gps_lat, gps_lon, gps_alt, exif_json = sdt, la, lo, al, exif
-
-                make_thumbnail(b["final_path"], b["thumb_path"], Config.THUMB_MAX_SIDE)
 
                 cur.execute(
                     insert_photo_sql(),
                     (
                         b["pk_name"],
-                        b["photo_typ"],
-                        b["datum"],
-                        b["author"],
-                        b["notes"],
+                        photo_typ,
+                        datum,
+                        author,
+                        notes,
                         b["mime"],
                         os.path.getsize(b["final_path"]),
                         b["checksum"],
@@ -547,33 +552,55 @@ def upload_photos():
                 )
 
                 pid = b["pk_name"]
-                for sj in b["sj_ids"]:
+                for sj in sj_ids:
                     cur.execute(_sql_link_insert("sj"), (pid, sj))
-                for poly in b["polygon_names"]:
+                for poly in polygon_names:
                     cur.execute(_sql_link_insert("polygon"), (pid, poly))
-                for sec in b["section_ids"]:
+                for sec in section_ids:
                     cur.execute(_sql_link_insert("section"), (pid, sec))
-                for fid in b["find_ids"]:
+                for fid in find_ids:
                     cur.execute(_sql_link_insert("find"), (pid, fid))
-                for sid in b["sample_ids"]:
+                for sid in sample_ids:
                     cur.execute(_sql_link_insert("sample"), (pid, sid))
 
+            # commit DB transaction first
             conn.commit()
-            flash(f"Uploaded {len(blocks)} photo(s).", "success")
-            logger.info(f"[{selected_db}] photos upload ok: count={len(blocks)}")
+
+            # ------------------------------------------------------------
+            # D) thumbnails AFTER COMMIT (best effort; DB already committed)
+            # ------------------------------------------------------------
+            thumb_ok = 0
+            thumb_fail = 0
+            for fp, tp in thumbs_planned:
+                try:
+                    make_thumbnail(fp, tp, Config.THUMB_MAX_SIDE)
+                    thumb_ok += 1
+                except Exception:
+                    thumb_fail += 1
+                    logger.warning(f"[{selected_db}] thumbnail failed for: {os.path.basename(fp)}")
+
+            if thumb_fail:
+                flash(f"Uploaded {len(blocks)} photo(s). Thumbnails: {thumb_ok} ok, {thumb_fail} failed.", "warning")
+            else:
+                flash(f"Uploaded {len(blocks)} photo(s).", "success")
+
+            logger.info(f"[{selected_db}] photos upload ok: count={len(blocks)} thumbs_ok={thumb_ok} thumbs_fail={thumb_fail}")
 
         except Exception as e:
+            # rollback DB
             try:
                 conn.rollback()
             except Exception:
                 pass
 
-            for fp, tp in final_pairs:
+            # cleanup moved finals (no thumbnails should exist yet, but delete_media_files is safe)
+            for b in blocks:
                 try:
-                    storage.delete_media_files(fp, tp)
+                    storage.delete_media_files(b.get("final_path"), b.get("thumb_path"))
                 except Exception:
                     pass
 
+            # cleanup staged uploads
             for sp in staged_paths:
                 try:
                     storage.cleanup_upload(sp)
@@ -597,6 +624,7 @@ def upload_photos():
             pass
 
     return redirect(url_for("photos.photos"))
+
 
 
 # -------------------------

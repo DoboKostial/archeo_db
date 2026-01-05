@@ -380,7 +380,7 @@ CREATE INDEX tab_sketches_checksum_idx   ON tab_sketches (checksum_sha256);
 ---
 
 CREATE TABLE tab_drawings (
-  id_drawing       VARCHAR(120) PRIMARY KEY,                       
+  id_drawing       VARCHAR(150) PRIMARY KEY,                       
   author           VARCHAR(100) NOT NULL REFERENCES gloss_personalia(mail),
   datum            date         NOT NULL,
   notes            text,
@@ -388,7 +388,7 @@ CREATE TABLE tab_drawings (
   file_size        bigint       NOT NULL CHECK (file_size >= 0),
   checksum_sha256  text         NOT NULL,
   -- mime and PK validation:
-  CONSTRAINT tab_drawings_id_format_chk CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
+  CONSTRAINT tab_drawings_id_format_chk CHECK (id_drawing ~ '^[0-9]+_[A-Za-z0-9._-]+[.][a-z0-9]+$'),
   CONSTRAINT tab_drawings_mime_chk CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
 -- indexes:
@@ -408,7 +408,7 @@ CREATE TABLE tab_photograms (
 	ref_photo_from VARCHAR(150) NULL,
 	ref_photo_to VARCHAR(150) NULL,
 	CONSTRAINT tab_photograms_file_size_check CHECK ((file_size >= 0)),
-	CONSTRAINT tab_photograms_id_format_chk CHECK (((id_photogram)::text ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'::text)),
+	CONSTRAINT tab_photograms_id_format_chk CHECK (((id_photogram)::text ~ '^[0-9]+_[A-Za-z0-9._-]+[.][a-z0-9]+$'::text)),
 	CONSTRAINT tab_photograms_mime_chk CHECK ((mime_type = ANY (ARRAY['image/jpeg'::text, 'image/png'::text, 'image/tiff'::text, 'image/svg+xml'::text, 'application/pdf'::text]))),
 	CONSTRAINT tab_photograms_pkey PRIMARY KEY (id_photogram),
 	CONSTRAINT tab_photograms_photo_from_fk FOREIGN KEY (ref_photo_from) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
