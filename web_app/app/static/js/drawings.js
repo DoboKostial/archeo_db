@@ -140,7 +140,7 @@
       const id = inp.value;
       if (!grouped.has(name)) grouped.set(name, []);
       // simple labels; you can refine if you want
-      const text = (name === "ref_sj") ? `SJ ${id}` :
+      const text = (name === "ref_sj") ? `SU ${id}` :
                    (name === "ref_section") ? `Section ${id}` :
                    String(id);
       grouped.get(name).push({ id: String(id), text });
@@ -246,7 +246,7 @@
       })));
     };
 
-    setMulti('.search-select[data-hidden-name="ref_sj"]', data.links.sj_ids, "SJ");
+    setMulti('.search-select[data-hidden-name="ref_sj"]', data.links.sj_ids, "SU");
     setMulti('.search-select[data-hidden-name="ref_section"]', data.links.section_ids, "Section");
 
     bsEdit.show();

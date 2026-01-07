@@ -213,7 +213,7 @@ def api_search_sj():
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id_sj::text AS id, ('SJ ' || id_sj::text) AS text
+                SELECT id_sj::text AS id, ('SU ' || id_sj::text) AS text
                 FROM tab_sj
                 WHERE id_sj::text ILIKE %s
                 ORDER BY id_sj
