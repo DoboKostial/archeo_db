@@ -366,7 +366,7 @@ CREATE TABLE tab_sketches (
 
   -- PK a MIME validation:
   CONSTRAINT tab_sketches_id_format_chk
-    CHECK (id_sketch ~ '^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$'),
+    CHECK (id_sketch ~ '^[0-9]+_[A-Za-z0-9._-]+[.][a-z0-9]+$'),
   CONSTRAINT tab_sketches_mime_chk
     CHECK (mime_type IN ('image/jpeg','image/png','image/tiff','image/svg+xml','application/pdf'))
 );
@@ -415,8 +415,8 @@ CREATE TABLE tab_photograms (
 	CONSTRAINT tab_photograms_photo_to_fk FOREIGN KEY (ref_photo_to) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT tab_photograms_ref_sketch_fkey FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE SET NULL ON UPDATE CASCADE
 );
-CREATE INDEX tab_photograms_checksum_idx ON public.tab_photograms USING btree (checksum_sha256);
-CREATE INDEX tab_photograms_ref_sketch_idx ON public.tab_photograms USING btree (ref_sketch);
+CREATE INDEX tab_photograms_checksum_idx ON tab_photograms USING btree (checksum_sha256);
+CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms USING btree (ref_sketch);
 
 
 -- tab_finds definition
@@ -640,7 +640,7 @@ CREATE TABLE tabaid_polygon_photograms (
 	CONSTRAINT tabaid_polygon_photograms_ref_photogram_fk FOREIGN KEY (ref_photogram) REFERENCES tab_photograms(id_photogram) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT tabaid_polygon_photograms_ref_polygon_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE INDEX tabaid_polygon_photograms_photogram_idx ON public.tabaid_polygon_photograms USING btree (ref_photogram);
+CREATE INDEX tabaid_polygon_photograms_photogram_idx ON tabaid_polygon_photograms USING btree (ref_photogram);
 
 
 -- M:N between sections and geodetic points

@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-3">
+
+  <!-- SECTION 1: UPLOAD -->
+  <div class="p-3 rounded-3 border bg-body-tertiary mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h4 class="mb-0 d-flex align-items-center gap-2">
+        Upload drawings
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-bs-toggle="modal"
+                data-bs-target="#helpDrawingsUpload"
+                title="Help">?</button>
+      </h4>
+    </div>
+
+    <form method="post"
+          action="{{ url_for('drawings.upload_drawings') }}"
+          enctype="multipart/form-data">
+
+      <div class="row g-3">
+        <!-- LEFT: metadata -->
+        <div class="col-lg-6">
+          <div class="border rounded-3 p-3 bg-light h-100">
+            <div class="fw-semibold mb-2">Drawing metadata</div>
+
+            <div class="mb-2">
+              <label class="form-label">Files (multiple)</label>
+              <input type="file" class="form-control" name="files" multiple
+                     accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" required>
+              <div class="form-text">Upload multiple drawings with the same author/date/notes and same links.</div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Author (email)</label>
+              <div class="search-select"
+                   data-mode="single"
+                   data-endpoint="{{ url_for('drawings.api_search_authors') }}"
+                   data-hidden-name="author"
+                   data-placeholder="Type to search author..." ></div>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Date</label>
+              <input type="date" class="form-control" name="datum" required>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Notes</label>
+              <input type="text" class="form-control" name="notes" placeholder="optional">
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: links -->
+        <div class="col-lg-6">
+          <div class="border rounded-3 p-3 bg-white h-100">
+            <div class="fw-semibold mb-2">Links <span class="text-muted fw-normal">(optional, multi)</span></div>
+
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">SUs</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sj') }}"
+                     data-hidden-name="ref_sj"
+                     data-placeholder="Type to search SU..."></div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Sections</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sections') }}"
+                     data-hidden-name="ref_section"
+                     data-placeholder="Type to search section..."></div>
+              </div>
+            </div>
+
+            <div class="form-text mt-2">Links apply to all uploaded files in this batch.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Upload</button>
+      </div>
+    </form>
+  </div>
+
+
+  <!-- SECTION 2: GALLERY + BULK -->
+  <div class="p-3 rounded-3 border bg-white mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h4 class="mb-0">Drawings gallery</h4>
+
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Select all</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">Clear</button>
+      </div>
+    </div>
+
+    <!-- Bulk form -->
+    <form method="post"
+          action="{{ url_for('drawings.bulk_drawings') }}"
+          id="bulkForm"
+          class="border rounded-3 p-3 bg-body-tertiary mb-3">
+      <div id="bulkSelectedContainer"></div>
+
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label">Action</label>
+          <select class="form-select" name="action" required>
+            <option value="" selected disabled>-- select --</option>
+            <option value="delete">Delete selected</option>
+            <option value="update_meta">Update metadata</option>
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Set author (optional)</label>
+          <div class="search-select"
+               data-mode="single"
+               data-endpoint="{{ url_for('drawings.api_search_authors') }}"
+               data-hidden-name="bulk_author"
+               data-placeholder="Type to search author..."></div>
+        </div>
+
+        <div class="col-md-2">
+          <label class="form-label">Set date (optional)</label>
+          <input type="date" class="form-control" name="bulk_datum">
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label">Set notes (optional)</label>
+          <input type="text" class="form-control" name="bulk_notes" placeholder="leave empty to skip">
+        </div>
+
+        <div class="col-12">
+          <button type="submit" class="btn btn-danger">Apply</button>
+          <span class="text-muted ms-2">Bulk updates apply to selected drawings.</span>
+        </div>
+      </div>
+    </form>
+
+    {% if drawings %}
+      <div class="row g-3">
+        {% for g in drawings %}
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="border rounded-3 p-2 h-100">
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="form-check">
+                  <input class="form-check-input photo-check" type="checkbox" value="{{ g.id_drawing }}" id="chk-{{ g.id_drawing }}">
+                  <label class="form-check-label small" for="chk-{{ g.id_drawing }}">Select</label>
+                </div>
+
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary btnEdit" data-id="{{ g.id_drawing }}">Edit</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger btnDelete" data-id="{{ g.id_drawing }}">Delete</button>
+                </div>
+              </div>
+
+              <div class="mt-2 d-flex gap-2">
+                <a href="{{ url_for('drawings.serve_drawing', id_drawing=g.id_drawing) }}"
+                   target="_blank"
+                   class="d-block">
+                  <img class="img-fluid rounded border"
+                       alt="{{ g.id_drawing }}"
+                       src="{{ url_for('drawings.serve_drawing_thumb', id_drawing=g.id_drawing) }}">
+                </a>
+
+                <div class="flex-grow-1">
+                  <div class="fw-semibold small text-break">{{ g.id_drawing }}</div>
+                  <div class="small text-muted">{{ g.author }}</div>
+                  <div class="small">{{ g.datum }}</div>
+                  {% if g.notes %}
+                    <div class="small text-break">{{ g.notes }}</div>
+                  {% endif %}
+                  <div class="small text-muted">{{ g.file_size_h }}</div>
+                  <div class="small">
+                    Links:
+                    <span class="badge text-bg-secondary">SJ {{ g.link_counts.sj }}</span>
+                    <span class="badge text-bg-secondary">Section {{ g.link_counts.section }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination -->
+      <div class="mt-3 d-flex justify-content-between align-items-center">
+        <div class="text-muted small">Page {{ page }} (per page {{ per_page }})</div>
+        <div class="d-flex gap-2">
+          {% if page > 1 %}
+            <a class="btn btn-sm btn-outline-secondary"
+               href="{{ url_for('drawings.drawings',
+                                page=page-1,
+                                per_page=per_page,
+                                author=filters.author,
+                                date_from=filters.date_from,
+                                date_to=filters.date_to,
+                                orphan_only=('1' if filters.orphan_only else '0'),
+                                ref_sj=filters.ref_sj,
+                                ref_section=filters.ref_section) }}">Prev</a>
+          {% endif %}
+          <a class="btn btn-sm btn-outline-secondary"
+             href="{{ url_for('drawings.drawings',
+                              page=page+1,
+                              per_page=per_page,
+                              author=filters.author,
+                              date_from=filters.date_from,
+                              date_to=filters.date_to,
+                              orphan_only=('1' if filters.orphan_only else '0'),
+                              ref_sj=filters.ref_sj,
+                              ref_section=filters.ref_section) }}">Next</a>
+        </div>
+      </div>
+    {% else %}
+      <div class="text-muted">No drawings found.</div>
+    {% endif %}
+  </div>
+
+
+  <!-- SECTION 3: STATS + FILTER -->
+  <div class="p-3 rounded-3 border bg-body-tertiary">
+    <div class="row g-3">
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 bg-white h-100">
+          <h5 class="mb-3">Stats</h5>
+          <div class="d-flex justify-content-between">
+            <div>Total drawings</div>
+            <div class="fw-semibold">{{ stats.total_cnt }}</div>
+          </div>
+          <div class="d-flex justify-content-between">
+            <div>Total size of all drawings</div>
+            <div class="fw-semibold">{{ stats.total_bytes_h }}</div>
+          </div>
+          <div class="d-flex justify-content-between">
+            <div>Orphans (drawings no links/attributes)</div>
+            <div class="fw-semibold">{{ stats.orphan_cnt }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 bg-white h-100">
+          <h5 class="mb-3">Filter</h5>
+
+          <form method="get" action="{{ url_for('drawings.drawings') }}">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">Author</label>
+                <input type="text" class="form-control" name="author" value="{{ filters.author or '' }}" placeholder="exact email">
+                <div class="form-text">Filter is exact match (fast).</div>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">Date from</label>
+                <input type="date" class="form-control" name="date_from" value="{{ filters.date_from or '' }}">
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">Date to</label>
+                <input type="date" class="form-control" name="date_to" value="{{ filters.date_to or '' }}">
+              </div>
+
+              <div class="col-12">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="1" id="orphanOnly" name="orphan_only" {% if filters.orphan_only %}checked{% endif %}>
+                  <label class="form-check-label" for="orphanOnly">
+                    Orphans only (no links)
+                  </label>
+                </div>
+              </div>
+
+
+              <div class="col-md-6">
+                <label class="form-label">Filter: SUs</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sj') }}"
+                     data-hidden-name="ref_sj"
+                     data-placeholder="Type to search SU..."></div>
+
+                {# PREFILL values so JS can show selected chips after reload #}
+                {% for sj in (filters.ref_sj or []) %}
+                  <input type="hidden" class="prefill" data-target="ref_sj" value="{{ sj }}">
+                {% endfor %}
+              </div>
+
+
+              <div class="col-md-6">
+                <label class="form-label">Filter: Sections</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sections') }}"
+                     data-hidden-name="ref_section"
+                     data-placeholder="Type to search section..."></div>
+              </div>
+
+
+              <div class="col-md-6">
+                <label class="form-label">Filter: SUs</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sj') }}"
+                     data-hidden-name="ref_sj"
+                     data-placeholder="Type to search SU..."></div>
+
+                {# PREFILL values so JS can show selected chips after reload #}
+                {% for sj in (filters.ref_sj or []) %}
+                  <input type="hidden" class="prefill" data-target="ref_sj" value="{{ sj }}">
+                {% endfor %}
+              </div>
+
+              
+              <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('drawings.drawings') }}">Reset</a>
+              </div>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- HELP MODAL -->
+<div class="modal fade" id="helpDrawingsUpload" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Drawings – help</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% include 'help/drawings_help.html' %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="modalEdit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form class="modal-content" method="post" enctype="multipart/form-data" id="editForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit drawing: <span id="editIdDrawing" class="text-muted"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-lg-6">
+            <div class="border rounded-3 p-3 bg-light h-100">
+              <div class="fw-semibold mb-2">Metadata</div>
+
+              <div class="mb-2">
+                <label class="form-label">Replace file (optional)</label>
+                <input type="file" class="form-control" name="file" accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Author</label>
+                <div class="search-select"
+                     data-mode="single"
+                     data-endpoint="{{ url_for('drawings.api_search_authors') }}"
+                     data-hidden-name="author"
+                     data-placeholder="Type to search author..."></div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Date</label>
+                <input type="date" class="form-control" name="datum" required>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-control" name="notes">
+              </div>
+            </div>
+          </div>
+
+          <div class="col-lg-6">
+            <div class="border rounded-3 p-3 bg-white h-100">
+              <div class="fw-semibold mb-2">Links</div>
+
+              <div class="mb-2">
+                <label class="form-label">SUs</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sj') }}"
+                     data-hidden-name="ref_sj"
+                     data-placeholder="Type to search SU..."></div>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Sections</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('drawings.api_search_sections') }}"
+                     data-hidden-name="ref_section"
+                     data-placeholder="Type to search section..."></div>
+              </div>
+
+              <div class="form-text">Edit replaces links (old links are removed).</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" id="deleteForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete drawing</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Really delete: <span id="deleteIdDrawing" class="fw-semibold"></span> ?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/drawings.js') }}"></script>
+{% endblock %}

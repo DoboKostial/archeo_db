@@ -1876,15 +1876,57 @@ def drawing_exists_sql():
 def drawing_checksum_exists_sql():
     return "SELECT 1 FROM tab_drawings WHERE checksum_sha256=%s LIMIT 1;"
 
-def select_drawings_page_sql(orphan_only: bool = False, has_author: bool = False, has_df: bool = False, has_dt: bool = False):
+
+# --- SEARCHSELECT (id/text) ---
+
+def search_authors_id_text_sql():
+    return """
+      SELECT mail AS id, mail AS text
+      FROM gloss_personalia
+      WHERE mail ILIKE %s
+      ORDER BY mail
+      LIMIT %s OFFSET %s;
     """
-    Returns:
-      id_drawing, author, datum, notes, mime_type, file_size, link_counts_json
-    link_counts_json = {"sj":N,"section":N}
+
+def search_sj_id_text_sql():
+    return """
+      SELECT id_sj::text AS id, ('SJ ' || id_sj::text) AS text
+      FROM tab_sj
+      WHERE id_sj::text ILIKE %s
+      ORDER BY id_sj
+      LIMIT %s OFFSET %s;
+    """
+
+def search_sections_id_text_sql():
+    return """
+      SELECT id_section::text AS id, ('Section ' || id_section::text) AS text
+      FROM tab_section
+      WHERE id_section::text ILIKE %s
+      ORDER BY id_section
+      LIMIT %s OFFSET %s;
+    """
+
+
+# --- DRAWINGS: page query with optional filters + aggregated link VALUES ---
+
+def select_drawings_page_sql(
+    orphan_only: bool,
+    has_author: bool,
+    has_df: bool,
+    has_dt: bool,
+    has_sj: bool,
+    has_section: bool,
+) -> str:
+    """
+    Page select for drawings incl. aggregated linked entity values.
+    Returns columns:
+      (id_drawing, author, datum, notes, mime_type, file_size, sj_ids_jsonb, section_ids_jsonb)
+
+    Params dict expected:
+      author, date_from, date_to, sj_list, section_list, limit, offset
     """
     where = ["1=1"]
-    if orphan_only:
-        where.append("(COALESCE(lc.sj,0) + COALESCE(lc.section,0)) = 0")
+
     if has_author:
         where.append("d.author = %(author)s")
     if has_df:
@@ -1892,28 +1934,60 @@ def select_drawings_page_sql(orphan_only: bool = False, has_author: bool = False
     if has_dt:
         where.append("d.datum <= %(date_to)s")
 
+    if has_sj:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_sj_drawings x
+            WHERE x.ref_drawing = d.id_drawing
+              AND x.ref_sj = ANY(%(sj_list)s)
+          )
+        """)
+
+    if has_section:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_section_drawings x
+            WHERE x.ref_drawing = d.id_drawing
+              AND x.ref_section = ANY(%(section_list)s)
+          )
+        """)
+
+    if orphan_only:
+        # no links at all
+        where.append("(COALESCE(jsonb_array_length(sj.sj_ids), 0) = 0 AND COALESCE(jsonb_array_length(sec.section_ids), 0) = 0)")
+
     return f"""
-        SELECT
-          d.id_drawing,
-          d.author,
-          to_char(d.datum, 'YYYY-MM-DD') AS datum,
-          d.notes,
-          d.mime_type,
-          d.file_size,
-          jsonb_build_object(
-            'sj', COALESCE(lc.sj,0),
-            'section', COALESCE(lc.section,0)
-          ) AS link_counts
-        FROM tab_drawings d
-        LEFT JOIN LATERAL (
-          SELECT
-            (SELECT COUNT(*) FROM tabaid_sj_drawings x WHERE x.ref_drawing = d.id_drawing) AS sj,
-            (SELECT COUNT(*) FROM tabaid_section_drawings y WHERE y.ref_drawing = d.id_drawing) AS section
-        ) lc ON TRUE
-        WHERE {" AND ".join(where)}
-        ORDER BY d.datum DESC, d.id_drawing DESC
-        LIMIT %(limit)s OFFSET %(offset)s;
+      SELECT
+        d.id_drawing,
+        d.author,
+        d.datum,
+        d.notes,
+        d.mime_type,
+        d.file_size,
+        COALESCE(sj.sj_ids, '[]'::jsonb)          AS sj_ids,
+        COALESCE(sec.section_ids, '[]'::jsonb)    AS section_ids
+      FROM tab_drawings d
+
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(jsonb_agg(ref_sj ORDER BY ref_sj), '[]'::jsonb) AS sj_ids
+        FROM tabaid_sj_drawings
+        WHERE ref_drawing = d.id_drawing
+      ) sj ON true
+
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(jsonb_agg(ref_section ORDER BY ref_section), '[]'::jsonb) AS section_ids
+        FROM tabaid_section_drawings
+        WHERE ref_drawing = d.id_drawing
+      ) sec ON true
+
+      WHERE {" AND ".join(where)}
+      ORDER BY d.datum DESC NULLS LAST, d.id_drawing DESC
+      LIMIT %(limit)s OFFSET %(offset)s;
     """
+
+
 
 def drawings_stats_sql():
     """
