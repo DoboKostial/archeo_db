@@ -1,54 +1,46 @@
-{# templates/photograms.html #}
 {% extends "base.html" %}
-{% block title %}Photograms{% endblock %}
-
 {% block content %}
-<div class="alert alert-info" role="alert">
-  You are working with database <strong>{{ selected_db }}</strong>.
-</div>
 
 <div class="container mt-3">
 
   <!-- SECTION 1: UPLOAD -->
- <div class="p-3 rounded-3 border bg-body-tertiary mb-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h4 class="mb-0 d-flex align-items-center gap-2">
-      Upload photograms
-      <button type="button"
-              class="btn btn-sm btn-outline-secondary"
-              data-bs-toggle="modal"
-              data-bs-target="#helpPhotogramsUpload"
-              title="Help">?</button>
-    </h4>
-  </div>
+  <div class="p-3 rounded-3 border bg-body-tertiary mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h4 class="mb-0 d-flex align-items-center gap-2">
+        Upload photograms
+        <button type="button"
+                class="btn btn-sm btn-outline-secondary"
+                data-bs-toggle="modal"
+                data-bs-target="#helpPhotogramsUpload"
+                title="Help">?</button>
+      </h4>
+    </div>
 
-  <form method="post"
-        action="{{ url_for('photograms.upload_photograms') }}"
-        enctype="multipart/form-data"
-        id="photogramsUploadForm">
+    <form method="post"
+          action="{{ url_for('photograms.upload_photograms') }}"
+          enctype="multipart/form-data"
+          id="photogramsUploadForm">
 
-    <div class="row g-3">
-      <!-- LEFT: metadata -->
-      <div class="col-lg-6">
-        <div class="border rounded-3 p-3 bg-light h-100">
-          <div class="fw-semibold mb-2">Photogram metadata</div>
-
-          <div class="row g-2">
-            <div class="col-12">
-              <label class="form-label">Files</label>
-              <input type="file"
-                     class="form-control"
-                     name="files"
-                     accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
-                     required>
-              <div id="extraFiles" class="mt-2"></div>
-              <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnAddFile">
-                + add more
-              </button>
-              <div class="form-text">All files will be uploaded with the same properties and links.</div>
+      <div class="row g-3">
+        <!-- LEFT: files + metadata -->
+        <div class="col-lg-6">
+          <div class="border rounded-3 p-3 bg-white h-100">
+            <div class="fw-semibold mb-2">Files</div>
+            <input type="file"
+                   class="form-control"
+                   name="files"
+                   multiple
+                   accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
+                   required>
+            <div class="form-text mt-2">
+              You can upload multiple files; metadata/links apply to all uploaded files in this batch.
             </div>
 
-            <div class="col-md-6">
+            <hr class="my-3">
+
+            <div class="fw-semibold mb-2">Metadata</div>
+
+            <div class="mb-2">
               <label class="form-label">Photogram type</label>
               <select class="form-select" name="photogram_typ" required>
                 <option value="" selected disabled>-- select --</option>
@@ -58,7 +50,7 @@
               </select>
             </div>
 
-            <div class="col-md-6">
+            <div class="mb-2">
               <label class="form-label">Ref sketch (optional)</label>
               <div class="search-select"
                    data-mode="single"
@@ -67,182 +59,144 @@
                    data-placeholder="Type to search sketch..."></div>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label">Photo from (optional)</label>
-              <div class="search-select"
-                   data-mode="single"
-                   data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                   data-hidden-name="ref_photo_from"
-                   data-placeholder="Type to search photo..."></div>
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">Photo from (optional)</label>
+                <div class="search-select"
+                     data-mode="single"
+                     data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                     data-hidden-name="ref_photo_from"
+                     data-placeholder="Type to search photo..."></div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Photo to (optional)</label>
+                <div class="search-select"
+                     data-mode="single"
+                     data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                     data-hidden-name="ref_photo_to"
+                     data-placeholder="Type to search photo..."></div>
+              </div>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label">Photo to (optional)</label>
-              <div class="search-select"
-                   data-mode="single"
-                   data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                   data-hidden-name="ref_photo_to"
-                   data-placeholder="Type to search photo..."></div>
-            </div>
-
-            <div class="col-12">
+            <div class="mt-2">
               <label class="form-label">Notes</label>
               <input type="text" class="form-control" name="notes" placeholder="optional">
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- RIGHT: links + ranges -->
-      <div class="col-lg-6">
-        <div class="border rounded-3 p-3 bg-white h-100">
-          <div class="fw-semibold mb-2">
-            Links <span class="text-muted fw-normal">(optional, multi)</span>
-          </div>
-
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label">SUs</label>
-              <div class="search-select"
-                   data-mode="multi"
-                   data-endpoint="{{ url_for('photograms.api_search_sj') }}"
-                   data-hidden-name="ref_sj"
-                   data-placeholder="Type to search SU..."></div>
+        <!-- RIGHT: LINKS + ranges -->
+        <div class="col-lg-6">
+          <div class="border rounded-3 p-3 bg-white h-100">
+            <div class="fw-semibold mb-2">
+              Links to terrain entities <span class="text-muted fw-normal">(optional, multi)</span>
             </div>
 
-            <div class="col-md-6">
-              <label class="form-label">Polygons</label>
-              <div class="search-select"
-                   data-mode="multi"
-                   data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
-                   data-hidden-name="ref_polygon"
-                   data-placeholder="Type to search polygon..."></div>
-            </div>
-
-            <div class="col-12">
-              <label class="form-label">Sections</label>
-              <div class="search-select"
-                   data-mode="multi"
-                   data-endpoint="{{ url_for('photograms.api_search_sections') }}"
-                   data-hidden-name="ref_section"
-                   data-placeholder="Type to search section..."></div>
-            </div>
-          </div>
-
-          <hr class="my-3">
-
-          <div class="fw-semibold mb-2">
-            Geopts ranges (FROM–TO) <span class="text-muted fw-normal">(optional)</span>
-          </div>
-
-          <div id="geoptsRanges">
-            <div class="row g-2 align-items-end range-row">
-              <div class="col-5">
-                <label class="form-label">FROM</label>
-                <input type="number" class="form-control" name="geopt_from[]" min="1">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label">SUs</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('photograms.api_search_sj') }}"
+                     data-hidden-name="ref_sj"
+                     data-placeholder="Type to search SU..."></div>
               </div>
-              <div class="col-5">
-                <label class="form-label">TO</label>
-                <input type="number" class="form-control" name="geopt_to[]" min="1">
+
+              <div class="col-md-6">
+                <label class="form-label">Polygons</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
+                     data-hidden-name="ref_polygon"
+                     data-placeholder="Type to search polygon..."></div>
               </div>
-              <div class="col-2 d-grid">
-                <button type="button" class="btn btn-outline-secondary btnAddRange">+</button>
+
+              <div class="col-12">
+                <label class="form-label">Sections</label>
+                <div class="search-select"
+                     data-mode="multi"
+                     data-endpoint="{{ url_for('photograms.api_search_sections') }}"
+                     data-hidden-name="ref_section"
+                     data-placeholder="Type to search section..."></div>
               </div>
             </div>
-          </div>
 
-          <div class="form-text mt-2">Ranges are stored as-is (user integrity).</div>
+            <hr class="my-3">
+
+            <div class="fw-semibold mb-2">
+              Geopts ranges (FROM–TO) <span class="text-muted fw-normal">(optional)</span>
+            </div>
+
+            <div id="geoptsRanges">
+              <div class="row g-2 align-items-end range-row">
+                <div class="col-5">
+                  <label class="form-label">FROM</label>
+                  <input type="number" class="form-control" name="geopt_from[]" min="1">
+                </div>
+                <div class="col-5">
+                  <label class="form-label">TO</label>
+                  <input type="number" class="form-control" name="geopt_to[]" min="1">
+                </div>
+                <div class="col-2 d-grid">
+                  <button type="button" class="btn btn-outline-secondary btnAddRange">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-text mt-2">Ranges are stored as-is (user integrity).</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="mt-3 d-flex gap-2">
-      <button type="submit" class="btn btn-primary">Upload</button>
-    </div>
-  </form>
-</div>
-
-
-  <!-- SECTION 2: GALLERY + BULK -->
-  <div class="p-3 rounded-3 border bg-white mb-3">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-      <h4 class="mb-0">Photograms gallery</h4>
-      <small class="text-muted">Page {{ page }}</small>
-    </div>
-
-    <form method="post" action="{{ url_for('photograms.bulk_photograms') }}" id="bulkForm" class="mb-3">
-      <div class="d-flex flex-wrap gap-2 align-items-center">
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Select all</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">Clear</button>
-
-        <select class="form-select form-select-sm" name="action" style="width: 200px;" required>
-          <option value="" selected disabled>-- bulk action --</option>
-          <option value="add_links">Add links</option>
-          <option value="remove_links">Remove links</option>
-        </select>
-
-        <div class="search-select"
-             data-mode="multi"
-             data-endpoint="{{ url_for('photograms.api_search_sj') }}"
-             data-hidden-name="ref_sj"
-             data-placeholder="Bulk: SU"></div>
-
-        <div class="search-select"
-             data-mode="multi"
-             data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
-             data-hidden-name="ref_polygon"
-             data-placeholder="Bulk: Polygon"></div>
-
-        <div class="search-select"
-             data-mode="multi"
-             data-endpoint="{{ url_for('photograms.api_search_sections') }}"
-             data-hidden-name="ref_section"
-             data-placeholder="Bulk: Section"></div>
-
-        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+      <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Upload</button>
       </div>
-      <div id="bulkSelectedContainer"></div>
     </form>
+  </div>
+
+
+  <!-- SECTION 2: GALLERY -->
+  <div class="p-3 rounded-3 border bg-white mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h4 class="mb-0">Photograms gallery</h4>
+    </div>
 
     <div class="row g-3">
       {% for g in photograms %}
       <div class="col-sm-6 col-md-4 col-lg-3">
         <div class="card h-100 shadow-sm">
-          <div class="card-header d-flex align-items-center justify-content-between">
-            <div class="form-check m-0">
-              <input class="form-check-input photogram-check" type="checkbox" value="{{ g.id_photogram }}">
-            </div>
-            <span class="small text-muted">{{ g.photogram_typ }}</span>
-          </div>
-
           <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=g.id_photogram) }}" target="_blank">
             <img class="card-img-top"
                  src="{{ url_for('photograms.serve_photogram_thumb', id_photogram=g.id_photogram) }}"
-                 onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;p-3 text-muted small&quot;>No thumbnail</div>');"
-                 alt="{{ g.id_photogram }}">
+                 alt="{{ g.id_photogram }}"
+                 onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;p-3 text-muted small&quot;>No thumbnail</div>');">
           </a>
 
           <div class="card-body">
             <div class="small text-muted mb-1">{{ g.id_photogram }}</div>
 
             <div class="d-flex flex-wrap gap-1 mb-2">
-              {% if g.ref_sketch %}
-                <span class="badge text-bg-secondary">sketch</span>
-              {% endif %}
-              {% if g.ref_photo_from or g.ref_photo_to %}
-                <span class="badge text-bg-secondary">photos</span>
-              {% endif %}
+              <span class="badge text-bg-secondary">{{ g.photogram_typ }}</span>
+
               <span class="badge text-bg-light">
-                Links:
-                SUs({{ g.link_counts.sj }}),
-                Polygons({{ g.link_counts.polygon }}),<br>
+                Links: SUs({{ g.link_counts.sj }}),
+                Polygons({{ g.link_counts.polygon }}),
                 Sections({{ g.link_counts.section }}),
                 Geopts({{ g.link_counts.ranges }})
               </span>
             </div>
 
+            {% if g.ref_sketch %}
+              <div class="small"><span class="text-muted">Sketch:</span> {{ g.ref_sketch }}</div>
+            {% endif %}
+            {% if g.ref_photo_from %}
+              <div class="small"><span class="text-muted">Photo from:</span> {{ g.ref_photo_from }}</div>
+            {% endif %}
+            {% if g.ref_photo_to %}
+              <div class="small"><span class="text-muted">Photo to:</span> {{ g.ref_photo_to }}</div>
+            {% endif %}
             {% if g.notes %}
-              <div class="small">{{ g.notes }}</div>
+              <div class="small mt-2">{{ g.notes }}</div>
             {% endif %}
           </div>
 
@@ -258,13 +212,14 @@
     <div class="d-flex justify-content-between align-items-center mt-3">
       <div class="text-muted small">Page {{ page }}</div>
       <div class="d-flex gap-2">
-        {% if page > 1 %}
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('photograms.photograms', page=page-1, per_page=per_page) }}">Prev</a>
+        {% if prev_url %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ prev_url }}">Prev</a>
         {% endif %}
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('photograms.photograms', page=page+1, per_page=per_page) }}">Next</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ next_url }}">Next</a>
       </div>
     </div>
   </div>
+
 
   <!-- SECTION 3: STATS + FILTER -->
   <div class="p-3 rounded-3 border bg-light mb-3">
@@ -314,25 +269,38 @@
                          data-mode="single"
                          data-endpoint="{{ url_for('photograms.api_search_sketches') }}"
                          data-hidden-name="ref_sketch"
-                         data-placeholder="Filter: sketch"></div>
+                         data-placeholder="Filter: sketch...">
+                      {% if filters.ref_sketch %}
+                        <input type="hidden" name="ref_sketch" value="{{ filters.ref_sketch }}">
+                      {% endif %}
+                    </div>
                   </div>
 
-                  <div class="mb-2">
-                    <label class="form-label">Photo from</label>
-                    <div class="search-select"
-                         data-mode="single"
-                         data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                         data-hidden-name="ref_photo_from"
-                         data-placeholder="Filter: photo from"></div>
-                  </div>
-
-                  <div class="mb-2">
-                    <label class="form-label">Photo to</label>
-                    <div class="search-select"
-                         data-mode="single"
-                         data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                         data-hidden-name="ref_photo_to"
-                         data-placeholder="Filter: photo to"></div>
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label">Photo from</label>
+                      <div class="search-select"
+                           data-mode="single"
+                           data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                           data-hidden-name="ref_photo_from"
+                           data-placeholder="Filter: photo...">
+                        {% if filters.ref_photo_from %}
+                          <input type="hidden" name="ref_photo_from" value="{{ filters.ref_photo_from }}">
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Photo to</label>
+                      <div class="search-select"
+                           data-mode="single"
+                           data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                           data-hidden-name="ref_photo_to"
+                           data-placeholder="Filter: photo...">
+                        {% if filters.ref_photo_to %}
+                          <input type="hidden" name="ref_photo_to" value="{{ filters.ref_photo_to }}">
+                        {% endif %}
+                      </div>
+                    </div>
                   </div>
 
                   <div class="form-check mt-2">
@@ -348,31 +316,45 @@
                   <div class="fw-semibold mb-2">Entities</div>
 
                   <div class="mb-2">
-                    <label class="form-label">SUs</label>
+                    <label class="form-label">Filter: SUs</label>
                     <div class="search-select"
                          data-mode="multi"
                          data-endpoint="{{ url_for('photograms.api_search_sj') }}"
-                         data-hidden-name="sj_ids"
-                         data-placeholder="Filter: SU"></div>
+                         data-hidden-name="ref_sj"
+                         data-placeholder="Type to search SU...">
+                      {% for sj in (filters.ref_sj or []) %}
+                        <input type="hidden" name="ref_sj" value="{{ sj }}">
+                      {% endfor %}
+                    </div>
                   </div>
 
                   <div class="mb-2">
-                    <label class="form-label">Polygons</label>
+                    <label class="form-label">Filter: Polygons</label>
                     <div class="search-select"
                          data-mode="multi"
                          data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
-                         data-hidden-name="polygon_names"
-                         data-placeholder="Filter: polygon"></div>
+                         data-hidden-name="ref_polygon"
+                         data-placeholder="Type to search polygon...">
+                      {% for p in (filters.ref_polygon or []) %}
+                        <input type="hidden" name="ref_polygon" value="{{ p }}">
+                      {% endfor %}
+                    </div>
                   </div>
 
                   <div class="mb-2">
-                    <label class="form-label">Sections</label>
+                    <label class="form-label">Filter: Sections</label>
                     <div class="search-select"
                          data-mode="multi"
                          data-endpoint="{{ url_for('photograms.api_search_sections') }}"
-                         data-hidden-name="section_ids"
-                         data-placeholder="Filter: section"></div>
+                         data-hidden-name="ref_section"
+                         data-placeholder="Type to search section...">
+                      {% for s in (filters.ref_section or []) %}
+                        <input type="hidden" name="ref_section" value="{{ s }}">
+                      {% endfor %}
+                    </div>
                   </div>
+
+                  <div class="form-text">Entity filters are applied via EXISTS(...) in SQL.</div>
                 </div>
               </div>
 
@@ -390,101 +372,115 @@
 
 </div>
 
+
 <!-- EDIT MODAL -->
 <div class="modal fade" id="modalEdit" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <form method="post" class="modal-content" id="editForm">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form method="post" class="modal-content" id="editForm" enctype="multipart/form-data">
       <div class="modal-header">
         <h5 class="modal-title">Edit photogram</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
       <div class="modal-body">
-        <div class="mb-2 text-muted small" id="editId"></div>
+        <div class="small text-muted mb-2">ID: <span class="fw-semibold" id="editId"></span></div>
 
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label">Photogram type</label>
-            <select class="form-select" name="photogram_typ" required>
-              {% for t in photogram_typ_choices %}
-                <option value="{{ t }}">{{ t }}</option>
-              {% endfor %}
-            </select>
+        <div class="row g-3">
+          <div class="col-lg-6">
+            <div class="border rounded-3 p-3 bg-light h-100">
+              <div class="fw-semibold mb-2">Metadata</div>
+
+              <div class="mb-2">
+                <label class="form-label">Photogram type</label>
+                <select class="form-select" name="photogram_typ" id="editTyp" required>
+                  {% for t in photogram_typ_choices %}
+                    <option value="{{ t }}">{{ t }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Ref sketch (optional)</label>
+                <div class="search-select"
+                     data-mode="single"
+                     data-endpoint="{{ url_for('photograms.api_search_sketches') }}"
+                     data-hidden-name="ref_sketch"
+                     data-placeholder="Type to search sketch..."></div>
+              </div>
+
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label">Photo from (optional)</label>
+                  <div class="search-select"
+                       data-mode="single"
+                       data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                       data-hidden-name="ref_photo_from"
+                       data-placeholder="Type to search photo..."></div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Photo to (optional)</label>
+                  <div class="search-select"
+                       data-mode="single"
+                       data-endpoint="{{ url_for('photograms.api_search_photos') }}"
+                       data-hidden-name="ref_photo_to"
+                       data-placeholder="Type to search photo..."></div>
+                </div>
+              </div>
+
+              <div class="mt-2">
+                <label class="form-label">Notes</label>
+                <input type="text" class="form-control" name="notes" id="editNotes">
+              </div>
+            </div>
           </div>
 
-          <div class="col-md-6">
-            <label class="form-label">Ref sketch</label>
-            <div class="search-select"
-                 data-mode="single"
-                 data-endpoint="{{ url_for('photograms.api_search_sketches') }}"
-                 data-hidden-name="ref_sketch"
-                 data-placeholder="Type to search sketch..."></div>
+          <div class="col-lg-6">
+            <div class="border rounded-3 p-3 bg-white h-100">
+              <div class="fw-semibold mb-2">
+                Links to terrain entities <span class="text-muted fw-normal">(optional, multi)</span>
+              </div>
+
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-label">SUs</label>
+                  <div class="search-select"
+                       data-mode="multi"
+                       data-endpoint="{{ url_for('photograms.api_search_sj') }}"
+                       data-hidden-name="ref_sj"
+                       data-placeholder="Type to search SU..."></div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Polygons</label>
+                  <div class="search-select"
+                       data-mode="multi"
+                       data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
+                       data-hidden-name="ref_polygon"
+                       data-placeholder="Type to search polygon..."></div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Sections</label>
+                  <div class="search-select"
+                       data-mode="multi"
+                       data-endpoint="{{ url_for('photograms.api_search_sections') }}"
+                       data-hidden-name="ref_section"
+                       data-placeholder="Type to search section..."></div>
+                </div>
+              </div>
+
+              <hr class="my-3">
+
+              <div class="fw-semibold mb-2">Geopts ranges</div>
+              <div id="editRanges"></div>
+              <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnEditAddRange">+ add range</button>
+
+              <div class="mt-3">
+                <label class="form-label">Replace file (optional)</label>
+                <input type="file" name="replace_file" class="form-control" accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+              </div>
+            </div>
           </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Photo from</label>
-            <div class="search-select"
-                 data-mode="single"
-                 data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                 data-hidden-name="ref_photo_from"
-                 data-placeholder="Type to search photo..."></div>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Photo to</label>
-            <div class="search-select"
-                 data-mode="single"
-                 data-endpoint="{{ url_for('photograms.api_search_photos') }}"
-                 data-hidden-name="ref_photo_to"
-                 data-placeholder="Type to search photo..."></div>
-          </div>
-
-          <div class="col-12">
-            <label class="form-label">Notes</label>
-            <input type="text" class="form-control" name="notes" placeholder="optional">
-          </div>
-        </div>
-
-        <hr class="my-3">
-
-        <div class="row g-2">
-          <div class="col-md-6">
-            <label class="form-label">SUs</label>
-            <div class="search-select"
-                 data-mode="multi"
-                 data-endpoint="{{ url_for('photograms.api_search_sj') }}"
-                 data-hidden-name="ref_sj"
-                 data-placeholder="Type to search SU..."></div>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Polygons</label>
-            <div class="search-select"
-                 data-mode="multi"
-                 data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
-                 data-hidden-name="ref_polygon"
-                 data-placeholder="Type to search polygon..."></div>
-          </div>
-
-          <div class="col-12">
-            <label class="form-label">Sections</label>
-            <div class="search-select"
-                 data-mode="multi"
-                 data-endpoint="{{ url_for('photograms.api_search_sections') }}"
-                 data-hidden-name="ref_section"
-                 data-placeholder="Type to search section..."></div>
-          </div>
-        </div>
-
-        <hr class="my-3">
-
-        <div class="fw-semibold mb-2">Geopts ranges</div>
-        <div id="editRanges"></div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnEditAddRange">+ add range</button>
-
-        <div class="mt-3">
-          <label class="form-label">Replace file (optional)</label>
-          <input type="file" name="replace_file" class="form-control" accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
         </div>
       </div>
 
@@ -495,6 +491,7 @@
     </form>
   </div>
 </div>
+
 
 <!-- DELETE MODAL -->
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-hidden="true">
@@ -517,6 +514,7 @@
   </div>
 </div>
 
+
 <!-- HELP MODAL -->
 <div class="modal fade" id="helpPhotogramsUpload" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -535,11 +533,16 @@
   </div>
 </div>
 
-
-
-
 {% endblock %}
 
+
 {% block scripts %}
+<script>
+  window.PHOTOGRAMS = {
+    apiDetailTmpl: "{{ url_for('photograms.api_detail', id_photogram='__ID__') }}",
+    editActionTmpl: "{{ url_for('photograms.edit_photogram', id_photogram='__ID__') }}",
+    deleteActionTmpl: "{{ url_for('photograms.delete_photogram', id_photogram='__ID__') }}"
+  };
+</script>
 <script src="{{ url_for('static', filename='js/photograms.js') }}"></script>
 {% endblock %}

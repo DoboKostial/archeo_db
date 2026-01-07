@@ -1524,9 +1524,26 @@ def select_photogram_geopts_ranges_sql():
 
 
 # --- list / detail / links / stats ---
-def select_photograms_page_sql(*, orphan_only: bool, has_typ: bool, has_sketch: bool, has_pf: bool, has_pt: bool):
-    # dynamic flags keep query parameterized
+def select_photograms_page_sql(
+    *,
+    orphan_only: bool,
+    has_typ: bool,
+    has_sketch: bool,
+    has_pf: bool,
+    has_pt: bool,
+    has_sj: bool,
+    has_polygon: bool,
+    has_section: bool,
+):
+    """
+    Page select for photograms with optional filters.
+    Params dict:
+      typ_list, ref_sketch, ref_photo_from, ref_photo_to,
+      sj_ids, polygon_names, section_ids,
+      limit, offset
+    """
     where = ["1=1"]
+
     if orphan_only:
         where.append("""
           NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj s WHERE s.ref_photogram=p.id_photogram)
@@ -1534,6 +1551,7 @@ def select_photograms_page_sql(*, orphan_only: bool, has_typ: bool, has_sketch: 
           AND NOT EXISTS (SELECT 1 FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram)
           AND NOT EXISTS (SELECT 1 FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram)
         """)
+
     if has_typ:
         where.append("p.photogram_typ = ANY(%(typ_list)s)")
     if has_sketch:
@@ -1542,6 +1560,37 @@ def select_photograms_page_sql(*, orphan_only: bool, has_typ: bool, has_sketch: 
         where.append("p.ref_photo_from = %(ref_photo_from)s")
     if has_pt:
         where.append("p.ref_photo_to = %(ref_photo_to)s")
+
+    # --- entity filters ---
+    if has_sj:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_photogram_sj x
+            WHERE x.ref_photogram = p.id_photogram
+              AND x.ref_sj = ANY(%(sj_ids)s)
+          )
+        """)
+
+    if has_polygon:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_polygon_photograms x
+            WHERE x.ref_photogram = p.id_photogram
+              AND x.ref_polygon = ANY(%(polygon_names)s)
+          )
+        """)
+
+    if has_section:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_section_photograms x
+            WHERE x.ref_photogram = p.id_photogram
+              AND x.ref_section = ANY(%(section_ids)s)
+          )
+        """)
 
     where_sql = " AND ".join(f"({w})" for w in where)
 
@@ -1564,6 +1613,7 @@ def select_photograms_page_sql(*, orphan_only: bool, has_typ: bool, has_sketch: 
       ORDER BY p.id_photogram DESC
       LIMIT %(limit)s OFFSET %(offset)s;
     """
+
 
 def select_photogram_detail_sql():
     return """

@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import os
+import json
 from typing import Any
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
-import json
 from psycopg2.extras import Json
 
 from config import Config
@@ -19,8 +19,7 @@ from app.utils import (
     sha256_file, validate_extension, validate_mime
 )
 
-from app.utils.decorators import require_selected_db 
-from app.utils.media_map import LINK_TABLES_SJ, LINK_TABLES_POLYGON, LINK_TABLES_SECTION  # reuse mapping
+from app.utils.decorators import require_selected_db
 
 from app.queries import (
     # INSERT/UPDATE/DELETE
@@ -62,7 +61,6 @@ from app.queries import (
 
 photograms_bp = Blueprint("photograms", __name__)
 
-# hard-coded choices (app-level validation)
 PHOTOGRAM_TYP_CHOICES = ["stereo", "resection", "synthetic", "other"]
 
 
@@ -78,11 +76,39 @@ def _as_int(val: str | None) -> int | None:
         return None
 
 
+def _parse_int_list(vals: list[str]) -> list[int]:
+    out: list[int] = []
+    for v in vals or []:
+        i = _as_int(v)
+        if i is not None:
+            out.append(i)
+    # unique keep order
+    seen = set()
+    uniq = []
+    for x in out:
+        if x not in seen:
+            uniq.append(x)
+            seen.add(x)
+    return uniq
+
+
+def _parse_text_list(vals: list[str]) -> list[str]:
+    out: list[str] = []
+    for v in vals or []:
+        s = (v or "").strip()
+        if s:
+            out.append(s)
+    # unique keep order
+    seen = set()
+    uniq = []
+    for x in out:
+        if x not in seen:
+            uniq.append(x)
+            seen.add(x)
+    return uniq
+
+
 def _read_range_pairs(form: Any, from_name: str, to_name: str) -> list[tuple[int, int]]:
-    """
-    Reads multiple FROM/TO pairs (arrays) from form.
-    Example names: geopt_from_0[] , geopt_to_0[]
-    """
     from_list = form.getlist(from_name)
     to_list = form.getlist(to_name)
 
@@ -102,6 +128,17 @@ def _read_range_pairs(form: Any, from_name: str, to_name: str) -> list[tuple[int
     return pairs
 
 
+def _human_bytes(n: int | None) -> str:
+    if n is None:
+        return "0 B"
+    x = float(n)
+    for u in ["B", "KB", "MB", "GB", "TB"]:
+        if x < 1024.0:
+            return f"{x:.1f} {u}"
+        x /= 1024.0
+    return f"{x:.1f} PB"
+
+
 # ---------------------------------------
 # PAGE
 # ---------------------------------------
@@ -117,38 +154,50 @@ def photograms():
     f_photo_to = (request.args.get("ref_photo_to") or "").strip() or None
     orphan_only = (request.args.get("orphan_only") == "1")
 
+    # NEW: entity filters
+    f_sj_ids = _parse_int_list(request.args.getlist("ref_sj"))
+    f_polygon_names = _parse_text_list(request.args.getlist("ref_polygon"))
+    f_section_ids = _parse_int_list(request.args.getlist("ref_section"))
+
     page = _as_int(request.args.get("page")) or 1
     per_page = _as_int(request.args.get("per_page")) or 24
     offset = (page - 1) * per_page
 
     with get_terrain_connection(selected_db) as conn:
         with conn.cursor() as cur:
-            # stats
             cur.execute(photograms_stats_sql())
             total_cnt, total_bytes, orphan_cnt = cur.fetchone()
 
             cur.execute(photograms_stats_by_type_sql())
             by_type = cur.fetchall()
 
-            # page rows
             cur.execute(
-                select_photograms_page_sql(orphan_only=orphan_only, has_typ=bool(f_typ), has_sketch=bool(f_sketch),
-                                           has_pf=bool(f_photo_from), has_pt=bool(f_photo_to)),
+                select_photograms_page_sql(
+                    orphan_only=orphan_only,
+                    has_typ=bool(f_typ),
+                    has_sketch=bool(f_sketch),
+                    has_pf=bool(f_photo_from),
+                    has_pt=bool(f_photo_to),
+                    has_sj=bool(f_sj_ids),
+                    has_polygon=bool(f_polygon_names),
+                    has_section=bool(f_section_ids),
+                ),
                 {
                     "typ_list": f_typ,
                     "ref_sketch": f_sketch,
                     "ref_photo_from": f_photo_from,
                     "ref_photo_to": f_photo_to,
+                    "sj_ids": f_sj_ids,
+                    "polygon_names": f_polygon_names,
+                    "section_ids": f_section_ids,
                     "limit": per_page,
                     "offset": offset,
                 },
             )
             rows = cur.fetchall()
 
-    # convert tuples -> dicts so Jinja can use g.id_photogram, g.link_counts.sj etc.
-    photograms = []
+    photograms_rows = []
     for r in rows:
-        # r = (id_photogram, photogram_typ, ref_sketch, notes, ref_photo_from, ref_photo_to, link_counts_json)
         lc = r[6]
         if isinstance(lc, str):
             try:
@@ -158,7 +207,7 @@ def photograms():
         if lc is None:
             lc = {}
 
-        photograms.append({
+        photograms_rows.append({
             "id_photogram": r[0],
             "photogram_typ": r[1],
             "ref_sketch": r[2],
@@ -173,18 +222,6 @@ def photograms():
             },
         })
 
-
-
-    def _human_bytes(n: int | None) -> str:
-        if n is None:
-            return "0 B"
-        x = float(n)
-        for u in ["B", "KB", "MB", "GB", "TB"]:
-            if x < 1024.0:
-                return f"{x:.1f} {u}"
-            x /= 1024.0
-        return f"{x:.1f} PB"
-
     stats = {
         "total_cnt": total_cnt,
         "total_bytes_h": _human_bytes(total_bytes),
@@ -198,14 +235,33 @@ def photograms():
         "ref_photo_from": f_photo_from,
         "ref_photo_to": f_photo_to,
         "orphan_only": orphan_only,
+        "ref_sj": f_sj_ids,
+        "ref_polygon": f_polygon_names,
+        "ref_section": f_section_ids,
     }
+
+    # pagination URLs preserving filters
+    def _page_url(new_page: int) -> str:
+        args = {}
+        for k, vals in request.args.lists():
+            if k == "page":
+                continue
+            args[k] = vals
+        args["page"] = new_page
+        args["per_page"] = per_page
+        return url_for("photograms.photograms", **args)
+
+    prev_url = _page_url(page - 1) if page > 1 else None
+    next_url = _page_url(page + 1)
 
     return render_template(
         "photograms.html",
         selected_db=selected_db,
-        photograms=photograms,
+        photograms=photograms_rows,
         page=page,
         per_page=per_page,
+        prev_url=prev_url,
+        next_url=next_url,
         stats=stats,
         filters=filters,
         photogram_typ_choices=PHOTOGRAM_TYP_CHOICES,
@@ -220,7 +276,6 @@ def photograms():
 def upload_photograms():
     selected_db = session["selected_db"]
 
-    # ---- 1) read shared fields (single form, many files) ----
     typ = (request.form.get("photogram_typ") or "").strip()
     notes = (request.form.get("notes") or "").strip() or None
 
@@ -232,14 +287,12 @@ def upload_photograms():
     polygons = request.form.getlist("ref_polygon")
     sections = request.form.getlist("ref_section")
 
-    # geopts ranges (arrays) - now not indexed
     try:
         ranges = _read_range_pairs(request.form, "geopt_from[]", "geopt_to[]")
     except Exception as e:
         flash(f"Upload failed: {e}", "danger")
         return redirect(url_for("photograms.photograms"))
 
-    # validate typ
     if typ not in PHOTOGRAM_TYP_CHOICES:
         flash("Upload failed: Invalid photogram_typ.", "danger")
         return redirect(url_for("photograms.photograms"))
@@ -250,10 +303,9 @@ def upload_photograms():
         flash("Upload failed: No files provided.", "danger")
         return redirect(url_for("photograms.photograms"))
 
-    # ---- 2) stage / validate all first ----
     staged_paths = []
     final_pairs = []  # (final_path, thumb_path)
-    items = []        # per file
+    items = []
     batch_checksums = set()
 
     conn = get_terrain_connection(selected_db)
@@ -261,7 +313,6 @@ def upload_photograms():
 
     try:
         with conn.cursor() as cur:
-            # ---- 2a) validate referenced entities (fail-fast) ----
             def _assert_exists(sql: str, value, err: str):
                 cur.execute(sql, (value,))
                 if not cur.fetchone():
@@ -300,7 +351,6 @@ def upload_photograms():
                 _assert_exists("SELECT 1 FROM tab_section WHERE id_section=%s LIMIT 1;",
                               s_i, f"Section not found: {s_i}")
 
-            # ---- 2b) stage each file + validate ----
             for f in files:
                 tmp_path, _ = save_to_uploads(Config.UPLOAD_FOLDER, f)
                 staged_paths.append(tmp_path)
@@ -313,26 +363,21 @@ def upload_photograms():
                 media_dir = Config.MEDIA_DIRS["photograms"]
                 final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
 
-                # FS collision
                 if os.path.exists(final_path):
                     raise ValueError(f"File already exists on FS: {pk_name}")
 
-                # DB collision on id
                 cur.execute("SELECT 1 FROM tab_photograms WHERE id_photogram=%s LIMIT 1;", (pk_name,))
                 if cur.fetchone():
                     raise ValueError(f"Photogram already exists in DB: {pk_name}")
 
-                # MIME + checksum from staged file
                 mime = detect_mime(tmp_path)
                 validate_mime(mime, Config.ALLOWED_MIME)
                 checksum = sha256_file(tmp_path)
 
-                # no duplicate content in DB
                 cur.execute(photogram_checksum_exists_sql(), (checksum,))
                 if cur.fetchone():
                     raise ValueError(f"Duplicate content (checksum already exists): {pk_name}")
 
-                # no duplicate content inside batch
                 if checksum in batch_checksums:
                     raise ValueError(f"Duplicate content within this upload batch: {pk_name}")
                 batch_checksums.add(checksum)
@@ -346,13 +391,11 @@ def upload_photograms():
                     "checksum": checksum,
                 })
 
-            # ---- 3) move -> thumbnail -> DB insert + links in ONE transaction ----
             for it in items:
                 move_into_place(it["tmp_path"], it["final_path"])
                 it["tmp_path"] = None
                 final_pairs.append((it["final_path"], it["thumb_path"]))
 
-                # thumbnail is part of transaction: if it fails, rollback + cleanup
                 make_thumbnail(it["final_path"], it["thumb_path"], Config.THUMB_MAX_SIDE)
 
                 cur.execute(
@@ -370,7 +413,6 @@ def upload_photograms():
                     ),
                 )
 
-                # links (same for all uploaded files)
                 for sj in sj_ids:
                     sj_i = _as_int(sj)
                     if sj_i is not None:
@@ -386,7 +428,6 @@ def upload_photograms():
                     if s_i is not None:
                         cur.execute(link_photogram_section_sql(), (s_i, it["pk_name"]))
 
-                # ranges (same for all uploaded files)
                 for a, b in ranges:
                     cur.execute(insert_photogram_geopts_range_sql(), (it["pk_name"], a, b))
 
@@ -400,14 +441,12 @@ def upload_photograms():
         except Exception:
             pass
 
-        # cleanup any moved files + thumbs
         for fp, tp in final_pairs:
             try:
                 delete_media_files(fp, tp)
             except Exception:
                 pass
 
-        # cleanup staged uploads
         for sp in staged_paths:
             try:
                 cleanup_upload(sp)
@@ -427,9 +466,8 @@ def upload_photograms():
     return redirect(url_for("photograms.photograms"))
 
 
-
 # ---------------------------------------
-# BULK (links only: SU / polygon / section)
+# BULK (links only)
 # ---------------------------------------
 @photograms_bp.post("/photograms/bulk")
 @require_selected_db
@@ -452,12 +490,35 @@ def bulk_photograms():
 
     with get_terrain_connection(selected_db) as conn:
         with conn.cursor() as cur:
+            def _assert_exists(sql: str, value, err: str):
+                cur.execute(sql, (value,))
+                if not cur.fetchone():
+                    raise ValueError(err)
+
+            # validate entities once
+            for sj in sj_ids:
+                sj_i = _as_int(sj)
+                if sj_i is None:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_sj WHERE id_sj=%s LIMIT 1;", sj_i, f"SU not found: {sj_i}")
+
+            for p in polygons:
+                p = (p or "").strip()
+                if not p:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_polygons WHERE polygon_name=%s LIMIT 1;", p, f"Polygon not found: {p}")
+
+            for s in sections:
+                s_i = _as_int(s)
+                if s_i is None:
+                    continue
+                _assert_exists("SELECT 1 FROM tab_section WHERE id_section=%s LIMIT 1;", s_i, f"Section not found: {s_i}")
+
             for pid in ids:
                 pid = (pid or "").strip()
                 if not pid:
                     continue
 
-                # SU
                 for sj in sj_ids:
                     sj_i = _as_int(sj)
                     if sj_i is None:
@@ -467,7 +528,6 @@ def bulk_photograms():
                     else:
                         cur.execute(unlink_photogram_sj_sql(), (pid, sj_i))
 
-                # polygon
                 for p in polygons:
                     p = (p or "").strip()
                     if not p:
@@ -477,7 +537,6 @@ def bulk_photograms():
                     else:
                         cur.execute(unlink_photogram_polygon_sql(), (p, pid))
 
-                # section
                 for s in sections:
                     s_i = _as_int(s)
                     if s_i is None:
@@ -510,7 +569,7 @@ def api_detail(id_photogram: str):
                 return jsonify({"error": "not found"}), 404
 
             cur.execute(select_photogram_links_sql(), (pid,))
-            links = cur.fetchone()  # arrays
+            links = cur.fetchone()
 
             cur.execute(select_photogram_geopts_ranges_sql(), (pid,))
             ranges = cur.fetchall()
@@ -556,7 +615,6 @@ def edit_photogram(id_photogram: str):
     sections = request.form.getlist("ref_section")
     ranges = _read_range_pairs(request.form, "geopt_from[]", "geopt_to[]")
 
-    # replacement file optional
     repl = request.files.get("replace_file")
     replace = bool(repl and repl.filename)
 
@@ -575,24 +633,18 @@ def edit_photogram(id_photogram: str):
                     flash("Photogram not found.", "danger")
                     return redirect(url_for("photograms.photograms"))
 
-                # if replace: store new file first to temp final, validate, checksum, then swap after commit
                 new_mime = None
                 new_size = None
                 new_checksum = None
 
                 if replace:
-                    # temp store
                     tmp_path, _ = save_to_uploads(Config.UPLOAD_FOLDER, repl)
-
-                    # validate name of upload file only by extension/mime; photogram ID stays same
                     ext = repl.filename.rsplit(".", 1)[-1].lower() if "." in repl.filename else ""
                     validate_extension(ext, Config.ALLOWED_EXTENSIONS)
 
-                    # move temp upload to a temp-final path in same folder
                     tmp_final_path = final_path + ".tmp_replace"
                     tmp_thumb_path = thumb_path + ".tmp_replace"
 
-                    # ensure no leftovers
                     try:
                         if os.path.exists(tmp_final_path):
                             os.remove(tmp_final_path)
@@ -609,18 +661,15 @@ def edit_photogram(id_photogram: str):
                     new_checksum = sha256_file(tmp_final_path)
                     new_size = os.path.getsize(tmp_final_path)
 
-                    # reject duplicate content
                     cur.execute(photogram_checksum_exists_sql(), (new_checksum,))
                     if cur.fetchone():
                         raise ValueError("Duplicate content (checksum already exists).")
 
-                    # generate thumb for tmp file (best-effort)
                     try:
                         make_thumbnail(tmp_final_path, tmp_thumb_path, Config.THUMB_MAX_SIDE)
                     except Exception:
                         tmp_thumb_path = None
 
-                # update main row (if not replace, keep existing file fields)
                 if not replace:
                     cur.execute("SELECT mime_type, file_size, checksum_sha256 FROM tab_photograms WHERE id_photogram=%s", (pid,))
                     old_mime, old_size, old_checksum = cur.fetchone()
@@ -641,7 +690,6 @@ def edit_photogram(id_photogram: str):
                     ),
                 )
 
-                # reset links
                 cur.execute("DELETE FROM tabaid_photogram_sj WHERE ref_photogram=%s", (pid,))
                 cur.execute("DELETE FROM tabaid_polygon_photograms WHERE ref_photogram=%s", (pid,))
                 cur.execute("DELETE FROM tabaid_section_photograms WHERE ref_photogram=%s", (pid,))
@@ -669,22 +717,18 @@ def edit_photogram(id_photogram: str):
 
             conn.commit()
 
-        # swap files after DB commit
         if replace and tmp_final_path:
-            # replace original
             try:
                 os.replace(tmp_final_path, final_path)
             finally:
                 tmp_final_path = None
 
-            # replace thumb if we created it
             if tmp_thumb_path and os.path.exists(tmp_thumb_path):
                 try:
                     os.replace(tmp_thumb_path, thumb_path)
                 finally:
                     tmp_thumb_path = None
             else:
-                # regenerate thumb best-effort
                 try:
                     make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
                 except Exception:
@@ -696,7 +740,6 @@ def edit_photogram(id_photogram: str):
         logger.warning(f"[{selected_db}] photogram edit failed {pid}: {e}")
         flash(f"Edit failed: {e}", "danger")
 
-        # cleanup temp replace files
         try:
             if tmp_final_path and os.path.exists(tmp_final_path):
                 os.remove(tmp_final_path)
@@ -733,7 +776,6 @@ def delete_photogram(id_photogram: str):
                 cur.execute(delete_photogram_sql(), (pid,))
             conn.commit()
 
-        # delete files
         try:
             delete_media_files(final_path, thumb_path)
         except Exception:
@@ -749,12 +791,11 @@ def delete_photogram(id_photogram: str):
 
 
 # ---------------------------------------
-# FILE SERVE (same pattern as photos)
+# FILE SERVE
 # ---------------------------------------
 @photograms_bp.get("/photograms/file/<path:id_photogram>")
 @require_selected_db
 def serve_photogram_file(id_photogram: str):
-    # implement same as photos.serve_photo_file (send_from_directory with safe path)
     from flask import send_from_directory
 
     selected_db = session["selected_db"]
@@ -777,8 +818,7 @@ def serve_photogram_thumb(id_photogram: str):
 
 
 # ---------------------------------------
-# SEARCH endpoints for SearchSelect
-# returns {results:[{id,text}], page, ...}
+# SEARCH endpoints (SearchSelect)
 # ---------------------------------------
 def _api_search(selected_db: str, sql: str, q: str):
     q = (q or "").strip()
