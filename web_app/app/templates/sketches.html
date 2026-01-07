@@ -1,0 +1,523 @@
+{# templates/sketches.html #}
+{% extends "base.html" %}
+{% block title %}Sketches{% endblock %}
+
+{% block content %}
+<div class="alert alert-info" role="alert">
+  You are working with database <strong>{{ selected_db }}</strong>.
+</div>
+
+<div class="container mt-3">
+
+<!-- SECTION 1: UPLOAD -->
+<div class="p-3 rounded-3 border bg-body-tertiary mb-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 d-flex align-items-center gap-2">
+      Upload sketches
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="modal"
+              data-bs-target="#helpSketchesUpload"
+              title="Help">?</button>
+    </h4>
+  </div>
+
+  <form method="post"
+        action="{{ url_for('sketches.upload_sketches') }}"
+        enctype="multipart/form-data"
+        id="sketchesUploadForm">
+
+    <div class="row g-3">
+      <!-- LEFT: metadata -->
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 bg-light h-100">
+          <div class="fw-semibold mb-2">Sketch metadata</div>
+
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label">Files</label>
+              <input type="file"
+                     class="form-control"
+                     name="files"
+                     accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
+                     required>
+              <div id="extraFiles" class="mt-2"></div>
+              <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnAddFile">
+                + add more
+              </button>
+              <div class="form-text">All files will be uploaded with the same properties and links.</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Sketch type</label>
+              <select class="form-select" name="sketch_typ" required>
+                <option value="" selected disabled>-- select --</option>
+                {% for t in sketch_typ_choices %}
+                  <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Author</label>
+              <div class="search-select"
+                   data-mode="single"
+                   data-endpoint="{{ url_for('sketches.api_search_authors') }}"
+                   data-hidden-name="author"
+                   data-placeholder="Type to search author email..."></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Date</label>
+              <input type="date" class="form-control" name="datum">
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Notes</label>
+              <input type="text" class="form-control" name="notes" placeholder="optional">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: links -->
+      <div class="col-lg-6">
+        <div class="border rounded-3 p-3 bg-white h-100">
+          <div class="fw-semibold mb-2">
+            Links <span class="text-muted fw-normal">(optional, multi)</span>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label">SUs</label>
+              <div class="search-select"
+                   data-mode="multi"
+                   data-endpoint="{{ url_for('sketches.api_search_sj') }}"
+                   data-hidden-name="ref_sj"
+                   data-placeholder="Type to search SU..."></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Polygons</label>
+              <div class="search-select"
+                   data-mode="multi"
+                   data-endpoint="{{ url_for('sketches.api_search_polygons') }}"
+                   data-hidden-name="ref_polygon"
+                   data-placeholder="Type to search polygon..."></div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Sections</label>
+              <div class="search-select"
+                   data-mode="multi"
+                   data-endpoint="{{ url_for('sketches.api_search_sections') }}"
+                   data-hidden-name="ref_section"
+                   data-placeholder="Type to search section..."></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Finds</label>
+              <div class="search-select"
+                   data-mode="multi"
+                   data-endpoint="{{ url_for('sketches.api_search_finds') }}"
+                   data-hidden-name="ref_find"
+                   data-placeholder="Type to search find..."></div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Samples</label>
+              <div class="search-select"
+                   data-mode="multi"
+                   data-endpoint="{{ url_for('sketches.api_search_samples') }}"
+                   data-hidden-name="ref_sample"
+                   data-placeholder="Type to search sample..."></div>
+            </div>
+          </div>
+
+          <div class="form-text mt-2">If a field is empty, no link is stored.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Upload</button>
+    </div>
+  </form>
+</div>
+
+
+  <!-- SECTION 2: GALLERY + BULK -->
+  <div class="p-3 rounded-3 border bg-white mb-3">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <h4 class="mb-0">Sketches gallery</h4>
+      <small class="text-muted">Page {{ page }}</small>
+    </div>
+
+    <form method="post" action="{{ url_for('sketches.bulk_sketches') }}" id="bulkForm" class="mb-3">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Select all</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">Clear</button>
+
+        <select class="form-select form-select-sm" name="action" style="width: 200px;" required>
+          <option value="" selected disabled>-- bulk action --</option>
+          <option value="add_links">Add links</option>
+          <option value="remove_links">Remove links</option>
+        </select>
+
+        <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_sj') }}" data-hidden-name="ref_sj" data-placeholder="Bulk: SU"></div>
+        <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_polygons') }}" data-hidden-name="ref_polygon" data-placeholder="Bulk: Polygon"></div>
+        <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_sections') }}" data-hidden-name="ref_section" data-placeholder="Bulk: Section"></div>
+        <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_finds') }}" data-hidden-name="ref_find" data-placeholder="Bulk: Find"></div>
+        <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_samples') }}" data-hidden-name="ref_sample" data-placeholder="Bulk: Sample"></div>
+
+        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+      </div>
+      <div id="bulkSelectedContainer"></div>
+    </form>
+
+    <div class="row g-3">
+      {% for g in sketches %}
+      <div class="col-sm-6 col-md-4 col-lg-3">
+        <div class="card h-100 shadow-sm">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="form-check m-0">
+              <input class="form-check-input sketch-check" type="checkbox" value="{{ g.id_sketch }}">
+            </div>
+            <span class="small text-muted">{{ g.sketch_typ }}</span>
+          </div>
+
+          <a href="{{ url_for('sketches.serve_sketch_file', id_sketch=g.id_sketch) }}" target="_blank">
+            <img class="card-img-top"
+                 src="{{ url_for('sketches.serve_sketch_thumb', id_sketch=g.id_sketch) }}"
+                 onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;p-3 text-muted small&quot;>No thumbnail</div>');"
+                 alt="{{ g.id_sketch }}">
+          </a>
+
+          <div class="card-body">
+            <div class="small text-muted mb-1">{{ g.id_sketch }}</div>
+            <div class="small mb-1"><span class="text-muted">Author:</span> {{ g.author }}</div>
+            {% if g.datum %}
+              <div class="small mb-2"><span class="text-muted">Date:</span> {{ g.datum }}</div>
+            {% endif %}
+
+            <div class="d-flex flex-wrap gap-1 mb-2">
+              <span class="badge text-bg-light">
+                Links:
+                SUs({{ g.link_counts.sj }}),
+                P({{ g.link_counts.polygon }}),
+                S({{ g.link_counts.section }}),
+                F({{ g.link_counts.find }}),
+                Sa({{ g.link_counts.sample }})
+              </span>
+            </div>
+
+            {% if g.notes %}
+              <div class="small">{{ g.notes }}</div>
+            {% endif %}
+          </div>
+
+          <div class="card-footer d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary btnEdit" data-id="{{ g.id_sketch }}">Edit</button>
+            <button type="button" class="btn btn-sm btn-outline-danger btnDelete" data-id="{{ g.id_sketch }}">Delete</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <div class="text-muted small">Page {{ page }}</div>
+      <div class="d-flex gap-2">
+        {% if page > 1 %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sketches.sketches', page=page-1, per_page=per_page) }}">Prev</a>
+        {% endif %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('sketches.sketches', page=page+1, per_page=per_page) }}">Next</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: STATS + FILTER -->
+  <div class="p-3 rounded-3 border bg-light mb-3">
+    <h4 class="mb-3">Stats & filter</h4>
+
+    <div class="row g-3">
+      <div class="col-lg-4">
+        <div class="p-3 border rounded-3 bg-white h-100 shadow-sm">
+          <div class="text-muted small">Total sketches</div>
+          <div class="fs-4">{{ stats.total_cnt }}</div>
+          <div class="text-muted small">Total size: {{ stats.total_bytes_h }}</div>
+          <div class="text-muted small">Orphans (no links): {{ stats.orphan_cnt }}</div>
+
+          <hr class="my-3">
+
+          <div class="text-muted small mb-2">By sketch type</div>
+          <div class="d-flex flex-wrap gap-2">
+            {% for t, c in stats.by_type %}
+              <span class="badge text-bg-secondary">{{ t }}: {{ c }}</span>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-8">
+        <div class="p-3 border rounded-3 bg-white shadow-sm">
+          <div class="fw-semibold mb-2">Filter</div>
+
+          <form method="get" action="{{ url_for('sketches.sketches') }}">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="p-3 border rounded-3 bg-light h-100">
+                  <div class="fw-semibold mb-2">Basic</div>
+
+                  <div class="mb-2">
+                    <label class="form-label">Sketch type</label>
+                    <select name="sketch_typ" class="form-select" multiple>
+                      {% for t in sketch_typ_choices %}
+                        <option value="{{ t }}" {% if t in filters.sketch_typ %}selected{% endif %}>{{ t }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="mb-2">
+                    <label class="form-label">Author</label>
+                    <div class="search-select"
+                         data-mode="single"
+                         data-endpoint="{{ url_for('sketches.api_search_authors') }}"
+                         data-hidden-name="author"
+                         data-placeholder="Filter: author email"></div>
+
+                    {% if filters.author %}
+                      <input type="hidden" class="prefill" data-target="author" value="{{ filters.author }}">
+                    {% endif %}
+                  </div>
+
+
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label">Date from</label>
+                      <input type="date" class="form-control" name="date_from" value="{{ filters.date_from or '' }}">
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label">Date to</label>
+                      <input type="date" class="form-control" name="date_to" value="{{ filters.date_to or '' }}">
+                    </div>
+                  </div>
+
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" name="orphan_only" value="1" id="chkOrphan"
+                           {% if filters.orphan_only %}checked{% endif %}>
+                    <label class="form-check-label" for="chkOrphan">Orphans only</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="p-3 border rounded-3 bg-light h-100">
+                  <div class="fw-semibold mb-2">Entities</div>
+
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label">SUs</label>
+                      <div class="search-select"
+                        data-mode="multi"
+                        data-endpoint="{{ url_for('sketches.api_search_sj') }}"
+                        data-hidden-name="ref_sj"
+                        data-placeholder="Type to search SJ..."></div>
+                      {% for v in (filters.ref_sj or []) %}
+                        <input type="hidden" class="prefill" data-target="ref_sj" value="{{ v }}">
+                      {% endfor %}
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label">Polygons</label>
+                      <div class="search-select"
+                        data-mode="multi"
+                        data-endpoint="{{ url_for('sketches.api_search_polygons') }}"
+                        data-hidden-name="ref_polygon"
+                        data-placeholder="Type to search polygon..."></div>
+                      {% for v in (filters.ref_polygon or []) %}
+                        <input type="hidden" class="prefill" data-target="ref_polygon" value="{{ v }}">
+                      {% endfor %}
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label">Sections</label>
+                      <div class="search-select"
+                        data-mode="multi"
+                        data-endpoint="{{ url_for('sketches.api_search_sections') }}"
+                        data-hidden-name="ref_section"
+                        data-placeholder="Type to search section..."></div>
+                      {% for v in (filters.ref_section or []) %}
+                        <input type="hidden" class="prefill" data-target="ref_section" value="{{ v }}">
+                      {% endfor %}
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label">Finds</label>
+                      <div class="search-select"
+                        data-mode="multi"
+                        data-endpoint="{{ url_for('sketches.api_search_finds') }}"
+                        data-hidden-name="ref_find"
+                        data-placeholder="Type to search find..."></div>
+                      {% for v in (filters.ref_find or []) %}
+                        <input type="hidden" class="prefill" data-target="ref_find" value="{{ v }}">
+                      {% endfor %}
+                    </div>
+
+                    <div class="col-12">
+                      <label class="form-label">Samples</label>
+                      <div class="search-select"
+                        data-mode="multi"
+                        data-endpoint="{{ url_for('sketches.api_search_samples') }}"
+                        data-hidden-name="ref_sample"
+                        data-placeholder="Type to search sample..."></div>
+                      {% for v in (filters.ref_sample or []) %}
+                        <input type="hidden" class="prefill" data-target="ref_sample" value="{{ v }}">
+                      {% endfor %}
+                    </div>
+                 </div>
+               </div>
+              
+              </div>
+
+
+              <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Apply filter</button>
+                <a class="btn btn-outline-secondary" href="{{ url_for('sketches.sketches') }}">Reset</a>
+              </div>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal fade" id="modalEdit" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <form method="post" class="modal-content" id="editForm" enctype="multipart/form-data">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit sketch</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-2 text-muted small" id="editId"></div>
+
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">Sketch type</label>
+            <select class="form-select" name="sketch_typ" required>
+              {% for t in sketch_typ_choices %}
+                <option value="{{ t }}">{{ t }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Author</label>
+            <div class="search-select"
+                 data-mode="single"
+                 data-endpoint="{{ url_for('sketches.api_search_authors') }}"
+                 data-hidden-name="author"
+                 data-placeholder="Type to search author..."></div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-control" name="datum">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <input type="text" class="form-control" name="notes">
+          </div>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label">SUs</label>
+            <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_sj') }}" data-hidden-name="ref_sj" data-placeholder="Search SU..."></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Polygons</label>
+            <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_polygons') }}" data-hidden-name="ref_polygon" data-placeholder="Search polygon..."></div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Sections</label>
+            <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_sections') }}" data-hidden-name="ref_section" data-placeholder="Search section..."></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Finds</label>
+            <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_finds') }}" data-hidden-name="ref_find" data-placeholder="Search find..."></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Samples</label>
+            <div class="search-select" data-mode="multi" data-endpoint="{{ url_for('sketches.api_search_samples') }}" data-hidden-name="ref_sample" data-placeholder="Search sample..."></div>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label">Replace file (optional)</label>
+          <input type="file" name="replace_file" class="form-control" accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf">
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal fade" id="modalDelete" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="post" class="modal-content" id="deleteForm">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete sketch</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">Delete sketch:</p>
+        <div class="fw-semibold" id="deleteId"></div>
+        <div class="text-muted small mt-2">Deletes DB record, links and files on disk.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal fade" id="helpSketchesUpload" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help: Sketches</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% include 'help/sketches_help.html' %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/sketches.js') }}"></script>
+{% endblock %}

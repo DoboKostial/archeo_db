@@ -1738,47 +1738,149 @@ def unlink_sketch_sample_sql():
     return "DELETE FROM tabaid_samples_sketches WHERE ref_sample=%s AND ref_sketch=%s;"
 
 
-# --- list/detail/links/stats ---
-def select_sketches_page_sql(*, orphan_only: bool, has_typ: bool, has_author: bool, has_df: bool, has_dt: bool):
+# --- SKETCHES: page query with optional filters incl. entity links ---
+def select_sketches_page_sql(
+    *,
+    orphan_only: bool,
+    has_typ: bool,
+    has_author: bool,
+    has_df: bool,
+    has_dt: bool,
+    has_sj: bool,
+    has_polygon: bool,
+    has_section: bool,
+    has_find: bool,
+    has_sample: bool,
+) -> str:
+    """
+    Returns:
+      (id_sketch, sketch_typ, author, datum, notes, link_counts_json)
+    Params dict:
+      typ_list, author, date_from, date_to,
+      sj_list, polygon_list, section_list, find_list, sample_list,
+      limit, offset
+    """
     where = ["1=1"]
+
+    if has_typ:
+        where.append("s.sketch_typ = ANY(%(typ_list)s)")
+    if has_author:
+        where.append("s.author = %(author)s")
+    if has_df:
+        where.append("s.datum >= %(date_from)s")
+    if has_dt:
+        where.append("s.datum <= %(date_to)s")
+
+    if has_sj:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_sj_sketch x
+            WHERE x.ref_sketch = s.id_sketch
+              AND x.ref_sj = ANY(%(sj_list)s)
+          )
+        """)
+
+    if has_polygon:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_polygon_sketches x
+            WHERE x.ref_sketch = s.id_sketch
+              AND x.ref_polygon = ANY(%(polygon_list)s)
+          )
+        """)
+
+    if has_section:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_section_sketches x
+            WHERE x.ref_sketch = s.id_sketch
+              AND x.ref_section = ANY(%(section_list)s)
+          )
+        """)
+
+    if has_find:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_finds_sketches x
+            WHERE x.ref_sketch = s.id_sketch
+              AND x.ref_find = ANY(%(find_list)s)
+          )
+        """)
+
+    if has_sample:
+        where.append("""
+          EXISTS (
+            SELECT 1
+            FROM tabaid_samples_sketches x
+            WHERE x.ref_sketch = s.id_sketch
+              AND x.ref_sample = ANY(%(sample_list)s)
+          )
+        """)
+
     if orphan_only:
         where.append("""
-          NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch s WHERE s.ref_sketch=k.id_sketch)
-          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_sketches p WHERE p.ref_sketch=k.id_sketch)
-          AND NOT EXISTS (SELECT 1 FROM tabaid_section_sketches sc WHERE sc.ref_sketch=k.id_sketch)
-          AND NOT EXISTS (SELECT 1 FROM tabaid_finds_sketches f WHERE f.ref_sketch=k.id_sketch)
-          AND NOT EXISTS (SELECT 1 FROM tabaid_samples_sketches sa WHERE sa.ref_sketch=k.id_sketch)
+          COALESCE(sj.cnt, 0) = 0
+          AND COALESCE(poly.cnt, 0) = 0
+          AND COALESCE(sec.cnt, 0) = 0
+          AND COALESCE(fd.cnt, 0) = 0
+          AND COALESCE(sp.cnt, 0) = 0
         """)
-    if has_typ:
-        where.append("k.sketch_typ = ANY(%(typ_list)s)")
-    if has_author:
-        where.append("k.author = %(author)s")
-    if has_df:
-        where.append("k.datum >= %(date_from)s::date")
-    if has_dt:
-        where.append("k.datum <= %(date_to)s::date")
-
-    where_sql = " AND ".join(f"({w})" for w in where)
 
     return f"""
       SELECT
-        k.id_sketch,
-        k.sketch_typ,
-        k.author,
-        k.datum,
-        k.notes,
-        json_build_object(
-          'sj',      (SELECT COUNT(*) FROM tabaid_sj_sketch s WHERE s.ref_sketch=k.id_sketch),
-          'polygon', (SELECT COUNT(*) FROM tabaid_polygon_sketches p WHERE p.ref_sketch=k.id_sketch),
-          'section', (SELECT COUNT(*) FROM tabaid_section_sketches sc WHERE sc.ref_sketch=k.id_sketch),
-          'find',    (SELECT COUNT(*) FROM tabaid_finds_sketches f WHERE f.ref_sketch=k.id_sketch),
-          'sample',  (SELECT COUNT(*) FROM tabaid_samples_sketches sa WHERE sa.ref_sketch=k.id_sketch)
+        s.id_sketch,
+        s.sketch_typ,
+        s.author,
+        s.datum,
+        s.notes,
+        jsonb_build_object(
+          'sj',     COALESCE(sj.cnt, 0),
+          'polygon',COALESCE(poly.cnt, 0),
+          'section',COALESCE(sec.cnt, 0),
+          'find',   COALESCE(fd.cnt, 0),
+          'sample', COALESCE(sp.cnt, 0)
         ) AS link_counts
-      FROM tab_sketches k
-      WHERE {where_sql}
-      ORDER BY k.id_sketch DESC
+      FROM tab_sketches s
+
+      LEFT JOIN (
+        SELECT ref_sketch, COUNT(*)::int AS cnt
+        FROM tabaid_sj_sketch
+        GROUP BY ref_sketch
+      ) sj ON sj.ref_sketch = s.id_sketch
+
+      LEFT JOIN (
+        SELECT ref_sketch, COUNT(*)::int AS cnt
+        FROM tabaid_polygon_sketches
+        GROUP BY ref_sketch
+      ) poly ON poly.ref_sketch = s.id_sketch
+
+      LEFT JOIN (
+        SELECT ref_sketch, COUNT(*)::int AS cnt
+        FROM tabaid_section_sketches
+        GROUP BY ref_sketch
+      ) sec ON sec.ref_sketch = s.id_sketch
+
+      LEFT JOIN (
+        SELECT ref_sketch, COUNT(*)::int AS cnt
+        FROM tabaid_finds_sketches
+        GROUP BY ref_sketch
+      ) fd ON fd.ref_sketch = s.id_sketch
+
+      LEFT JOIN (
+        SELECT ref_sketch, COUNT(*)::int AS cnt
+        FROM tabaid_samples_sketches
+        GROUP BY ref_sketch
+      ) sp ON sp.ref_sketch = s.id_sketch
+
+      WHERE {" AND ".join(where)}
+      ORDER BY s.datum DESC NULLS LAST, s.id_sketch DESC
       LIMIT %(limit)s OFFSET %(offset)s;
     """
+
 
 def select_sketch_detail_sql():
     return """
