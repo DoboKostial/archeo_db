@@ -584,6 +584,10 @@ def upload_polygon_media(media_type):
         datum = (request.form.get("datum") or "").strip() or None
     else:  # photograms
         photogram_typ = (request.form.get("photogram_typ") or "").strip()
+        ref_sketch = (request.form.get("ref_sketch") or "").strip() or None
+        ref_photo_from = (request.form.get("ref_photo_from") or "").strip() or None
+        ref_photo_to = (request.form.get("ref_photo_to") or "").strip() or None
+
 
     ok, failed = 0, []
 
@@ -667,16 +671,19 @@ def upload_polygon_media(media_type):
                     )
                     cur2.execute(link_polygon_sketch_sql(), (polygon_name, pk_name))
 
-                else:  # photograms (ref_sketch ignored for now)
+                else:  # photograms
                     cur2.execute(
                         insert_photogram_sql(),
                         (
                             pk_name,
                             photogram_typ or "",
-                            notes,
-                            mime,
+                            ref_sketch,          # ref_sketch
+                            notes,               # notes
+                            mime,                # mime_type
                             os.path.getsize(final_path),
                             checksum,
+                            ref_photo_from,      # ref_photo_from
+                            ref_photo_to,        # ref_photo_to
                         )
                     )
                     cur2.execute(link_polygon_photogram_sql(), (polygon_name, pk_name))

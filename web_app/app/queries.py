@@ -142,6 +142,7 @@ def get_enabled_user_name_by_email(conn, email):
 
 # -------------------------------------------------------------------
 # queries for data manipulation in terrain DBs
+# SQLs for SUs (stratigraphic units)
 # -------------------------------------------------------------------
 
 def count_sj_by_type(sj_typ):
@@ -193,6 +194,45 @@ def fetch_stratigraphy_relations(conn):
     with conn.cursor() as cur:
         cur.execute(sql)
         return cur.fetchall()
+
+def list_polygon_names_sql():
+    return "SELECT polygon_name FROM tab_polygons ORDER BY polygon_name;"
+
+
+def list_su_for_media_select_sql():
+    """
+    Used for Attach graphic documentation section.
+    Keep it simple: show last SUs first.
+    """
+    return """
+        SELECT id_sj, COALESCE(sj_typ, ''), COALESCE(description, '')
+        FROM tab_sj
+        ORDER BY id_sj DESC;
+    """
+
+
+def list_last_su_sql(limit=10):
+    return f"""
+        SELECT id_sj, COALESCE(sj_typ, ''), COALESCE(description, ''), recorded, COALESCE(author,'')
+        FROM tab_sj
+        ORDER BY id_sj DESC
+        LIMIT {int(limit)};
+    """
+
+
+def insert_sj_polygon_link_sql():
+    """
+    Idempotent insert (M:N).
+    """
+    return """
+        INSERT INTO tabaid_sj_polygon (ref_sj, ref_polygon)
+        VALUES (%s, %s)
+        ON CONFLICT (ref_sj, ref_polygon) DO NOTHING;
+    """
+
+
+def delete_su_sql():
+    return "DELETE FROM tab_sj WHERE id_sj=%s;"
 
 
 
@@ -406,26 +446,6 @@ def find_polygons_srid_sql():
     """
 
 
-#def polygons_geojson_top_bottom_sql():
-#    """
-#    Returns (polygon_name, top_geojson, bottom_geojson) for all polygons.
-#    Geoms are forced to 2D for shapefile.
-#    """
-#    return """
-#        SELECT
-#            polygon_name,
-#            CASE
-#              WHEN geom_top IS NULL THEN NULL
-#              ELSE ST_AsGeoJSON(ST_Force2D(geom_top))
-#            END AS top_gj,
-#            CASE
-#              WHEN geom_bottom IS NULL THEN NULL
-#              ELSE ST_AsGeoJSON(ST_Force2D(geom_bottom))
-#            END AS bottom_gj
-#        FROM tab_polygons
-#        WHERE geom_top IS NOT NULL OR geom_bottom IS NOT NULL
-#        ORDER BY polygon_name;
-#    """
 
 # parent a children are important when deleting polygons - children are "reparented" to grandfather
 def get_polygon_parent_sql():

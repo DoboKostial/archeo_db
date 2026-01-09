@@ -42,13 +42,6 @@ SET ROLE app_terrain_db;
 -- GLOSSARIES
 ---
 
--- gloss_docu_typ definition
-CREATE TABLE gloss_docu_typ (
-	docu_typ VARCHAR(60) NOT NULL,
-	description VARCHAR(200) NULL,
-	CONSTRAINT gloss_docu_typ_pk PRIMARY KEY (docu_typ)
-);
-
 -- gloss_object_type definition - glossary for archaeological objects
 CREATE TABLE gloss_object_type (
 	object_typ VARCHAR(100) NOT NULL,
