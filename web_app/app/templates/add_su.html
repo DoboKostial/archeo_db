@@ -13,7 +13,19 @@
        1) NEW STRATIGRAPHIC UNIT (3 columns)
        =========================================================== -->
   <fieldset class="border p-3 rounded-3 bg-primary-subtle">
-    <legend class="w-auto px-2">New stratigraphic unit</legend>
+    
+
+    <!-- Title + help button aligned in one row -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+      <h4 class="mb-0">New stratigraphic unit</h4>
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="modal"
+              data-bs-target="#helpNewSU"
+              title="Help">
+        ?
+      </button>
+    </div>
 
     <form method="POST" action="{{ url_for('su.add_su') }}">
       <div class="row g-3">
@@ -224,17 +236,6 @@
           <fieldset class="border p-3 rounded-3 bg-white">
             <legend class="w-auto px-2">Stratigraphic relations</legend>
 
-            <div class="mb-3">
-              <label class="form-label">Above (SU IDs)</label>
-              <div class="row g-2">
-                <div class="col-6">
-                  <input type="number" class="form-control" name="above_1" placeholder="ID" value="{{ form_data.above_1 if form_data else '' }}">
-                </div>
-                <div class="col-6">
-                  <input type="number" class="form-control" name="above_2" placeholder="ID" value="{{ form_data.above_2 if form_data else '' }}">
-                </div>
-              </div>
-            </div>
 
             <div class="mb-3">
               <label class="form-label">Below (SU IDs)</label>
@@ -248,13 +249,30 @@
               </div>
             </div>
 
+
             <div class="mb-3">
               <label class="form-label">Equal (=)</label>
               <input type="number" class="form-control" name="equal" placeholder="ID" value="{{ form_data.equal if form_data else '' }}">
             </div>
 
+
+            <div class="mb-3">
+              <label class="form-label">Above (SU IDs)</label>
+              <div class="row g-2">
+                <div class="col-6">
+                  <input type="number" class="form-control" name="above_1" placeholder="ID" value="{{ form_data.above_1 if form_data else '' }}">
+                </div>
+                <div class="col-6">
+                  <input type="number" class="form-control" name="above_2" placeholder="ID" value="{{ form_data.above_2 if form_data else '' }}">
+                </div>
+              </div>
+            </div>
+
+
+
+
             <small class="text-muted">
-              Stored exactly as entered (>, <, =). Your FK cascades will keep it consistent on delete.
+              Stored exactly as entered (>, <, =). There is no FK to tab_sj.
             </small>
           </fieldset>
         </div>
@@ -622,6 +640,30 @@
     </form>
   </div>
 </div>
+
+
+<!-- HELP MODAL: New stratigraphic unit -->
+<div class="modal fade" id="helpNewSU" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Help: New stratigraphic unit</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        {% include "help/su_help.html" %}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 
 
 <!-- External JS -->
