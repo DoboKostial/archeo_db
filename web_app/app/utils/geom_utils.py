@@ -2,17 +2,19 @@
 # helpers for geometry things
 
 #imports from standard library
-from typing import Optional
+from typing import Optional, Union
+import re
 import io, csv
 import psycopg2
 from psycopg2 import sql, errors
 # imports from app
 from app.logger import logger
 from app.database import get_terrain_connection
-
-###
-### utils functions
-###
+from app.logger import logger
+from app.queries import (
+    detect_db_srid_typmods_sql,
+    epsg_exists_in_spatial_ref_sys_sql,
+)
 
 # After new DB creation we have no SRID assigned. This function sets
 # project SRID for ALL geometry columns in the freshly created DB by
@@ -47,6 +49,52 @@ def update_geometry_srid(dbname: str, target_srid: int, schema: Optional[str] = 
     except Exception as e:
         logger.error(f"Error while updating SRID in DB '{dbname}': {e}")
         raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def detect_db_srid(dbname: str) -> Optional[Union[int, str]]:
+    """
+    Detect SRID for a terrain DB by inspecting typmod SRIDs of geometry columns.
+
+    Returns:
+      - int SRID if all geometry columns share the same SRID
+      - "mixed" if multiple SRIDs are found
+      - None if no geometry columns with SRID typmod are found
+    """
+    conn = get_terrain_connection(dbname)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(detect_db_srid_typmods_sql())
+            srids = [r[0] for r in cur.fetchall()]
+
+        if not srids:
+            return None
+        if len(srids) == 1:
+            return int(srids[0])
+        return "mixed"
+
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def epsg_exists_in_template_spatial_ref_sys(epsg_int: int) -> bool:
+    """
+    Validate EPSG exists in terrain_db_template.spatial_ref_sys.
+    """
+    if not isinstance(epsg_int, int) or epsg_int <= 0:
+        return False
+
+    conn = get_terrain_connection("terrain_db_template")
+    try:
+        with conn.cursor() as cur:
+            cur.execute(epsg_exists_in_spatial_ref_sys_sql(), (epsg_int,))
+            return cur.fetchone() is not None
     finally:
         try:
             conn.close()

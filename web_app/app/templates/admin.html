@@ -3,18 +3,18 @@
 
 <h4>User management</h4>
 <table class="table table-striped">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Last login</th>
-            <th>Action</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for name, mail, role, enabled, last_login in users %}
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th>Last login</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for name, mail, role, enabled, last_login in users %}
       <tr>
         <td>{{ name }}</td>
         <td>{{ mail }}</td>
@@ -24,19 +24,19 @@
         <td>
           {% if enabled %}
             <form method="POST" action="{{ url_for('admin.disable_user') }}">
-                <input type="hidden" name="mail" value="{{ mail }}">
-                <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
+              <input type="hidden" name="mail" value="{{ mail }}">
+              <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
             </form>
           {% else %}
             <form method="POST" action="{{ url_for('admin.enable_user') }}">
-                <input type="hidden" name="mail" value="{{ mail }}">
-                <button type="submit" class="btn btn-sm btn-success">Activate</button>
+              <input type="hidden" name="mail" value="{{ mail }}">
+              <button type="submit" class="btn btn-sm btn-success">Activate</button>
             </form>
           {% endif %}
         </td>
       </tr>
-        {% endfor %}
-    </tbody>
+    {% endfor %}
+  </tbody>
 </table>
 
 <!-- pagination controls -->
@@ -88,31 +88,45 @@
 
 <h3>Terrain DB management</h3>
 <table class="table table-bordered">
-    <thead>
-        <tr>
-            <th>DB name</th>
-            <th>DB size</th>
-            <th>DB Action</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for dbname, size in terrain_dbs %}
-        <tr>
-            <td>{{ dbname }}</td>
-            <td>{{ (size / 1024 / 1024) | round(2) }} MB</td>
-            <td>
-                <form method="POST" action="{{ url_for('admin.backup_database') }}" style="display: inline;">
-                    <input type="hidden" name="dbname" value="{{ dbname }}">
-                    <button type="submit" class="btn btn-sm btn-secondary">Backup</button>
-                </form>
-                <form method="POST" action="{{ url_for('admin.delete_database') }}" style="display: inline;" onsubmit="return confirm('Are You sure to delete DB {{ dbname }}? This is NOT REVERTIBLE');">
-                    <input type="hidden" name="dbname" value="{{ dbname }}">
-                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
+  <thead>
+    <tr>
+      <th>DB name</th>
+      <th>DB size</th>
+      <th>SRID/EPSG</th>
+      <th>DB Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for dbname, size, srid in terrain_dbs %}
+      <tr>
+        <td>{{ dbname }}</td>
+        <td>{{ (size / 1024 / 1024) | round(2) }} MB</td>
+        <td>
+          {% if srid == 'mixed' %}
+            <span class="badge text-bg-warning">mixed</span>
+          {% elif srid %}
+            EPSG:{{ srid }}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <form method="POST" action="{{ url_for('admin.backup_database') }}" style="display: inline;">
+            <input type="hidden" name="dbname" value="{{ dbname }}">
+            <button type="submit" class="btn btn-sm btn-secondary">Backup</button>
+          </form>
+
+          <form method="POST"
+                action="{{ url_for('admin.delete_database') }}"
+                style="display: inline;"
+                onsubmit="return confirm('Are You sure to delete DB {{ dbname }}? This is NOT REVERTIBLE');">
+            <input type="hidden" name="dbname" value="{{ dbname }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
 </table>
 
 <h4>Create new terrain database</h4>
@@ -121,20 +135,155 @@
     <div class="col-md-6">
       <input type="text" name="dbname" class="form-control" placeholder="E.g. 004_Troy" required>
     </div>
+
     <div class="col-md-4">
-      <select name="epsg" class="form-select" required>
+      <select name="epsg" id="epsgSelect" class="form-select" required>
         <option value="5514">S-JTSK / Křovák (EPSG:5514)</option>
         <option value="4326">WGS 84 (EPSG:4326)</option>
-        <option value="3857">Web Mercator (EPSG:3857)</option>
         <option value="32633">UTM zone 33N (EPSG:32633)</option>
+        <option value="32633">UTM zone 32N (EPSG:32633)</option>
+        <option value="3857">Web Mercator (EPSG:3857)</option>
         <option value="3035">ETRS89 / LAEA Europe (EPSG:3035)</option>
-        <option value="32633">UTM zone 43N (EPSG:32643)</option>
+        <option value="32643">UTM zone 43N (EPSG:32643)</option>
+        <option value="other">Other…</option>
       </select>
     </div>
+
     <div class="col-md-2">
       <button type="submit" class="btn btn-success">Create database</button>
     </div>
   </div>
 </form>
+
+<!-- SRID SEARCH MODAL -->
+<div class="modal fade" id="sridSearchModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Select SRID (search in spatial_ref_sys)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-2">
+          <input id="sridSearchInput"
+                 type="text"
+                 class="form-control"
+                 placeholder="Type EPSG code (e.g. 5514) or name (e.g. Krovak, UTM, WGS)..."
+                 autocomplete="off">
+          <div class="form-text">
+            Search is performed in <code>terrain_db_template.spatial_ref_sys</code>.
+          </div>
+        </div>
+
+        <div id="sridSearchStatus" class="text-muted small mb-2"></div>
+        <div class="list-group" id="sridResults"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+window.addEventListener('load', function () {
+  const epsgSelect = document.getElementById('epsgSelect');
+  const modalEl = document.getElementById('sridSearchModal');
+  const inputEl = document.getElementById('sridSearchInput');
+  const statusEl = document.getElementById('sridSearchStatus');
+  const resultsEl = document.getElementById('sridResults');
+
+  if (!epsgSelect || !modalEl || !inputEl || !resultsEl) return;
+
+  if (typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+    console.error("Bootstrap JS is not loaded (bootstrap.Modal missing).");
+    return;
+  }
+
+  const modal = new bootstrap.Modal(modalEl);
+
+  function ensureOption(value, label) {
+    let opt = Array.from(epsgSelect.options).find(o => o.value === String(value));
+    if (!opt) {
+      opt = document.createElement('option');
+      opt.value = String(value);
+      opt.textContent = label || (`EPSG:${value}`);
+      const otherOpt = Array.from(epsgSelect.options).find(o => (o.value || '').toLowerCase().startsWith('other'));
+      epsgSelect.add(opt, otherOpt || null);
+    } else if (label) {
+      opt.textContent = label;
+    }
+  }
+
+  function setSelectedSrid(srid, label) {
+    ensureOption(srid, label);
+    epsgSelect.value = String(srid);
+  }
+
+  function renderResults(items) {
+    resultsEl.innerHTML = '';
+    if (!items.length) {
+      resultsEl.innerHTML = '<div class="text-muted small">No results.</div>';
+      return;
+    }
+    for (const it of items) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'list-group-item list-group-item-action';
+      btn.textContent = it.label || (`EPSG:${it.srid}`);
+      btn.addEventListener('click', () => {
+        setSelectedSrid(it.srid, it.label);
+        modal.hide();
+      });
+      resultsEl.appendChild(btn);
+    }
+  }
+
+  let t = null;
+  async function doSearch(q) {
+    const qq = (q || '').trim();
+    if (!qq) {
+      statusEl.textContent = '';
+      resultsEl.innerHTML = '';
+      return;
+    }
+    statusEl.textContent = 'Searching...';
+    try {
+      const resp = await fetch(`/admin/srid/search?q=${encodeURIComponent(qq)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      statusEl.textContent = data.length ? `Found ${data.length} result(s).` : 'No results.';
+      renderResults(data);
+    } catch (e) {
+      statusEl.textContent = 'Search failed.';
+      resultsEl.innerHTML = '';
+    }
+  }
+
+  epsgSelect.addEventListener('change', () => {
+    const v = (epsgSelect.value || '').toLowerCase();
+    if (v.startsWith('other')) {
+      // keep it invalid until user picks a real SRID
+      epsgSelect.selectedIndex = 0;
+      inputEl.value = '';
+      statusEl.textContent = '';
+      resultsEl.innerHTML = '';
+      modal.show();
+      setTimeout(() => inputEl.focus(), 150);
+    }
+  });
+
+  inputEl.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => doSearch(inputEl.value), 250);
+  });
+});
+</script>
+
 
 {% endblock %}

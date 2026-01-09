@@ -2,21 +2,63 @@
 import os, re, shutil, subprocess, jwt, psycopg2
 from zipfile import ZipFile
 
-from flask import Blueprint, request, render_template, redirect, url_for, flash, send_file
+from flask import Blueprint, request, render_template, redirect, url_for, flash, send_file, jsonify
 from werkzeug.security import generate_password_hash
+from psycopg2 import sql
 
 from config import Config
 from app.logger import logger
-from app.database import get_auth_connection, create_database_backup
-from app.queries import get_user_role, get_terrain_db_list, get_terrain_db_sizes
-from psycopg2 import sql
-
+from app.database import get_auth_connection, create_database_backup, get_terrain_connection
+from app.queries import (
+    get_user_role,
+    get_terrain_db_list,
+    get_terrain_db_sizes,
+    count_app_users_sql,
+    list_app_users_sql,
+    srid_search_exact_sql,
+    srid_search_text_sql,
+)
 from app.utils.auth import generate_random_password, send_new_account_email
 from app.utils.admin import sync_single_user_to_all_terrain_dbs, sync_single_db
-from app.utils.geom_utils import update_geometry_srid
+from app.utils.geom_utils import update_geometry_srid, detect_db_srid, epsg_exists_in_template_spatial_ref_sys
 from app.utils.decorators import archeolog_required
 
 admin_bp = Blueprint('admin', __name__)
+
+
+@admin_bp.get("/admin/srid/search")
+@archeolog_required
+def srid_search():
+    """
+    Search SRIDs in terrain_db_template.spatial_ref_sys.
+    Query param: q (code or text)
+    Returns JSON: [{"srid": 5514, "label": "EPSG:5514 — ..."}]
+    """
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
+
+    conn = get_terrain_connection("terrain_db_template")
+    try:
+        with conn.cursor() as cur:
+            if re.fullmatch(r"\d{3,6}", q):
+                cur.execute(srid_search_exact_sql(), (int(q),))
+            else:
+                like = f"%{q}%"
+                cur.execute(srid_search_text_sql(), (like, like))
+            rows = cur.fetchall()
+
+        return jsonify([{"srid": int(r[0]), "label": r[1]} for r in rows])
+
+    except Exception as e:
+        logger.error(f"SRID search error: {e}")
+        return jsonify([]), 500
+
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 # administrative endpoint enabled only if group_role 'archeolog' is logged in
@@ -55,26 +97,33 @@ def admin():
     offset = (page - 1) * per_page
 
     # the number of all users
-    cur.execute("SELECT COUNT(*) FROM app_users")
+    cur.execute(count_app_users_sql())
     total_users = cur.fetchone()[0]
     total_pages = (total_users + per_page - 1) // per_page
 
     # fetch users with limit (offset)
-    cur.execute("""
-        SELECT name, mail, group_role, enabled, last_login
-        FROM app_users
-        ORDER BY name
-        LIMIT %s OFFSET %s
-    """, (per_page, offset))
+    cur.execute(list_app_users_sql(), (per_page, offset))
     users = cur.fetchall()
 
-    # fetching all terrain DBs
+    # fetching all terrain DBs (names)
     terrain_db_names = get_terrain_db_list(conn)
 
-    # list the size of all terrain DBs
+    # list sizes
     cur.execute(get_terrain_db_sizes())
     all_sizes = cur.fetchall()
-    terrain_dbs = [(name, int(size)) for name, size in all_sizes if name in terrain_db_names]
+
+    # enrich with SRID detected from typmods
+    terrain_dbs = []
+    for name, size in all_sizes:
+        if name not in terrain_db_names:
+            continue
+        srid = None
+        try:
+            srid = detect_db_srid(name)
+        except Exception as e:
+            logger.warning(f"SRID detect failed for DB '{name}': {e}")
+            srid = None
+        terrain_dbs.append((name, int(size), srid))
 
     conn.close()
 
@@ -202,7 +251,7 @@ def enable_user():
     conn = get_auth_connection()
     cur = conn.cursor()
 
-    # Check if currrent user is archeolog
+    # Check if current user is archeolog
     cur.execute(get_user_role(), (user_email,))
     role = cur.fetchone()[0]
     if role != 'archeolog':
@@ -320,11 +369,19 @@ def create_database():
 
     try:
         epsg_int = int(epsg)
-        allowed_epsg = [5514, 5515, 4326, 32633, 3035, 32643]
-        if epsg_int not in allowed_epsg:
-            flash("Chosen EPSG is not allowed.", "danger")
+        if epsg_int <= 0:
+            flash("Invalid EPSG code.", "danger")
             return redirect('/admin')
+    except ValueError:
+        flash("EPSG must be a number (select from list or use Other... search).", "danger")
+        return redirect('/admin')
 
+    # Validate EPSG exists in template DB spatial_ref_sys
+    if not epsg_exists_in_template_spatial_ref_sys(epsg_int):
+        flash("Chosen EPSG was not found in spatial_ref_sys (template DB).", "danger")
+        return redirect('/admin')
+
+    try:
         # Creating DB from template
         conn = get_auth_connection()
         conn.autocommit = True
@@ -363,6 +420,7 @@ def create_database():
         logger.info(f"File and thumbs structure created for DB '{dbname}' at {db_dir}")
 
         flash(f"Database '{dbname}' was created with EPSG:{epsg_int} and synchronized with users.", "success")
+
     except psycopg2.errors.DuplicateDatabase:
         flash(f"Database '{dbname}' already exists!", "warning")
     except Exception as e:

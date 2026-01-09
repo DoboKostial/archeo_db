@@ -108,6 +108,68 @@ def get_user_role():
     return "SELECT group_role FROM app_users WHERE mail = %s"
 
 
+# -------------------------------------------------------------------
+# Admin + SRID helpers (auth_db + terrain_db_template + terrain DBs)
+# -------------------------------------------------------------------
+
+def count_app_users_sql():
+    return "SELECT COUNT(*) FROM app_users;"
+
+
+def list_app_users_sql():
+    return """
+        SELECT name, mail, group_role, enabled, last_login
+        FROM app_users
+        ORDER BY name
+        LIMIT %s OFFSET %s;
+    """
+
+
+def epsg_exists_in_spatial_ref_sys_sql():
+    # Use in terrain_db_template
+    return "SELECT 1 FROM spatial_ref_sys WHERE srid = %s;"
+
+
+def srid_search_exact_sql():
+    # q is numeric srid, use in terrain_db_template
+    return """
+        SELECT
+          srid,
+          ('EPSG:' || srid::text) || ' — ' || COALESCE(srtext, '') AS label
+        FROM spatial_ref_sys
+        WHERE srid = %s;
+    """
+
+
+def srid_search_text_sql():
+    # q is text, use in terrain_db_template
+    return """
+        SELECT
+          srid,
+          ('EPSG:' || srid::text) || ' — ' || COALESCE(srtext, '') AS label
+        FROM spatial_ref_sys
+        WHERE srtext ILIKE %s
+           OR srid::text ILIKE %s
+        ORDER BY srid
+        LIMIT 20;
+    """
+
+
+def detect_db_srid_typmods_sql():
+    # Use in a terrain DB. Detect SRID from geometry typmods.
+    return """
+        SELECT DISTINCT postgis_typmod_srid(a.atttypmod) AS srid
+        FROM pg_attribute a
+        JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE a.attnum > 0
+          AND NOT a.attisdropped
+          AND a.atttypid = 'geometry'::regtype
+          AND postgis_typmod_srid(a.atttypmod) > 0
+        ORDER BY srid;
+    """
+
+
 def get_terrain_db_list(conn):
     with conn.cursor() as cur:
         cur.execute("""
