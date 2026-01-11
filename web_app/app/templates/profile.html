@@ -49,10 +49,16 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
     const new_password = document.getElementById('newPassword').value;
     const confirm_password = document.getElementById('confirmPassword').value;
 
+    // ✅ CSRF token from base.html meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     try {
         const response = await fetch("{{ url_for('auth.profile') }}", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify({ new_password, confirm_password })
         });
 
@@ -61,7 +67,7 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
             document.getElementById('formMessage').innerText = data.message;
             document.getElementById('formError').innerText = '';
         } else {
-            document.getElementById('formError').innerText = data.error;
+            document.getElementById('formError').innerText = data.error || 'Request failed.';
             document.getElementById('formMessage').innerText = '';
         }
     } catch (err) {
@@ -69,4 +75,5 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
     }
 });
 </script>
+
 {% endblock %}

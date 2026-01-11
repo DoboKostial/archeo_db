@@ -2,10 +2,11 @@
 
 from datetime import datetime, timedelta
 import jwt
-from flask import Blueprint, request, render_template, jsonify, redirect, url_for, make_response
+from flask import Blueprint, request, render_template, jsonify, redirect, url_for, make_response, flash
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import Config
+from app.extensions import csrf
 from app.logger import logger
 from app.database import get_auth_connection
 from app.queries import (
@@ -21,33 +22,36 @@ from app.queries import (
 )
 from app.utils.auth import send_password_reset_email, send_password_change_email
 
-auth_bp = Blueprint('auth', __name__)
+auth_bp = Blueprint("auth", __name__)
+
+JWT_SESSION_MINUTES = 15
+RESET_TOKEN_MINUTES = 30
 
 
-# login endpoint for application
-@auth_bp.route('/login', methods=['GET', 'POST'])
+@auth_bp.route("/login", methods=["GET", "POST"])
+@csrf.exempt
 def login():
-    if request.method == 'GET':
-        return render_template('login.html')
+    if request.method == "GET":
+        return render_template("login.html")
 
-    # --- accept both JSON and HTML form ---
-    email = password = None
+    # accept both JSON and HTML form
     if request.is_json:
         data = request.get_json(silent=True) or {}
-        email = (data.get('email') or '').strip()
-        password = data.get('password') or ''
+        email = (data.get("email") or "").strip()
+        password = data.get("password") or ""
     else:
-        email = (request.form.get('email') or '').strip()
-        password = request.form.get('password') or ''
+        email = (request.form.get("email") or "").strip()
+        password = request.form.get("password") or ""
 
     if not email or not password:
         logger.warning("Login failed: missing email or password")
         if request.is_json:
             return jsonify({"error": "Missing email or password."}), 400
         flash("Missing email or password.", "danger")
-        return redirect(url_for('auth.login'))
+        return redirect(url_for("auth.login"))
 
     logger.info(f"Login attempt: {email}")
+
     conn = None
     try:
         conn = get_auth_connection()
@@ -55,63 +59,187 @@ def login():
         # account enabled?
         enabled = is_user_enabled(conn, email)
         if enabled is False:
-            logger.warning(f"Login denied, account locked for: {email}")
+            logger.warning(f"Login denied, account disabled for: {email}")
             if request.is_json:
                 return jsonify({"error": "Your account is inactive. Please contact administrator."}), 403
             flash("Your account is inactive. Please contact administrator.", "danger")
-            return redirect(url_for('auth.login'))
+            return redirect(url_for("auth.login"))
 
         # password check
         password_hash = get_user_password_hash(conn, email)
-        if password_hash and check_password_hash(password_hash, password):
-            token = jwt.encode(
-                {"email": email, "exp": datetime.utcnow() + timedelta(hours=1)},
-                Config.SECRET_KEY,
-                algorithm="HS256",
-            )
-            logger.info(f"Successful login for: {email}")
-
+        if not (password_hash and check_password_hash(password_hash, password)):
+            logger.warning(f"Invalid credentials for: {email}")
             if request.is_json:
-                resp = make_response(jsonify({"success": True}))
-            else:
-                resp = make_response(redirect(url_for('main.index')))
+                return jsonify({"error": "Invalid credentials."}), 403
+            flash("Invalid credentials.", "danger")
+            return redirect(url_for("auth.login"))
 
-            # common cookie settings
-            resp.set_cookie('token', token, httponly=True, samesite='Lax')
-            return resp
+        # load user name + role once, embed into JWT
+        name = get_user_name_by_email(conn, email) or ""
+        role = None
+        try:
+            with conn.cursor() as cur:
+                cur.execute(get_user_role(), (email,))
+                role = cur.fetchone()[0] if cur.rowcount else None
+        except Exception:
+            role = None
+        role = role or ""
 
-        # wrong credentials
-        logger.warning(f"Invalid credentials for: {email}")
+        # update last_login on successful login (správná semantika)
+        try:
+            update_last_login(conn, email)
+        except Exception as e:
+            logger.warning(f"Could not update last_login for {email}: {e}")
+
+        token = jwt.encode(
+            {
+                "email": email,
+                "name": name,
+                "role": role,
+                "iat": datetime.utcnow(),
+                "exp": datetime.utcnow() + timedelta(minutes=JWT_SESSION_MINUTES),
+            },
+            Config.SECRET_KEY,
+            algorithm="HS256",
+        )
+
+        logger.info(f"Successful login for: {email} role={role}")
+
         if request.is_json:
-            return jsonify({"error": "Invalid credentials."}), 403
-        flash("Invalid credentials.", "danger")
-        return redirect(url_for('auth.login'))
+            resp = make_response(jsonify({"success": True}))
+        else:
+            # pokud přijde next=, vrať se tam
+            nxt = request.args.get("next")
+            resp = make_response(redirect(nxt or url_for("main.index")))
+
+        resp.set_cookie(
+            "token",
+            token,
+            httponly=True,
+            samesite="Lax",
+            max_age=JWT_SESSION_MINUTES * 60,
+        )
+        return resp
 
     except Exception as e:
         logger.error(f"Error during login verification for {email}: {e}")
         if request.is_json:
             return jsonify({"error": "Server fault"}), 500
         flash("Internal server error during login.", "danger")
-        return redirect(url_for('auth.login'))
+        return redirect(url_for("auth.login"))
+
     finally:
         if conn:
-            try: conn.close()
-            except Exception: pass
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
-
-# logic for reseting forgotten password
-@auth_bp.route('/forgot-password', methods=['GET', 'POST'])
+@auth_bp.route("/forgot-password", methods=["GET", "POST"])
+@csrf.exempt
 def forgot_password():
-    if request.method == 'GET':
-        logger.info(f"GET /forgot-password from {request.remote_addr}")
-        return render_template('forgot_password.html')
+    """
+    Public endpoint.
 
-    data = request.get_json()
-    email = data.get('email') if data else None
+    Flow:
+    - GET without token: show 'enter email' page (forgot_password.html)
+    - POST without token: accept email, send reset link: /forgot-password?token=<jwt>
+    - GET with token: show reset form (reset_password.html)
+    - POST with token: set new password, then redirect to /login (or return JSON)
+    """
+    token = request.args.get("token") or None
 
+    # --- GET ---
+    if request.method == "GET":
+        if not token:
+            logger.info(f"GET /forgot-password from {request.remote_addr}")
+            return render_template("forgot_password.html")
+
+        # token present => show reset form
+        try:
+            payload = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"])
+            if payload.get("purpose") != "pwreset":
+                raise jwt.InvalidTokenError("wrong purpose")
+            email = payload.get("email")
+        except jwt.ExpiredSignatureError:
+            flash("Reset link expired. Please request a new one.", "danger")
+            return redirect(url_for("auth.forgot_password"))
+        except Exception:
+            flash("Invalid reset link. Please request a new one.", "danger")
+            return redirect(url_for("auth.forgot_password"))
+
+        return render_template("reset_password.html", token=token, email=email)
+
+    # --- POST ---
+    # Accept JSON or form
+    data = request.get_json(silent=True) or {}
+    form_token = (data.get("token") or request.form.get("token") or "").strip()
+    if form_token:
+        # reset submit
+        new_password = data.get("new_password") or request.form.get("new_password") or ""
+        confirm_password = data.get("confirm_password") or request.form.get("confirm_password") or ""
+
+        if not new_password or new_password != confirm_password:
+            if request.is_json:
+                return jsonify({"error": "Passwords do not match or are empty."}), 400
+            flash("Passwords do not match or are empty.", "danger")
+            return redirect(url_for("auth.forgot_password", token=form_token))
+
+        try:
+            payload = jwt.decode(form_token, Config.SECRET_KEY, algorithms=["HS256"])
+            if payload.get("purpose") != "pwreset":
+                raise jwt.InvalidTokenError("wrong purpose")
+            email = payload["email"]
+        except jwt.ExpiredSignatureError:
+            if request.is_json:
+                return jsonify({"error": "Reset link expired."}), 400
+            flash("Reset link expired. Please request a new one.", "danger")
+            return redirect(url_for("auth.forgot_password"))
+        except Exception:
+            if request.is_json:
+                return jsonify({"error": "Invalid reset link."}), 400
+            flash("Invalid reset link. Please request a new one.", "danger")
+            return redirect(url_for("auth.forgot_password"))
+
+        conn = get_auth_connection()
+        try:
+            # must still be enabled
+            user_name = get_enabled_user_name_by_email(conn, email)
+            if not user_name:
+                if request.is_json:
+                    return jsonify({"error": "This account does not exist or is disabled."}), 400
+                flash("This account does not exist or is disabled.", "danger")
+                return redirect(url_for("auth.forgot_password"))
+
+            password_hash = generate_password_hash(new_password)
+            update_user_password_hash(conn, email, password_hash)
+
+            send_password_change_email(email, user_name)
+
+            logger.info(f"Password reset successful for {email}")
+
+            if request.is_json:
+                return jsonify({"success": True})
+            flash("Password was reset. Please log in.", "success")
+            return redirect(url_for("auth.login"))
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    # reset request submit (no token)
+    email = (data.get("email") or request.form.get("email") or "").strip()
     logger.info(f"Password reset requested from {request.remote_addr} for email: {email}")
 
+    if not email:
+        if request.is_json:
+            return jsonify({"error": "Missing email."}), 400
+        flash("Missing email.", "danger")
+        return redirect(url_for("auth.forgot_password"))
+
+    conn = None
     try:
         conn = get_auth_connection()
         user_name = get_enabled_user_name_by_email(conn, email)
@@ -120,14 +248,18 @@ def forgot_password():
             logger.warning(f"Password reset failed – no such enabled user: {email}")
             return jsonify({"error": "This account does not exist or is disabled."}), 400
 
-        token = jwt.encode({
-            'email': email,
-            'exp': datetime.utcnow() + timedelta(minutes=30)
-        }, Config.SECRET_KEY, algorithm='HS256')
+        reset_token = jwt.encode(
+            {
+                "email": email,
+                "purpose": "pwreset",
+                "iat": datetime.utcnow(),
+                "exp": datetime.utcnow() + timedelta(minutes=RESET_TOKEN_MINUTES),
+            },
+            Config.SECRET_KEY,
+            algorithm="HS256",
+        )
 
-        # POZN.: po přesunu do auth blueprintu se endpoint jmenuje 'auth.emergency_login'
-        reset_url = url_for('auth.emergency_login', token=token, _external=True)
-
+        reset_url = url_for("auth.forgot_password", token=reset_token, _external=True)
         send_password_reset_email(email, user_name, reset_url)
 
         logger.info(f"Password reset link sent to {email}")
@@ -138,140 +270,73 @@ def forgot_password():
         return jsonify({"error": "Internal server error."}), 500
     finally:
         try:
-            conn.close()
+            if conn:
+                conn.close()
         except Exception:
             pass
 
 
-# here logic for emergency login with token per user
-@auth_bp.route('/emergency-login/<token>')
-def emergency_login(token):
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_email = payload['email']
-    except jwt.ExpiredSignatureError:
-        logger.warning("Expiration of emergency JWT token -> redirecting to /login")
-        return redirect('/login')
-    except jwt.InvalidTokenError:
-        logger.warning("Non valid emergency JWT token: redirecting to /login")
-        return redirect('/login')
-
-    conn = get_auth_connection()
-    is_enabled = is_user_enabled(conn, user_email)
-    if not is_enabled:
-        logger.warning(f"Emergency login of disabled or non-existing user: {user_email}")
-        conn.close()
-        return redirect('/login')
-
-    logger.info(f"Emergency login successfull for user: {user_email}")
-    conn.close()
-
-    response = redirect('/profile')
-    response.set_cookie(
-        'token',
-        token,
-        httponly=True,
-        samesite='Lax',
-        max_age=60 * 60 * 24  # 24 hours – customizable
-    )
-    return response
-
-
-# user logout and get to main login endpoint
-@auth_bp.route('/logout')
+@auth_bp.route("/logout")
 def logout():
-    token = request.cookies.get('token')
-    if not token:
-        return redirect('/login')
-
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_email = payload.get('email')
-
-        if user_email:
-            conn = get_auth_connection()
-            update_last_login(conn, user_email)
-            conn.close()
-
-        logger.info(f"User {user_email} loged out successfully")
-    except Exception as e:
-        logger.error(f"Error during logout: {e}")
-
-    response = make_response(redirect('/login'))
-    response.set_cookie('token', '', expires=0)
+    # logout je chráněný (gatekeeper), ale i kdyby token chyběl, redirect na login je OK
+    response = make_response(redirect(url_for("auth.login")))
+    response.set_cookie("token", "", expires=0)
     return response
 
 
-# endpoint about currently logged in user with password change possibility
-# beware of mail function - postfix should be configured on machine
-@auth_bp.route('/profile', methods=['GET', 'POST'])
+@auth_bp.route("/profile", methods=["GET", "POST"])
 def profile():
-    token = request.cookies.get('token')
-    if not token:
-        logger.warning("Access on /profile without token -> redirecting to /login")
-        return redirect('/login')
+    # Tady už žádné ruční čtení tokenu – gatekeeper garantuje přihlášení
+    from flask import g
 
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_email = payload['email']
-    except jwt.ExpiredSignatureError:
-        logger.warning("JWT token expiration -> redirecting to /login")
-        return redirect('/login')
+    user_email = getattr(g, "user_email", "")
+    user_role = getattr(g, "user_role", "")
+    user_name_from_token = getattr(g, "user_name", "")
 
     conn = get_auth_connection()
+    cur = conn.cursor()
     try:
-        cur = conn.cursor()
-
-        # Retrieving user role
-        cur.execute(get_user_role(), (user_email,))
-        user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
-
-        if request.method == 'POST':
+        if request.method == "POST":
             logger.info(f"Request for password change for user: {user_email}")
             data = request.get_json() or {}
-            new_password = data.get('new_password')
-            confirm_password = data.get('confirm_password')
+            new_password = data.get("new_password")
+            confirm_password = data.get("confirm_password")
 
             if new_password != confirm_password or not new_password:
-                logger.warning(f"The change of password for {user_email} failed - passwords are not same or empty.")
-                return jsonify({'error': 'Given passwords are not the same or are empty.'}), 400
+                logger.warning(f"Password change for {user_email} failed - mismatch/empty.")
+                return jsonify({"error": "Given passwords are not the same or are empty."}), 400
 
             password_hash = generate_password_hash(new_password)
             update_user_password_hash(conn, user_email, password_hash)
 
-            user_name_for_email = get_user_name_by_email(conn, user_email) or "uživatel"
+            # pro e-mail vezmeme jméno z DB, fallback token
+            user_name_for_email = get_user_name_by_email(conn, user_email) or user_name_from_token or "user"
+            send_password_change_email(user_email, user_name_for_email)
 
             logger.info(f"Password changed successfully for {user_email}")
-            send_password_change_email(user_email, user_name_for_email)
-            logger.info(f"Confirming email about password change was sent to {user_email}")
-
-            return jsonify({'message': 'Password was changed and confirming email was sent.'})
+            return jsonify({"message": "Password was changed and confirming email was sent."})
 
         # GET request – profile data
         user_data = get_full_user_data(conn, user_email)
         if not user_data:
-            logger.error(f"User {user_email} was not found in database -> redirecting to /login")
-            return redirect('/login')
+            logger.error(f"User {user_email} not found in DB -> redirecting to /login")
+            return redirect(url_for("auth.login"))
 
         user_name, mail, last_login = user_data
         citation = get_random_citation(conn)
 
-        if not last_login:
-            logger.warning(f"User {user_email} has no recorded last_login.")
-            last_login_str = "N/A"
-        else:
-            last_login_str = last_login.strftime('%Y-%m-%d')
+        last_login_str = last_login.strftime("%Y-%m-%d") if last_login else "N/A"
 
-        logger.info(f"Fetching the profile of user {user_email}")
-
+        logger.info(f"Fetching profile for {user_email}")
         return render_template(
-            'profile.html',
+            "profile.html",
             user_name=user_name,
             user_email=mail,
             last_login=last_login_str,
             citation=citation,
-            user_role=user_role
+            user_role=user_role,
         )
+
     finally:
         try:
             cur.close()

@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}Archeo terrain DB{% endblock %}</title>
+    
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- Bootstrap CSS (local version to ensure offline availability) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
@@ -17,7 +19,7 @@
 </head>
 <body>
 
-    {% if user_name and last_login %}
+    {% if user_email %}
         {% include 'header.html' %}
     {% endif %}
 
@@ -41,5 +43,29 @@
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
 
     {% block scripts %}{% endblock %}
+
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (!meta) return;
+  const token = meta.getAttribute("content");
+  if (!token) return;
+
+  document.querySelectorAll('form[method="POST"], form[method="post"]').forEach((form) => {
+    // pokud už token existuje, nesahej na to
+    if (form.querySelector('input[name="csrf_token"]')) return;
+
+    const inp = document.createElement("input");
+    inp.type = "hidden";
+    inp.name = "csrf_token";
+    inp.value = token;
+    form.appendChild(inp);
+  });
+});
+</script>
+
+
 </body>
 </html>
