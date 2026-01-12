@@ -1,76 +1,85 @@
+{# web_app/app/templates/list_objects.html #}
 {% extends "base.html" %}
-{% block title %}Seznam archeologických objektů{% endblock %}
+{% block title %}List of archaeological objects{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Seznam archeologických objektů</h2>
+  <h2>List of archaeological objects</h2>
 
-    <ul class="nav nav-tabs mb-3" id="viewTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#textView" type="button" role="tab">Textový výpis</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="graphic-tab" data-bs-toggle="tab" data-bs-target="#graphicView" type="button" role="tab">Grafické zobrazení</button>
-        </li>
-    </ul>
+  <ul class="nav nav-tabs mb-3" id="viewTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#textView"
+              type="button" role="tab">Text list</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="graphic-tab" data-bs-toggle="tab" data-bs-target="#graphicView"
+              type="button" role="tab">Graphical list</button>
+    </li>
+  </ul>
 
-    <div class="tab-content" id="viewTabsContent">
-        <!-- TEXTOVÝ VÝPIS -->
-        <div class="tab-pane fade show active" id="textView" role="tabpanel">
-            {% if objects %}
-                <ul class="list-group">
-                    {% for obj in objects %}
-                        <li class="list-group-item">
-                            <strong>ID objektu:</strong> {{ obj[0] }} |
-                            <strong>Typ:</strong> {{ obj[1] }} |
-                            <strong>Nadřazený objekt:</strong> {{ obj[2] or "—" }}<br>
-                            <strong>SJ:</strong> {{ obj[4]|join(", ") if obj[4] else "žádné" }}<br>
-                            <em>{{ obj[3] }}</em>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p>Žádné objekty nebyly nalezeny.</p>
-            {% endif %}
-        </div>
+  <div class="tab-content" id="viewTabsContent">
 
-        <!-- GRAFICKÉ ZOBRAZENÍ -->
-        <div class="tab-pane fade" id="graphicView" role="tabpanel">
-            <div class="d-flex flex-wrap justify-content-start">
-                {% for obj in objects %}
-                    <div class="card m-2" style="min-width: 250px;">
-                        <div class="card-header bg-primary text-white">
-                            Objekt {{ obj[0] }} ({{ obj[1] }})
-                            {% if obj[2] %}
-                                <span class="badge bg-light text-dark float-end">↑ {{ obj[2] }}</span>
-                            {% endif %}
-                        </div>
-                        <div class="card-body">
-                            <p><strong>SJ:</strong></p>
-                            {% if obj[4] %}
-                                <ul>
-                                    {% for sj in obj[4] %}
-                                        <li>SJ {{ sj }}</li>
-                                    {% endfor %}
-                                </ul>
-                            {% else %}
-                                <p><em>Žádné SJ</em></p>
-                            {% endif %}
-                            {% if obj[3] %}
-                                <hr>
-                                <p class="text-muted">{{ obj[3] }}</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                {% endfor %}
+    <!-- TEXT VIEW -->
+    <div class="tab-pane fade show active" id="textView" role="tabpanel">
+      {% if objects %}
+        <ul class="list-group">
+          {% for obj in objects %}
+            <li class="list-group-item">
+              <strong>ID object:</strong> {{ obj[0] }} |
+              <strong>Type:</strong> {{ obj[1] }} |
+              <strong>Superior object:</strong> {{ obj[2] or "—" }}<br>
+              <strong>SUs:</strong> {{ obj[4]|join(", ") if obj[4] else "none" }}<br>
+              {% if obj[3] %}<em>{{ obj[3] }}</em>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No objects were found.</p>
+      {% endif %}
+    </div>
+
+    <!-- GRAPHIC VIEW -->
+    <div class="tab-pane fade" id="graphicView" role="tabpanel">
+      <div class="d-flex flex-wrap justify-content-start">
+        {% for obj in objects %}
+          <div class="card m-2" style="min-width: 260px;">
+            <div class="card-header bg-primary text-white">
+              Objekt {{ obj[0] }} ({{ obj[1] }})
+              {% if obj[2] %}
+                <span class="badge bg-light text-dark float-end">↑ {{ obj[2] }}</span>
+              {% endif %}
             </div>
-        </div>
+            <div class="card-body">
+              <p class="mb-1"><strong>SJ:</strong></p>
+              {% if obj[4] %}
+                <ul class="mb-2">
+                  {% for sj in obj[4] %}
+                    <li>SJ {{ sj }}</li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="text-muted"><em>No SUs</em></p>
+              {% endif %}
+              {% if obj[3] %}
+                <hr>
+                <p class="text-muted mb-0">{{ obj[3] }}</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
     </div>
 
-    <div class="mt-4">
-        <form action="{{ url_for('archeo_objects.generate_objects_pdf') }}" method="POST" target="_blank">
-            <button type="submit" class="btn btn-outline-secondary">Tisk do PDF</button>
-        </form>
-    </div>
+  </div>
+
+  <div class="mt-4 d-flex gap-2">
+    <a href="{{ url_for('archeo_objects.objects') }}" class="btn btn-outline-primary">Back to definition</a>
+
+    <form action="{{ url_for('archeo_objects.generate_objects_pdf') }}" method="POST" target="_blank" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-secondary">Print to PDF</button>
+    </form>
+  </div>
+
 </div>
 {% endblock %}

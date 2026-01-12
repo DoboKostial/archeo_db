@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="eng">
 <head>
     <meta charset="UTF-8">
     <style>
@@ -12,23 +12,23 @@
     </style>
 </head>
 <body>
-    <h1>Seznam archeologických objektů</h1>
+    <h1>List of archaeological objects</h1>
 
     {% for obj in objects %}
         <div class="object-box">
             <div class="object-title">
-                Objekt {{ obj[0] }} – {{ obj[1] }}
+                Object {{ obj[0] }} – {{ obj[1] }}
                 {% if obj[2] %}(↑ {{ obj[2] }}){% endif %}
             </div>
             {% if obj[4] %}
-                <p>SJ:</p>
+                <p>SU:</p>
                 <ul class="sj-list">
                     {% for sj in obj[4] %}
-                        <li>SJ {{ sj }}</li>
+                        <li>SU {{ sj }}</li>
                     {% endfor %}
                 </ul>
             {% else %}
-                <p><em>Žádné stratigrafické jednotky</em></p>
+                <p><em>No statigraphic units</em></p>
             {% endif %}
             {% if obj[3] %}
                 <p class="description">{{ obj[3] }}</p>

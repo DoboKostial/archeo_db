@@ -324,6 +324,8 @@ def get_all_objects(conn):
  # Here SQLs for archeo object handling and logic
  ####
 
+# --- Objects queries ---
+
 def q_list_objects_with_sjs(conn):
     """
     Return list of objects with aggregated SU ids:
@@ -349,7 +351,7 @@ def q_list_objects_with_sjs(conn):
 
 def q_get_object_with_sjs(conn, id_object: int):
     """
-    Return single object as:
+    Return single object:
     (id_object, object_typ, superior_object, notes, [sj_ids...]) or None
     """
     with conn.cursor() as cur:
@@ -397,10 +399,7 @@ def q_sj_belongs_to_other_object(conn, id_sj: int, id_object: int) -> bool:
     True if SU is already assigned to a different object.
     """
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT ref_object FROM tab_sj WHERE id_sj = %s;",
-            (id_sj,),
-        )
+        cur.execute("SELECT ref_object FROM tab_sj WHERE id_sj = %s;", (id_sj,))
         row = cur.fetchone()
         if not row:
             return False
@@ -463,9 +462,95 @@ def q_delete_object(conn, id_object: int):
 
 def q_has_children(conn, id_object: int) -> bool:
     with conn.cursor() as cur:
-        cur.execute("SELECT 1 FROM tab_object WHERE superior_object = %s LIMIT 1;", (id_object,))
+        cur.execute(
+            "SELECT 1 FROM tab_object WHERE superior_object = %s LIMIT 1;",
+            (id_object,),
+        )
         return cur.fetchone() is not None
-  
+
+
+# --- Inhumation grave queries (tab_object_inhum_grave) ---
+
+def q_has_inhum_grave(conn, id_object: int) -> bool:
+    """
+    True if object has inhumation grave record.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM tab_object_inhum_grave WHERE id_object = %s;",
+            (id_object,),
+        )
+        return cur.fetchone() is not None
+
+
+def q_get_object_inhum_grave(conn, id_object: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+              preservation,
+              orientation_dir,
+              bone_map,
+              notes_grave,
+              anthropo_present,
+              burial_box_type
+            FROM tab_object_inhum_grave
+            WHERE id_object = %s;
+            """,
+            (id_object,),
+        )
+        return cur.fetchone()
+
+
+def q_upsert_object_inhum_grave(
+    conn,
+    id_object: int,
+    preservation,
+    orientation_dir,
+    bone_map_json,
+    notes_grave,
+    anthropo_present: bool,
+    burial_box_type,
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO tab_object_inhum_grave (
+              id_object,
+              preservation,
+              orientation_dir,
+              bone_map,
+              notes_grave,
+              anthropo_present,
+              burial_box_type
+            )
+            VALUES (%s, %s, %s, %s::jsonb, %s, %s, %s)
+            ON CONFLICT (id_object) DO UPDATE SET
+              preservation = EXCLUDED.preservation,
+              orientation_dir = EXCLUDED.orientation_dir,
+              bone_map = EXCLUDED.bone_map,
+              notes_grave = EXCLUDED.notes_grave,
+              anthropo_present = EXCLUDED.anthropo_present,
+              burial_box_type = EXCLUDED.burial_box_type;
+            """,
+            (
+                id_object,
+                preservation,
+                orientation_dir,
+                bone_map_json,
+                notes_grave,
+                anthropo_present,
+                burial_box_type,
+            ),
+        )
+
+
+def q_delete_object_inhum_grave(conn, id_object: int):
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM tab_object_inhum_grave WHERE id_object = %s;",
+            (id_object,),
+        )
     
 
 

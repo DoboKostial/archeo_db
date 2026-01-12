@@ -163,6 +163,19 @@ CREATE TABLE tab_object (
 	CONSTRAINT tab_object_superior_fk FOREIGN KEY (superior_object) REFERENCES tab_object(id_object) ON DELETE RESTRICT
 );
 
+
+CREATE TABLE IF NOT EXISTS tab_object_grave (
+  id_object        int4 PRIMARY KEY REFERENCES tab_object(id_object) ON DELETE CASCADE,
+
+  preservation     text NULL,             -- e.g.. 'complete'|'partial'|'poor'...
+  orientation_dir  text NULL,             -- head directed to N, W, NE...
+  bone_map         jsonb NULL,            
+  notes_grave      text NULL,
+  anthropo_present BOOL NOT NULL DEFAULT false, -- was the grave excavated by anthropologist?
+  burial_box_type  text NULL  -- e.g. coffin, sarcophagus, none, 
+  );
+
+
 ---
 -- tab_polygon definition
 ---

@@ -1,170 +1,480 @@
+{# web_app/app/templates/objects.html #}
 {% extends "base.html" %}
 {% block title %}Zadání objektu{% endblock %}
 
 {% block content %}
 <div class="alert alert-info" role="alert">
-    Pracujete nad databází <strong>{{ selected_db }}</strong>. Další volné objekt je <strong>{{ suggested_id }}</strong>.
+  You are working with database <strong>{{ selected_db }}</strong>.
+  Next suggested object ID is <strong>{{ suggested_id }}</strong>.
 </div>
-<div class="container mt-4">
-    <h3>New archaeological object</h3>
 
-    <form method="POST">
-        <div class="mb-3">
-            <h5>
-            <label for="id_object" class="form-label">ID objektu</label>
-            <input type="number" class="form-control" id="id_object" name="id_object" required
-                   value="{{ form_data.get('id_object', suggested_id) }}">
-            </h5>
+<div class="container-fluid mt-3">
+  <div class="row g-3">
+
+    <!-- LEFT: Create form -->
+    <div class="col-12 col-xxl-6">
+      <div class="card">
+        <div class="card-header">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h5 class="mb-0">New archaeological object</h5>
+
+            <div class="d-flex gap-2 align-items-center">
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#helpObjects"
+                      title="Help">
+                ?
+              </button>
+
+              <span class="badge bg-secondary d-none" id="createInhumBadge">Inhumation grave</span>
+              <button type="button" class="btn btn-sm btn-outline-dark" id="btnCreateInhumModal">
+                Object is a grave
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div class="mb-3">
-            <label for="object_typ" class="form-label">Typ objektu</label>
-            <div class="input-group">
+
+        <div class="card-body">
+          <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            {# inhum grave hidden fields (create form) #}
+            <input type="hidden" name="is_inhum_grave" id="is_inhum_grave" value="{{ '1' if form_data and form_data.get('is_inhum_grave') else '0' }}">
+            <input type="hidden" name="inhum_preservation" id="inhum_preservation" value="{{ form_data.get('inhum_preservation','') if form_data else '' }}">
+            <input type="hidden" name="inhum_orientation_dir" id="inhum_orientation_dir" value="{{ form_data.get('inhum_orientation_dir','') if form_data else '' }}">
+            <input type="hidden" name="inhum_bone_map" id="inhum_bone_map" value="{{ form_data.get('inhum_bone_map','') if form_data else '' }}">
+            <input type="hidden" name="inhum_notes" id="inhum_notes" value="{{ form_data.get('inhum_notes','') if form_data else '' }}">
+            <input type="hidden" name="inhum_anthropo_present" id="inhum_anthropo_present" value="{{ form_data.get('inhum_anthropo_present','0') if form_data else '0' }}">
+            <input type="hidden" name="inhum_burial_box_type" id="inhum_burial_box_type" value="{{ form_data.get('inhum_burial_box_type','') if form_data else '' }}">
+
+            <div class="mb-3">
+              <label for="id_object" class="form-label">ID objektu</label>
+              <input type="number" class="form-control" id="id_object" name="id_object" required
+                     value="{{ form_data.get('id_object', suggested_id) if form_data else suggested_id }}">
+            </div>
+
+            <div class="mb-3">
+              <label for="object_typ" class="form-label">Typ objektu</label>
+              <div class="input-group">
                 <select class="form-select" id="object_typ" name="object_typ" required>
-                    <option value="">-- vyber typ --</option>
-                    {% for typ in object_types %}
-                        <option value="{{ typ }}" {% if form_data.get('object_typ') == typ %}selected{% endif %}>{{ typ }}</option>
-                    {% endfor %}
+                  <option value="">-- vyber typ --</option>
+                  {% for typ in object_types %}
+                    <option value="{{ typ }}" {% if form_data and form_data.get('object_typ') == typ %}selected{% endif %}>
+                      {{ typ }}
+                    </option>
+                  {% endfor %}
                 </select>
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#defineObjectTypeModal">
-                    Definuj
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-toggle="modal" data-bs-target="#defineObjectTypeModal">
+                  Define
                 </button>
+              </div>
             </div>
-        </div>
 
-        <div class="mb-3">
-            <label for="superior_object" class="form-label">Belongs to object of higher category (optional)</label>
-            <input type="number" class="form-control" id="superior_object" name="superior_object"
-                   value="{{ form_data.get('superior_object', '') }}">
-        </div>
+            <div class="mb-3">
+              <label for="superior_object" class="form-label">Belongs to superior object (optional)</label>
+              <input type="number" class="form-control" id="superior_object" name="superior_object"
+                     value="{{ form_data.get('superior_object','') if form_data else '' }}">
+            </div>
 
-        <div class="mb-3">
-            <label for="notes" class="form-label">Notes for object</label>
-            <textarea class="form-control" id="notes" name="notes" rows="3">{{ form_data.get('notes', '') }}</textarea>
-        </div>
+            <div class="mb-3">
+              <label for="notes" class="form-label">Notes for object</label>
+              <textarea class="form-control" id="notes" name="notes" rows="3">{{ form_data.get('notes','') if form_data else '' }}</textarea>
+            </div>
 
-        <div class="mb-3">
-            <label class="form-label">Stratigrafické jednotky tvořící objekt</label>
-            <div id="sj-container">
-                {% if form_data.getlist %}
-                    {% for sj in form_data.getlist('sj_ids[]') %}
-                        <div class="input-group mb-2 sj-input">
-                            <input type="number" name="sj_ids[]" class="form-control" value="{{ sj }}" required>
-                            <button type="button" class="btn btn-outline-danger remove-sj">×</button>
-                        </div>
-                    {% endfor %}
-                {% else %}
+            <div class="mb-3">
+              <label class="form-label">Stratigraphic units belonging to object</label>
+              <div id="sj-container">
+                {% set sj_list = form_data.getlist('sj_ids[]') if form_data else [] %}
+                {% if sj_list %}
+                  {% for sj in sj_list %}
                     <div class="input-group mb-2 sj-input">
-                        <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
-                        <button type="button" class="btn btn-outline-danger remove-sj">×</button>
+                      <input type="number" name="sj_ids[]" class="form-control" value="{{ sj }}" required>
+                      <button type="button" class="btn btn-outline-danger remove-sj">×</button>
                     </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="input-group mb-2 sj-input">
+                    <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
+                    <button type="button" class="btn btn-outline-danger remove-sj">×</button>
+                  </div>
                 {% endif %}
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="add-sj">+ add SU</button>
+              <div class="form-text">At least 2 SUs are mandatory.</div>
             </div>
-            <button type="button" class="btn btn-sm btn-outline-primary" id="add-sj">+ přidej SJ</button>
-        </div>
 
-        <button type="submit" class="btn btn-success">Uložit objekt</button>
-        <a href="{{ url_for('archeo_objects.list_objects') }}" class="btn btn-info mt-2">Vylistuj objekty</a>
-    </form>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-success">Save object</button>
+              <a href="{{ url_for('archeo_objects.list_objects') }}" class="btn btn-outline-secondary">Details listing</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Existing objects table -->
+    <div class="col-12 col-xxl-6">
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">Existing objects</h5>
+        </div>
+        <div class="card-body">
+          {% if objects %}
+            <div class="table-responsive">
+              <table class="table table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Superior</th>
+                    <th>SUs</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for obj in objects %}
+                    <tr>
+                      <td><strong>{{ obj[0] }}</strong></td>
+                      <td>{{ obj[1] }}</td>
+                      <td>{{ obj[2] if obj[2] else "—" }}</td>
+                      <td>
+                        {% if obj[4] %}
+                          <span class="text-muted">{{ obj[4] | join(", ") }}</span>
+                        {% else %}
+                          <em class="text-muted">none</em>
+                        {% endif %}
+                      </td>
+                      <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary btn-edit"
+                                data-object-id="{{ obj[0] }}"
+                                data-bs-toggle="modal" data-bs-target="#editObjectModal">
+                          Edit
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-delete"
+                                data-object-id="{{ obj[0] }}"
+                                data-bs-toggle="modal" data-bs-target="#deleteObjectModal">
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-muted mb-0">No objects were found.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 
+{# -------------------------
+   Modals
+   ------------------------- #}
+<!-- Modal: Help (objects) -->
+<div class="modal fade" id="helpObjects" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Help: Archaeological objects</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% include "help/object_help.html" %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-<!-- Modal pro definici nového typu objektu -->
-<div class="modal fade" id="defineObjectTypeModal" tabindex="-1" aria-labelledby="defineObjectTypeLabel" aria-hidden="true">
+
+   <!-- Modal: Define object type -->
+<div class="modal fade" id="defineObjectTypeModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="defineObjectTypeLabel">Nový typ objektu</h5>
+        <h5 class="modal-title">New type of object</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
       </div>
       <div class="modal-body">
         <div class="mb-3">
-          <label for="newObjectType" class="form-label">Název typu</label>
+          <label for="newObjectType" class="form-label">Type name</label>
           <input type="text" class="form-control" id="newObjectType" required>
         </div>
         <div class="mb-3">
-          <label for="newDescription" class="form-label">Popis</label>
+          <label for="newDescription" class="form-label">Description</label>
           <textarea class="form-control" id="newDescription" rows="2"></textarea>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="submitNewType">Uložit typ</button>
+        <button type="button" class="btn btn-primary" id="submitNewType">Save the type to glossary</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit object -->
+<div class="modal fade" id="editObjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header d-flex align-items-center justify-content-between">
+        <h5 class="modal-title">Edit object</h5>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge bg-secondary d-none" id="editInhumBadge">Inhumation grave</span>
+          <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditInhumModal">
+            Object is a grave
+          </button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="edit_id_object">
+
+        {# inhum grave hidden fields (edit modal) #}
+        <input type="hidden" id="edit_is_inhum_grave" value="0">
+        <input type="hidden" id="edit_inhum_preservation" value="">
+        <input type="hidden" id="edit_inhum_orientation_dir" value="">
+        <input type="hidden" id="edit_inhum_bone_map" value="">
+        <input type="hidden" id="edit_inhum_notes" value="">
+        <input type="hidden" id="edit_inhum_anthropo_present" value="0">
+        <input type="hidden" id="edit_inhum_burial_box_type" value="">
+
+        <div class="row g-3">
+          <div class="col-md-2">
+            <label class="form-label">ID</label>
+            <input type="number" class="form-control" id="edit_id_object_display" disabled>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="edit_object_typ" required>
+              <option value="">-- vyber typ --</option>
+              {% for typ in object_types %}
+                <option value="{{ typ }}">{{ typ }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Superior</label>
+            <input type="number" class="form-control" id="edit_superior_object">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Notes</label>
+            <input type="text" class="form-control" id="edit_notes">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">SUs</label>
+            <div id="edit_sj_container"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="edit_add_sj">+ Add SU</button>
+            <div class="form-text">Minimálně 2 SJ.</div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="edit_error"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="saveEdit">Uložit změny</button>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zavřít</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- JavaScript -->
+<!-- Modal: Delete confirm -->
+<div class="modal fade" id="deleteObjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Delete object</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="delete_id_object">
+        Opravdu chcete smazat objekt <strong id="delete_id_object_label"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" id="confirmDelete">Smazat</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zrušit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Inhumation grave (shared for create & edit) -->
+<div class="modal fade" id="inhumGraveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Inhumation grave attributes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-info">
+          Tento dialog vyplňuje data pro tabulku <code>tab_object_inhum_grave</code>.
+        </div>
+
+        <div class="mb-3 form-check">
+          <input class="form-check-input" type="checkbox" id="inhum_present">
+          <label class="form-check-label" for="inhum_present">
+            This object is an <strong>inhumation grave</strong>
+          </label>
+        </div>
+
+        <div id="inhum_fields" class="border rounded p-3">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Preservation</label>
+              <select class="form-select" id="inhum_preservation_ui">
+                <option value="">—</option>
+                <option value="complete">complete</option>
+                <option value="partial">partial</option>
+                <option value="poor">poor</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Orientation (head direction)</label>
+              <select class="form-select" id="inhum_orientation_dir_ui">
+                <option value="">—</option>
+                <option value="N">N</option>
+                <option value="NE">NE</option>
+                <option value="E">E</option>
+                <option value="SE">SE</option>
+                <option value="S">S</option>
+                <option value="SW">SW</option>
+                <option value="W">W</option>
+                <option value="NW">NW</option>
+              </select>
+              <div class="form-text">Použijeme jednoduchý směr (text).</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Burial box type</label>
+              <select class="form-select" id="inhum_burial_box_type_ui">
+                <option value="">—</option>
+                <option value="coffin">coffin</option>
+                <option value="sarcophagus">sarcophagus</option>
+                <option value="none">none</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="inhum_anthropo_present_ui">
+                <label class="form-check-label" for="inhum_anthropo_present_ui">
+                  Anthropologist present
+                </label>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Notes (grave)</label>
+              <textarea class="form-control" id="inhum_notes_ui" rows="2"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Bone presence map</label>
+              <div class="form-text mb-2">Zaškrtni, co je přítomné / identifikovatelné.</div>
+
+              {# You can replace the image path with your real static file #}
+              <div class="border rounded p-2">
+                <div class="position-relative d-inline-block" style="max-width: 320px;">
+                  <img
+                    src="{{ url_for('static', filename='../static/images/bone_map.png') }}"
+                    class="img-fluid"
+                    alt="Bone map"
+                  >
+
+                  {# Approximate positions - adjust to your image #}
+                  <input class="form-check-input bonechk" type="checkbox" data-key="skull"
+                         style="position:absolute; left:50%; top:10%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="thorax"
+                         style="position:absolute; left:50%; top:27%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="pelvis"
+                         style="position:absolute; left:50%; top:46%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_arm"
+                         style="position:absolute; left:28%; top:32%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_arm"
+                         style="position:absolute; left:72%; top:32%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_hand"
+                         style="position:absolute; left:18%; top:50%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_hand"
+                         style="position:absolute; left:82%; top:50%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_leg"
+                         style="position:absolute; left:42%; top:72%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_leg"
+                         style="position:absolute; left:58%; top:72%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="feet"
+                         style="position:absolute; left:50%; top:92%; transform:translate(-50%,-50%);">
+                </div>
+
+                <div class="mt-2 d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="boneMapAll">
+                    Check all
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="boneMapNone">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="inhum_modal_error"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="inhumSave">Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    const sjContainer = document.getElementById("sj-container");
-    const addBtn = document.getElementById("add-sj");
-
-    addBtn.addEventListener("click", function () {
-        const inputGroup = document.createElement("div");
-        inputGroup.className = "input-group mb-2 sj-input";
-        inputGroup.innerHTML = `
-            <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
-            <button type="button" class="btn btn-outline-danger remove-sj">×</button>
-        `;
-        sjContainer.appendChild(inputGroup);
-    });
-
-    sjContainer.addEventListener("click", function (e) {
-        if (e.target.classList.contains("remove-sj")) {
-            e.target.closest(".sj-input").remove();
-        }
-    });
-});
+  window.ArcheoObjectsConfig = {
+    csrfToken: "{{ csrf_token() }}",
+    urlDefineType: "{{ url_for('archeo_objects.define_object_type') }}",
+    urlApiGetObjectBase: "{{ url_for('archeo_objects.api_get_object', id_object=0) }}",
+    urlUpdateObject: "{{ url_for('archeo_objects.update_object') }}",
+    urlDeleteObject: "{{ url_for('archeo_objects.delete_object') }}",
+  };
 </script>
 
-<script>
-document.getElementById('submitNewType').addEventListener('click', function () {
-    const newType = document.getElementById('newObjectType').value.trim();
-    const description = document.getElementById('newDescription').value.trim();
+<script src="{{ url_for('static', filename='js/archeo_objects.js') }}"></script>
+<script src="{{ url_for('static', filename='js/archeo_objects_edit.js') }}"></script>
 
-    if (!newType) {
-        alert("Zadejte název typu objektu.");
-        return;
-    }
 
-    fetch("{{ url_for('archeo_objects.define_object_type') }}", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": "{{ csrf_token() if csrf_token else '' }}"
-        },
-        body: JSON.stringify({
-            object_typ: newType,
-            description_typ: description
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => { throw new Error(data.error || 'Chyba při ukládání'); });
-        }
-        return response.json();
-    })
-    .then(data => {
-        const select = document.getElementById('object_typ');
-        const newOption = document.createElement('option');
-        newOption.value = newType;
-        newOption.text = newType;
-        newOption.selected = true;
-        select.appendChild(newOption);
 
-        const modalElement = document.getElementById('defineObjectTypeModal');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        modal.hide();
-
-        document.getElementById('newObjectType').value = '';
-        document.getElementById('newDescription').value = '';
-    })
-    .catch(error => {
-        alert("Chyba: " + error.message);
-    });
-});
-</script>
 {% endblock %}

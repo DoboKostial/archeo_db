@@ -1,0 +1,38 @@
+      <div class="modal-body">
+        <p>
+          An archaeological object is an interpretive entity composed of multiple stratigraphic units (SU, Fig. 01). 
+          One SU can belong to at most one object.
+        </p>
+
+        <ul>
+          <li><strong>ID objekct</strong> is unique identifier.</li>
+          <li><strong>Min. 2 SUs</strong> are mandatory for defiition/storing of object.</li>
+          <li><strong>Superior object</strong> is optional and couldnt create cycle in hierarchy.</li>
+          <li><strong>Object is a grave</strong> opens dialogue for defining inhumation grave attributes. (table <code>tab_object_inhum_grave</code>).</li>
+        </ul>
+
+
+<div class="mt-3">
+  <p class="mb-2"><strong>Figures</strong></p>
+
+  <div class="row g-2">
+    <div class="col-md-4">
+      <figure class="mb-0">
+        <img src="{{ url_for('static', filename='images/help_object.png') }}"
+             class="img-fluid rounded border"
+             alt="Standard section example">
+        <figcaption class="small text-muted mt-1">Fig. 01. Object consisting from several SUs.</figcaption>
+      </figure>
+    </div>
+  </div>
+</div>
+
+
+        <hr>
+
+        <p class="mb-2"><strong>Tips</strong></p>
+        <ul class="mb-0">
+          <li>Object type could be added/defined with buton <em>Define</em> (glossary).</li>
+          <li>Object can be edited with button <em>Edit</em> / <em>Delete</em>.</li>
+        </ul>
+      </div>
