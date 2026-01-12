@@ -298,7 +298,7 @@ def delete_su_sql():
 
 
 
-# --- Harris / SU & Objects queries ---
+# --- Harris queries ---
 
 def get_all_sj_with_types(conn):
     """Return [(id_sj, sj_typ), ...]."""
@@ -317,6 +317,155 @@ def get_all_objects(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT id_object, object_typ, superior_object FROM tab_object;")
         return cur.fetchall()
+    
+
+
+ ####
+ # Here SQLs for archeo object handling and logic
+ ####
+
+def q_list_objects_with_sjs(conn):
+    """
+    Return list of objects with aggregated SU ids:
+    [(id_object, object_typ, superior_object, notes, [sj_ids...]), ...]
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                o.id_object,
+                o.object_typ,
+                o.superior_object,
+                o.notes,
+                ARRAY_AGG(s.id_sj ORDER BY s.id_sj) AS sj_ids
+            FROM tab_object o
+            LEFT JOIN tab_sj s ON s.ref_object = o.id_object
+            GROUP BY o.id_object, o.object_typ, o.superior_object, o.notes
+            ORDER BY o.id_object;
+            """
+        )
+        return cur.fetchall()
+
+
+def q_get_object_with_sjs(conn, id_object: int):
+    """
+    Return single object as:
+    (id_object, object_typ, superior_object, notes, [sj_ids...]) or None
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT
+                o.id_object,
+                o.object_typ,
+                o.superior_object,
+                o.notes,
+                ARRAY(
+                    SELECT s.id_sj
+                    FROM tab_sj s
+                    WHERE s.ref_object = o.id_object
+                    ORDER BY s.id_sj
+                ) AS sj_ids
+            FROM tab_object o
+            WHERE o.id_object = %s;
+            """,
+            (id_object,),
+        )
+        return cur.fetchone()
+
+
+def q_object_exists(conn, id_object: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM tab_object WHERE id_object = %s;", (id_object,))
+        return cur.fetchone() is not None
+
+
+def q_superior_exists(conn, superior_object: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM tab_object WHERE id_object = %s;", (superior_object,))
+        return cur.fetchone() is not None
+
+
+def q_sj_exists(conn, id_sj: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM tab_sj WHERE id_sj = %s;", (id_sj,))
+        return cur.fetchone() is not None
+
+
+def q_sj_belongs_to_other_object(conn, id_sj: int, id_object: int) -> bool:
+    """
+    True if SU is already assigned to a different object.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT ref_object FROM tab_sj WHERE id_sj = %s;",
+            (id_sj,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return False
+        ref_object = row[0]
+        return (ref_object is not None) and (ref_object != id_object)
+
+
+def q_unassign_sjs_not_in_list(conn, id_object: int, keep_sj_ids: list[int]):
+    """
+    Set ref_object NULL for SUs currently assigned to id_object but not in keep list.
+    """
+    with conn.cursor() as cur:
+        if keep_sj_ids:
+            cur.execute(
+                """
+                UPDATE tab_sj
+                SET ref_object = NULL
+                WHERE ref_object = %s
+                  AND NOT (id_sj = ANY(%s));
+                """,
+                (id_object, keep_sj_ids),
+            )
+        else:
+            cur.execute(
+                "UPDATE tab_sj SET ref_object = NULL WHERE ref_object = %s;",
+                (id_object,),
+            )
+
+
+def q_assign_sjs_to_object(conn, id_object: int, sj_ids: list[int]):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE tab_sj
+            SET ref_object = %s
+            WHERE id_sj = ANY(%s);
+            """,
+            (id_object, sj_ids),
+        )
+
+
+def q_update_object(conn, id_object: int, object_typ: str, superior_object, notes: str):
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE tab_object
+            SET object_typ = %s,
+                superior_object = %s,
+                notes = %s
+            WHERE id_object = %s;
+            """,
+            (object_typ, superior_object, notes, id_object),
+        )
+
+
+def q_delete_object(conn, id_object: int):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM tab_object WHERE id_object = %s;", (id_object,))
+
+
+def q_has_children(conn, id_object: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM tab_object WHERE superior_object = %s LIMIT 1;", (id_object,))
+        return cur.fetchone() is not None
+  
     
 
 

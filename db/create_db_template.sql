@@ -155,10 +155,12 @@ CREATE INDEX IF NOT EXISTS tab_geopts_geom_gix ON tab_geopts USING GIST (pts_geo
 ---
 CREATE TABLE tab_object (
 	id_object int4 NOT NULL,
-	object_typ VARCHAR(100) NULL,
-	superior_object int4 NULL DEFAULT 0,
-	notes TEXT NULL,
-	CONSTRAINT tab_object_pk PRIMARY KEY (id_object)
+	object_typ varchar(150) NULL,
+	superior_object int4 NULL,
+	notes text NULL,
+	CONSTRAINT tab_object_no_self_parent CHECK (((superior_object IS NULL) OR (superior_object <> id_object))),
+	CONSTRAINT tab_object_pk PRIMARY KEY (id_object),
+	CONSTRAINT tab_object_superior_fk FOREIGN KEY (superior_object) REFERENCES tab_object(id_object) ON DELETE RESTRICT
 );
 
 ---
