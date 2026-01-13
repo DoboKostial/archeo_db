@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
         data: {
             labels: labels,
             datasets: [{
-                label: 'Velikost databáze (MB)',
+                label: 'Database size (MB)',
                 data: data,
                 backgroundColor: backgroundColors,
                 borderColor: '#444',
@@ -34,14 +34,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 title: {
                     display: true,
-                    text: 'Velikost databází'
+                    text: 'Database size'
                 }
             },
             scales: {
                 x: {
                     title: {
                         display: true,
-                        text: 'Název databáze'
+                        text: 'Database name'
                     },
                     ticks: {
                         autoSkip: false,
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     beginAtZero: true,
                     title: {
                         display: true,
-                        text: 'Velikost v MB'
+                        text: 'Size in MB'
                     }
                 }
             }

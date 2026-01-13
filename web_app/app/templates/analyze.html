@@ -1,0 +1,198 @@
+{# web_app/app/templates/analyze.html #}
+{% extends "base.html" %}
+
+{% block title %}Analyze{% endblock %}
+
+{% block head %}
+  {# Chart.js – local asset (load once) #}
+  <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+  <a id="top"></a>
+
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h4 class="mb-0 d-flex align-items-center gap-2">
+      Analyze
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="modal"
+              data-bs-target="#helpAnalyze"
+              title="Help">?</button>
+    </h4>
+
+    <div class="d-flex gap-2">
+      <form method="POST" action="{{ url_for('analyze.analyze_run') }}">
+        <button type="submit" class="btn btn-primary">Run checks</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Help modal -->
+  <div class="modal fade" id="helpAnalyze" tabindex="-1" aria-labelledby="helpAnalyzeLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="helpAnalyzeLabel">Analyze – help</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">This page provides quick project health checks and summary charts.</p>
+          <ul class="mb-3">
+            <li><b>Charts</b> are loaded automatically (donut/pie charts).</li>
+            <li><b>Run checks</b> finds typical issues: missing links, missing media, overlaps, or orphan records.</li>
+            <li>Some rows provide direct links (e.g. open photo file, drawing detail API).</li>
+          </ul>
+          <div class="alert alert-secondary mb-0">
+            Tip: Use the “Open …” button in a rule block to jump to the related module (SUs / Polygons / Sections).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <h5 class="mb-0">Project overview</h5>
+          <div class="text-muted small">Donut/pie charts by type / linkage / nesting</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="reloadStatsBtn">
+          Reload charts
+        </button>
+      </div>
+
+      <hr class="my-3">
+
+      {# IMPORTANT: id + data-stats-url expected by analyze.js #}
+      <div id="statsCharts"
+           class="row g-3"
+           data-stats-url="{{ url_for('analyze.analyze_stats_json') }}">
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="card">
+    <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <h5 class="mb-0">Checks results</h5>
+          {% if total_issues is defined %}
+            <div class="text-muted small">Total issues: <b>{{ total_issues }}</b></div>
+          {% else %}
+            <div class="text-muted small">Press “Run checks” to generate results.</div>
+          {% endif %}
+        </div>
+        {% if analyze_results %}
+          <a class="btn btn-sm btn-outline-secondary" href="#top">Back to top</a>
+        {% endif %}
+      </div>
+
+      <hr class="my-3">
+
+      {% if analyze_results %}
+        <div class="accordion" id="analyzeAccordion">
+          {% for r in analyze_results %}
+            {% set item_id = "rule_" ~ loop.index %}
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="{{ item_id }}_hdr">
+                <button class="accordion-button collapsed" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#{{ item_id }}_body"
+                        aria-expanded="false"
+                        aria-controls="{{ item_id }}_body">
+                  <div class="d-flex w-100 justify-content-between align-items-center">
+                    <div class="me-3">
+                      <span class="badge text-bg-secondary me-2">{{ r.code }}</span>
+                      <span>{{ r.title }}</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      {% if r.error %}
+                        <span class="badge text-bg-danger">error</span>
+                      {% else %}
+                        <span class="badge text-bg-{% if r.count and r.count > 0 %}warning{% else %}success{% endif %}">
+                          {{ r.count }} issue(s)
+                        </span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </button>
+              </h2>
+
+              <div id="{{ item_id }}_body" class="accordion-collapse collapse"
+                   aria-labelledby="{{ item_id }}_hdr" data-bs-parent="#analyzeAccordion">
+                <div class="accordion-body">
+                  {% if r.module_link and r.module_link.url %}
+                    <div class="mb-3">
+                      <a class="btn btn-sm btn-outline-primary" href="{{ r.module_link.url }}">
+                        {{ r.module_link.label }}
+                      </a>
+                    </div>
+                  {% endif %}
+
+                  {% if r.error %}
+                    <div class="alert alert-danger mb-0">{{ r.error }}</div>
+                  {% else %}
+                    {% if r.count == 0 %}
+                      <div class="alert alert-success mb-0">No issues found for this check.</div>
+                    {% else %}
+                      <div class="table-responsive">
+                        <table class="table table-sm table-striped align-middle">
+                          <thead>
+                            <tr>
+                              <th style="width:1%">#</th>
+                              <th>Row</th>
+                              <th style="width:1%" class="text-nowrap">Link</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for it in r.rows %}
+                              <tr>
+                                <td class="text-muted">{{ loop.index }}</td>
+                                <td><code>{{ it.row }}</code></td>
+                                <td class="text-nowrap">
+                                  {% if it.link and it.link.url %}
+                                    <a href="{{ it.link.url }}" class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener">
+                                      {{ it.link.label }}
+                                    </a>
+                                  {% else %}
+                                    <span class="text-muted">—</span>
+                                  {% endif %}
+                                </td>
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-secondary mb-0">No results yet. Click <b>Run checks</b>.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  {# Load analyze.js ONCE #}
+  <script src="{{ url_for('static', filename='js/analyze.js') }}"></script>
+
+  <script>
+    // reload button (simple: full reload)
+    document.addEventListener("DOMContentLoaded", () => {
+      const btn = document.getElementById("reloadStatsBtn");
+      if (btn) btn.addEventListener("click", () => window.location.reload());
+    });
+  </script>
+{% endblock %}

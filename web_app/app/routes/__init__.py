@@ -12,3 +12,4 @@ from .photos import photos_bp
 from .photograms import photograms_bp
 from .sketches import sketches_bp
 from .drawings import drawings_bp
+from .analyze import analyze_bp

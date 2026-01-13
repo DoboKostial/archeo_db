@@ -2562,3 +2562,527 @@ def bulk_update_drawings_meta_sql(set_author: bool, set_date: bool, set_notes: b
       SET {", ".join(sets)}
       WHERE id_drawing = ANY(%(ids)s);
     """
+
+
+# ============================================================
+# ANALYZE: DASHBOARD DONUT STATS + DOMAIN RULE QUERIES (DDL-based)
+# ============================================================
+
+# ---------------------------
+# DONUT STATS (pie charts)
+# ---------------------------
+
+def stats_polygons_by_order_sql():
+    """
+    Donut: polygons by nesting depth (order).
+    depth=1 => root polygons (parent_name IS NULL)
+    """
+    return """
+        WITH RECURSIVE t AS (
+          SELECT polygon_name, parent_name, 1 AS depth
+          FROM tab_polygons
+          WHERE parent_name IS NULL
+          UNION ALL
+          SELECT p.polygon_name, p.parent_name, t.depth + 1
+          FROM tab_polygons p
+          JOIN t ON t.polygon_name = p.parent_name
+        ),
+        allp AS (
+          -- in case of any "orphan" rows (shouldn't happen due FK), include them as depth=1
+          SELECT p.polygon_name, COALESCE(t.depth, 1) AS depth
+          FROM tab_polygons p
+          LEFT JOIN t ON t.polygon_name = p.polygon_name
+        )
+        SELECT ('order ' || depth::text) AS label, COUNT(*)::bigint AS value
+        FROM allp
+        GROUP BY depth
+        ORDER BY depth;
+    """
+
+
+def stats_sj_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(sj_typ,''), '(empty)') AS label, COUNT(*)::bigint AS value
+        FROM tab_sj
+        GROUP BY COALESCE(NULLIF(sj_typ,''), '(empty)')
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_objects_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(object_typ,''), '(empty)') AS label, COUNT(*)::bigint AS value
+        FROM tab_object
+        GROUP BY COALESCE(NULLIF(object_typ,''), '(empty)')
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_objects_by_su_count_buckets_sql():
+    """
+    Donut: objects grouped by how many SUs they contain (0,1,2,3-4,5+).
+    """
+    return """
+        WITH c AS (
+          SELECT
+            o.id_object,
+            COUNT(s.id_sj)::int AS su_cnt
+          FROM tab_object o
+          LEFT JOIN tab_sj s ON s.ref_object = o.id_object
+          GROUP BY o.id_object
+        )
+        SELECT bucket AS label, COUNT(*)::bigint AS value
+        FROM (
+          SELECT
+            CASE
+              WHEN su_cnt = 0 THEN '0'
+              WHEN su_cnt = 1 THEN '1'
+              WHEN su_cnt = 2 THEN '2'
+              WHEN su_cnt BETWEEN 3 AND 4 THEN '3-4'
+              ELSE '5+'
+            END AS bucket
+          FROM c
+        ) x
+        GROUP BY bucket
+        ORDER BY
+          CASE bucket
+            WHEN '0' THEN 0
+            WHEN '1' THEN 1
+            WHEN '2' THEN 2
+            WHEN '3-4' THEN 3
+            ELSE 4
+          END;
+    """
+
+
+def stats_sections_by_type_sql():
+    return """
+        SELECT section_type::text AS label, COUNT(*)::bigint AS value
+        FROM tab_section
+        GROUP BY section_type
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_sections_by_su_count_buckets_sql():
+    """
+    Donut: sections grouped by number of linked SUs (0,1,2,3-4,5+).
+    """
+    return """
+        WITH c AS (
+          SELECT
+            s.id_section,
+            COUNT(x.ref_sj)::int AS su_cnt
+          FROM tab_section s
+          LEFT JOIN tabaid_sj_section x ON x.ref_section = s.id_section
+          GROUP BY s.id_section
+        )
+        SELECT bucket AS label, COUNT(*)::bigint AS value
+        FROM (
+          SELECT
+            CASE
+              WHEN su_cnt = 0 THEN '0'
+              WHEN su_cnt = 1 THEN '1'
+              WHEN su_cnt = 2 THEN '2'
+              WHEN su_cnt BETWEEN 3 AND 4 THEN '3-4'
+              ELSE '5+'
+            END AS bucket
+          FROM c
+        ) x
+        GROUP BY bucket
+        ORDER BY
+          CASE bucket
+            WHEN '0' THEN 0
+            WHEN '1' THEN 1
+            WHEN '2' THEN 2
+            WHEN '3-4' THEN 3
+            ELSE 4
+          END;
+    """
+
+def stats_photos_by_type_sql():
+    return """
+        SELECT photo_typ AS label, COUNT(*)::bigint AS value
+        FROM tab_photos
+        GROUP BY photo_typ
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_sketches_by_type_sql():
+    return """
+        SELECT sketch_typ AS label, COUNT(*)::bigint AS value
+        FROM tab_sketches
+        GROUP BY sketch_typ
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_photograms_vs_drawings_sql():
+    """
+    Donut: photograms vs drawings (counts).
+    """
+    return """
+        SELECT 'photograms' AS label, COUNT(*)::bigint AS value
+        FROM tab_photograms
+        UNION ALL
+        SELECT 'drawings' AS label, COUNT(*)::bigint AS value
+        FROM tab_drawings;
+    """
+
+def stats_photograms_by_type_sql():
+    return """
+        SELECT photogram_typ AS label, COUNT(*)::bigint AS value
+        FROM tab_photograms
+        GROUP BY photogram_typ
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_finds_by_type_sql():
+    return """
+        SELECT ref_find_type AS label, COUNT(*)::bigint AS value
+        FROM tab_finds
+        GROUP BY ref_find_type
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+def stats_samples_by_type_sql():
+    return """
+        SELECT ref_sample_type AS label, COUNT(*)::bigint AS value
+        FROM tab_samples
+        GROUP BY ref_sample_type
+        ORDER BY COUNT(*) DESC, label;
+    """
+
+
+# ----------------------------
+# ANALYZE: DOMAIN RULES (lists)
+# ----------------------------
+
+# --- ANALYZE / STATS -------------------------------------------------
+
+def stats_polygons_by_row_sql():
+    return """
+        SELECT
+          SUM(CASE WHEN parent_name IS NULL THEN 1 ELSE 0 END)::int AS row1,
+          SUM(CASE WHEN parent_name IS NOT NULL THEN 1 ELSE 0 END)::int AS row2
+        FROM tab_polygons;
+    """
+
+
+def stats_su_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(LOWER(sj_typ), ''), 'unknown') AS sj_typ, COUNT(*)::int
+        FROM tab_sj
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_objects_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(object_typ,''), 'unknown') AS object_typ, COUNT(*)::int
+        FROM tab_object
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_objects_by_su_count_bucket_sql():
+    """
+    Pie: objects grouped by how many SUs they contain (0,1,2,3,4,5+).
+    Returns rows: (bucket_label, count)
+    """
+    return """
+        WITH x AS (
+          SELECT
+            o.id_object,
+            COUNT(s.id_sj)::int AS su_cnt
+          FROM tab_object o
+          LEFT JOIN tab_sj s ON s.ref_object = o.id_object
+          GROUP BY o.id_object
+        )
+        SELECT bucket, COUNT(*)::int
+        FROM (
+          SELECT
+            CASE
+              WHEN su_cnt = 0 THEN '0'
+              WHEN su_cnt = 1 THEN '1'
+              WHEN su_cnt = 2 THEN '2'
+              WHEN su_cnt = 3 THEN '3'
+              WHEN su_cnt = 4 THEN '4'
+              ELSE '5+'
+            END AS bucket
+          FROM x
+        ) t
+        GROUP BY bucket
+        ORDER BY
+          CASE bucket
+            WHEN '0' THEN 0
+            WHEN '1' THEN 1
+            WHEN '2' THEN 2
+            WHEN '3' THEN 3
+            WHEN '4' THEN 4
+            ELSE 5
+          END;
+    """
+
+
+
+def stats_sections_by_type_sql():
+    return """
+        SELECT section_type::text, COUNT(*)::int
+        FROM tab_section
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_sections_by_su_count_bucket_sql():
+    """
+    Pie: sections grouped by number of linked SUs (0,1,2,3,4,5+).
+    Returns: (bucket, count)
+    """
+    return """
+        WITH x AS (
+          SELECT
+            s.id_section,
+            COUNT(l.ref_sj)::int AS su_cnt
+          FROM tab_section s
+          LEFT JOIN tabaid_sj_section l ON l.ref_section = s.id_section
+          GROUP BY s.id_section
+        )
+        SELECT bucket, COUNT(*)::int
+        FROM (
+          SELECT
+            CASE
+              WHEN su_cnt = 0 THEN '0'
+              WHEN su_cnt = 1 THEN '1'
+              WHEN su_cnt = 2 THEN '2'
+              WHEN su_cnt = 3 THEN '3'
+              WHEN su_cnt = 4 THEN '4'
+              ELSE '5+'
+            END AS bucket
+          FROM x
+        ) t
+        GROUP BY bucket
+        ORDER BY
+          CASE bucket
+            WHEN '0' THEN 0
+            WHEN '1' THEN 1
+            WHEN '2' THEN 2
+            WHEN '3' THEN 3
+            WHEN '4' THEN 4
+            ELSE 5
+          END;
+    """
+
+
+
+def stats_photos_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(LOWER(photo_typ), ''), 'unknown') AS photo_typ, COUNT(*)::int
+        FROM tab_photos
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_sketches_by_type_sql():
+    return """
+        SELECT COALESCE(NULLIF(LOWER(sketch_typ), ''), 'unknown') AS sketch_typ, COUNT(*)::int
+        FROM tab_sketches
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_photograms_vs_drawings_sql():
+    return """
+        SELECT
+          (SELECT COUNT(*)::int FROM tab_photograms) AS photograms,
+          (SELECT COUNT(*)::int FROM tab_drawings)  AS drawings;
+    """
+
+
+def stats_finds_by_type_sql():
+    return """
+        SELECT ref_find_type::text, COUNT(*)::int
+        FROM tab_finds
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+def stats_samples_by_type_sql():
+    return """
+        SELECT ref_sample_type::text, COUNT(*)::int
+        FROM tab_samples
+        GROUP BY 1
+        ORDER BY 2 DESC, 1;
+    """
+
+
+# --- ANALYZE RULES ----------------------------------------------------
+
+def rule_polygons_without_su_sql():
+    return """
+        SELECT p.polygon_name
+        FROM tab_polygons p
+        LEFT JOIN (SELECT DISTINCT ref_polygon FROM tabaid_sj_polygon) x
+          ON x.ref_polygon = p.polygon_name
+        WHERE x.ref_polygon IS NULL
+        ORDER BY p.polygon_name;
+    """
+
+
+def rule_polygons_overlap_same_row_sql():
+    # same nesting row: (parent_name IS NULL) boolean equality
+    return """
+        WITH p AS (
+          SELECT polygon_name, parent_name, geom_top, geom_bottom
+          FROM tab_polygons
+        ),
+        pairs_top AS (
+          SELECT a.polygon_name AS a, b.polygon_name AS b
+          FROM p a
+          JOIN p b ON a.polygon_name < b.polygon_name
+          WHERE (a.parent_name IS NULL) = (b.parent_name IS NULL)
+            AND a.geom_top IS NOT NULL AND b.geom_top IS NOT NULL
+            AND ST_Intersects(a.geom_top, b.geom_top)
+            AND (ST_Overlaps(a.geom_top, b.geom_top) OR ST_Area(ST_Intersection(a.geom_top, b.geom_top)) > 0)
+        ),
+        pairs_bottom AS (
+          SELECT a.polygon_name AS a, b.polygon_name AS b
+          FROM p a
+          JOIN p b ON a.polygon_name < b.polygon_name
+          WHERE (a.parent_name IS NULL) = (b.parent_name IS NULL)
+            AND a.geom_bottom IS NOT NULL AND b.geom_bottom IS NOT NULL
+            AND ST_Intersects(a.geom_bottom, b.geom_bottom)
+            AND (ST_Overlaps(a.geom_bottom, b.geom_bottom) OR ST_Area(ST_Intersection(a.geom_bottom, b.geom_bottom)) > 0)
+        )
+        SELECT 'top' AS side, a, b FROM pairs_top
+        UNION ALL
+        SELECT 'bottom' AS side, a, b FROM pairs_bottom
+        ORDER BY side, a, b;
+    """
+
+
+def rule_polygons_missing_edges_sql():
+    return """
+        SELECT polygon_name,
+               (geom_top IS NOT NULL) AS has_top_geom,
+               (geom_bottom IS NOT NULL) AS has_bottom_geom
+        FROM tab_polygons
+        WHERE geom_top IS NULL OR geom_bottom IS NULL
+        ORDER BY polygon_name;
+    """
+
+
+def rule_su_without_photo_sql():
+    return """
+        SELECT s.id_sj
+        FROM tab_sj s
+        LEFT JOIN (SELECT DISTINCT ref_sj FROM tabaid_photo_sj) p ON p.ref_sj = s.id_sj
+        WHERE p.ref_sj IS NULL
+        ORDER BY s.id_sj;
+    """
+
+
+def rule_su_without_sketch_sql():
+    return """
+        SELECT s.id_sj
+        FROM tab_sj s
+        LEFT JOIN (SELECT DISTINCT ref_sj FROM tabaid_sj_sketch) k ON k.ref_sj = s.id_sj
+        WHERE k.ref_sj IS NULL
+        ORDER BY s.id_sj;
+    """
+
+
+def rule_su_without_relation_sql():
+    return """
+        SELECT s.id_sj
+        FROM tab_sj s
+        LEFT JOIN (
+          SELECT ref_sj1 AS sj FROM tab_sj_stratigraphy
+          UNION
+          SELECT ref_sj2 AS sj FROM tab_sj_stratigraphy
+        ) rel ON rel.sj = s.id_sj
+        WHERE rel.sj IS NULL
+        ORDER BY s.id_sj;
+    """
+
+
+def rule_sections_without_su_sql():
+    return """
+        SELECT s.id_section
+        FROM tab_section s
+        LEFT JOIN (SELECT DISTINCT ref_section FROM tabaid_sj_section) x ON x.ref_section = s.id_section
+        WHERE x.ref_section IS NULL
+        ORDER BY s.id_section;
+    """
+
+
+def rule_sections_without_photo_sql():
+    return """
+        SELECT s.id_section
+        FROM tab_section s
+        LEFT JOIN (SELECT DISTINCT ref_section FROM tabaid_section_photos) p ON p.ref_section = s.id_section
+        WHERE p.ref_section IS NULL
+        ORDER BY s.id_section;
+    """
+
+
+def rule_sections_without_sketch_sql():
+    return """
+        SELECT s.id_section
+        FROM tab_section s
+        LEFT JOIN (SELECT DISTINCT ref_section FROM tabaid_section_sketches) k ON k.ref_section = s.id_section
+        WHERE k.ref_section IS NULL
+        ORDER BY s.id_section;
+    """
+
+
+def rule_orphan_photos_sql():
+    return """
+        SELECT p.id_photo
+        FROM tab_photos p
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_photo_sj x WHERE x.ref_photo=p.id_photo)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_photos pp WHERE pp.ref_photo=p.id_photo)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_photos sp WHERE sp.ref_photo=p.id_photo)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_finds_photos fp WHERE fp.ref_photo=p.id_photo)
+        ORDER BY p.id_photo;
+    """
+
+
+def rule_orphan_sketches_sql():
+    return """
+        SELECT s.id_sketch
+        FROM tab_sketches s
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch x WHERE x.ref_sketch=s.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_sketches pp WHERE pp.ref_sketch=s.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_sketches sp WHERE sp.ref_sketch=s.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_finds_sketches fp WHERE fp.ref_sketch=s.id_sketch)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_samples_sketches sap WHERE sap.ref_sketch=s.id_sketch)
+        ORDER BY s.id_sketch;
+    """
+
+
+def rule_orphan_drawings_sql():
+    return """
+        SELECT d.id_drawing
+        FROM tab_drawings d
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_sj_drawings x WHERE x.ref_drawing=d.id_drawing)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_drawings sp WHERE sp.ref_drawing=d.id_drawing)
+        ORDER BY d.id_drawing;
+    """
+
+
+def rule_orphan_photograms_sql():
+    # Podle DDL, které jsi poslal, jistě existuje tabaid_photogram_sj.
+    # Pokud máš navíc polygon/section link tabulky pro photograms, přidáš EXISTS sem.
+    return """
+        SELECT p.id_photogram
+        FROM tab_photograms p
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj x WHERE x.ref_photogram=p.id_photogram)
+        ORDER BY p.id_photogram;
+    """
