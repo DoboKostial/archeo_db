@@ -3,7 +3,7 @@ import jwt
 from flask import Flask, request, redirect, url_for, jsonify, g
 from config import Config
 from app.logger import logger
-from app.extensions import csrf  # NEW
+from app.extensions import csrf
 
 
 def create_app():
@@ -91,12 +91,12 @@ def create_app():
 
     @app.context_processor
     def inject_user_info():
-        # IMPORTANT: navbar/header má být dostupný všude bez DB hitu
+        # IMPORTANT: navbar/header available everywhere without DB hit
         return dict(
             user_name=getattr(g, "user_name", "") or "",
             user_email=getattr(g, "user_email", "") or "",
             user_role=getattr(g, "user_role", "") or "",
-            last_login=getattr(g, "user_last_login", "") or "",  # NEW
+            last_login=getattr(g, "user_last_login", "") or "",
         )
 
     return app

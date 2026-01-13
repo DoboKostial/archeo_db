@@ -24,8 +24,8 @@ from app.utils.auth import send_password_reset_email, send_password_change_email
 
 auth_bp = Blueprint("auth", __name__)
 
-JWT_SESSION_MINUTES = 15
-RESET_TOKEN_MINUTES = 30
+JWT_SESSION_MINUTES = 60
+RESET_TOKEN_MINUTES = 120
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
