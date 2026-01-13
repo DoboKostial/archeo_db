@@ -17,7 +17,7 @@
       <button type="button"
               class="btn btn-sm btn-outline-secondary"
               data-bs-toggle="modal"
-              data-bs-target="#helpPhotossUpload"
+              data-bs-target="#helpPhotosUpload"
               title="Help">
         ?
       </button>
@@ -444,6 +444,26 @@
   </div>
 
 </div>
+
+
+<!-- HELP MODAL -->
+<div class="modal fade" id="helpPhotosUpload" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Photos: help</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        {% include 'help/photos_help.html' %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <!-- EDIT MODAL -->
 <div class="modal fade" id="modalEdit" tabindex="-1" aria-hidden="true">
