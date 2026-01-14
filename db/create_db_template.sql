@@ -164,7 +164,7 @@ CREATE TABLE tab_object (
 );
 
 
-CREATE TABLE IF NOT EXISTS tab_object_grave (
+CREATE TABLE IF NOT EXISTS tab_object_inhum_grave (
   id_object        int4 PRIMARY KEY REFERENCES tab_object(id_object) ON DELETE CASCADE,
 
   preservation     text NULL,             -- e.g.. 'complete'|'partial'|'poor'...
