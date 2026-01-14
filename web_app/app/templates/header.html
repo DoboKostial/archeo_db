@@ -14,12 +14,11 @@
         {% endif %}
 
         <!-- Terrain entry modules -->
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('polygons.polygons') }}">TE:POLYGONS</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.add_su') }}">TE:ST.UNITS</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('archeo_objects.objects') }}">TE:OBJECTS</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.harrismatrix') }}">TE:HARRISMATRIX</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('sections.sections') }}">TE:SECTIONS</a></li>
-        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('geodesy.geodesy') }}">DE:GEODESY</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('polygons.polygons') }}">TE: POLYGONS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.add_su') }}">TE: STRAT.UNITS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('archeo_objects.objects') }}">TE: OBJECTS</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('su.harrismatrix') }}">TE: HARRISMATRIX</a></li>
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('sections.sections') }}">TE: SECTIONS</a></li>
         <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('finds_samples.finds_samples') }}">TE: FINDS</a></li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle text-danger"
@@ -28,15 +27,17 @@
           role="button"
           data-bs-toggle="dropdown"
           aria-expanded="false">
-            MEDIA
+            DE: MEDIA
           </a>
           <ul class="dropdown-menu" aria-labelledby="navMediaDropdown">
-            <li><a class="dropdown-item text-danger" href="{{ url_for('photos.photos') }}">PHOTOS</a></li>
-            <li><a class="dropdown-item text-danger" href="{{ url_for('photograms.photograms') }}">PHOTOGRAMS</a></li>
-            <li><a class="dropdown-item text-danger" href="{{ url_for('sketches.sketches') }}">SKETCHES</a></li>
-            <li><a class="dropdown-item text-danger" href="{{ url_for('drawings.drawings') }}">DRAWINGS</a></li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('photos.photos') }}">DE: PHOTOS</a></li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('photograms.photograms') }}">DE: PHOTOGRAMS</a></li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('sketches.sketches') }}">DE: SKETCHES</a></li>
+            <li><a class="dropdown-item text-danger" href="{{ url_for('drawings.drawings') }}">DE: DRAWINGS</a></li>
           </ul>
-        </li>        
+        </li> 
+        <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('geodesy.geodesy') }}">DE: GEODESY</a></li>
+        <!-- Analyze -->    
         <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('analyze.analyze') }}">ANALYZE</a></li>
       </ul>
 
