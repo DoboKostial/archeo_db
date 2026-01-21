@@ -4,7 +4,7 @@ from flask import Flask, request, redirect, url_for, jsonify, g
 from config import Config
 from app.logger import logger
 from app.extensions import csrf
-
+from app.reports.service import init_report_generators
 
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -12,11 +12,13 @@ def create_app():
 
     # init CSRF protection
     csrf.init_app(app)
+    # generator for reports
+    init_report_generators()
 
     from app.routes import (
         main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp,
         sections_bp, geodesy_bp, finds_samples_bp, photos_bp, photograms_bp,
-        sketches_bp, drawings_bp, analyze_bp
+        sketches_bp, drawings_bp, analyze_bp, reports_bp
     )
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -32,6 +34,8 @@ def create_app():
     app.register_blueprint(sketches_bp)
     app.register_blueprint(drawings_bp)
     app.register_blueprint(analyze_bp)
+    app.register_blueprint(reports_bp)
+
 
     PUBLIC_ENDPOINTS = {"auth.login", "auth.forgot_password"}
 
