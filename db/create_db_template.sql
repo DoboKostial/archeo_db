@@ -544,7 +544,7 @@ CREATE INDEX IF NOT EXISTS tabaid_samples_sketches_sketch_idx ON tabaid_samples_
 -- this table connects photos and SUs (stratigraphic units)
 CREATE TABLE tabaid_photo_sj (
 	id_aut serial4 NOT NULL,
-	ref_photo VARCHAR(120) NOT NULL,
+	ref_photo VARCHAR(150) NOT NULL,
 	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_photo_sj_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_photo_sj_fk_photo FOREIGN KEY (ref_photo) REFERENCES tab_photos(id_photo) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -558,7 +558,7 @@ CREATE INDEX tabaid_photo_sj_ref_photo_idx ON tabaid_photo_sj(ref_photo);
 -- this table connects drawings and SUs (stratigraphic units)
 CREATE TABLE tabaid_sj_drawings (
 	id_aut serial4 NOT NULL,
-	ref_drawing VARCHAR(120) NOT NULL,
+	ref_drawing VARCHAR(150) NOT NULL,
 	ref_sj int4 NOT NULL,
 	CONSTRAINT tabaid_sj_drawings_pk PRIMARY KEY (id_aut),
 	CONSTRAINT tabaid_sj_drawings_fk_drawing FOREIGN KEY (ref_drawing) REFERENCES tab_drawings(id_drawing) ON DELETE CASCADE ON UPDATE CASCADE,
