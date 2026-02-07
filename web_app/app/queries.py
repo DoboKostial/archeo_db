@@ -108,6 +108,15 @@ def get_user_role():
     return "SELECT group_role FROM app_users WHERE mail = %s"
 
 
+# Authors (for <select>)
+
+def list_authors_sql():
+    """
+    Returns authors' emails for dropdowns.
+    """
+    return "SELECT mail FROM gloss_personalia ORDER BY mail;"
+
+
 # -------------------------------------------------------------------
 # Admin + SRID helpers (auth_db + terrain_db_template + terrain DBs)
 # -------------------------------------------------------------------
@@ -767,17 +776,6 @@ def reparent_children_sql():
 def delete_polygon_sql():
     """Delete polygon by name. Params: (polygon_name,)"""
     return "DELETE FROM tab_polygons WHERE polygon_name = %s;"
-
-
-# -----------------------
-# Authors (for <select>)
-# -----------------------
-
-def list_authors_sql():
-    """
-    Returns authors' emails for dropdowns.
-    """
-    return "SELECT mail FROM gloss_personalia ORDER BY mail;"
 
 
 # -------------------------
@@ -1688,15 +1686,6 @@ def stats_by_type_sql():
 # -------------------------
 # Search endpoints (AJAX for select2 in media handling)
 # -------------------------
-
-#def search_authors_sql():
-#    return """
-#        SELECT mail
-#        FROM gloss_personalia
-#        WHERE mail ILIKE %s
-#        ORDER BY mail
-#        LIMIT %s OFFSET %s;
-#    """
 
 
 def search_sj_sql():
@@ -3077,8 +3066,6 @@ def rule_orphan_drawings_sql():
 
 
 def rule_orphan_photograms_sql():
-    # Podle DDL, které jsi poslal, jistě existuje tabaid_photogram_sj.
-    # Pokud máš navíc polygon/section link tabulky pro photograms, přidáš EXISTS sem.
     return """
         SELECT p.id_photogram
         FROM tab_photograms p
