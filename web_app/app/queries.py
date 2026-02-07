@@ -3073,3 +3073,148 @@ def rule_orphan_photograms_sql():
           NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj x WHERE x.ref_photogram=p.id_photogram)
         ORDER BY p.id_photogram;
     """
+
+#### 
+# REPORTS SECTION
+####
+
+# -------------------------------------------------------------------
+# REPORTING: SJ cards (1 SJ = 1 page)
+# -------------------------------------------------------------------
+
+from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_SJ
+
+def report_sj_cards_list_sj_sql():
+    """
+    Reuse existing SQL used for media select.
+    Returns rows (id_sj, sj_typ, description); report will take only id_sj.
+    """
+    return list_su_for_media_select_sql()
+
+
+def report_sj_cards_detail_sql():
+    """
+    SJ detail for report card.
+    Includes:
+      - tab_sj (base)
+      - type-specific 1:1 tables via LEFT JOIN (deposit/negativ/structure)
+      - aggregated stratigraphy relations (tab_sj_stratigraphy)
+    """
+    return """
+        SELECT
+            s.id_sj,
+            COALESCE(s.sj_typ, '')            AS sj_typ,
+            COALESCE(s.description, '')       AS description,
+            COALESCE(s.interpretation, '')    AS interpretation,
+            COALESCE(s.author, '')            AS author,
+            s.recorded                         AS recorded,
+            COALESCE(s.docu_plan, false)      AS docu_plan,
+            COALESCE(s.docu_vertical, false)  AS docu_vertical,
+            s.ref_object                       AS ref_object,
+
+            -- Which 1:1 type table exists (first match wins)
+            CASE
+              WHEN d.id_deposit   IS NOT NULL THEN 'deposit'
+              WHEN n.id_negativ   IS NOT NULL THEN 'negativ'
+              WHEN st.id_structure IS NOT NULL THEN 'structure'
+              ELSE ''
+            END AS sj_subtype,
+
+            -- deposit 1:1
+            COALESCE(d.deposit_typ, '')           AS deposit_typ,
+            COALESCE(d.color, '')                 AS deposit_color,
+            COALESCE(d.boundary_visibility, '')   AS deposit_boundary_visibility,
+            COALESCE(d."structure", '')           AS deposit_structure,
+            COALESCE(d.compactness, '')           AS deposit_compactness,
+            COALESCE(d.deposit_removed, '')       AS deposit_removed,
+
+            -- negativ 1:1
+            COALESCE(n.negativ_typ, '')           AS negativ_typ,
+            COALESCE(n.excav_extent, '')          AS negativ_excav_extent,
+            COALESCE(n.ident_niveau_cut, false)   AS negativ_ident_niveau_cut,
+            COALESCE(n.shape_plan, '')            AS negativ_shape_plan,
+            COALESCE(n.shape_sides, '')           AS negativ_shape_sides,
+            COALESCE(n.shape_bottom, '')          AS negativ_shape_bottom,
+
+            -- structure 1:1
+            COALESCE(st.structure_typ, '')        AS structure_typ,
+            COALESCE(st.construction_typ, '')     AS structure_construction_typ,
+            COALESCE(st.binder, '')               AS structure_binder,
+            COALESCE(st.basic_material, '')       AS structure_basic_material,
+            st.length_m                           AS structure_length_m,
+            st.width_m                            AS structure_width_m,
+            st.height_m                           AS structure_height_m,
+
+            -- Stratigraphy relations (aggregated lists)
+            COALESCE((
+              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj1 = s.id_sj AND r.relation = '<'
+            ), '') AS rel_ref1_lt,
+
+            COALESCE((
+              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj1 = s.id_sj AND r.relation = '>'
+            ), '') AS rel_ref1_gt,
+
+            COALESCE((
+              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj1 = s.id_sj AND r.relation = '='
+            ), '') AS rel_ref1_eq,
+
+            COALESCE((
+              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj2 = s.id_sj AND r.relation = '<'
+            ), '') AS rel_ref2_lt,
+
+            COALESCE((
+              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj2 = s.id_sj AND r.relation = '>'
+            ), '') AS rel_ref2_gt,
+
+            COALESCE((
+              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
+              FROM tab_sj_stratigraphy r
+              WHERE r.ref_sj2 = s.id_sj AND r.relation = '='
+            ), '') AS rel_ref2_eq
+
+        FROM tab_sj s
+        LEFT JOIN tab_sj_deposit   d  ON d.id_deposit   = s.id_sj
+        LEFT JOIN tab_sj_negativ   n  ON n.id_negativ   = s.id_sj
+        LEFT JOIN tab_sj_structure st ON st.id_structure = s.id_sj
+        WHERE s.id_sj = %s;
+    """
+
+
+def report_sj_cards_media_ids_sql(kind: str):
+    """
+    Generic SQL for media IDs attached to SJ (photos/sketches/drawings/photograms),
+    built from app/utils/media_map.py.
+    """
+    if kind not in MEDIA_TABLES:
+        raise KeyError(f"Unknown media kind: {kind}")
+    if kind not in LINK_TABLES_SJ:
+        raise KeyError(f"Missing SJ link mapping for kind: {kind}")
+
+    media = MEDIA_TABLES[kind]
+    link = LINK_TABLES_SJ[kind]
+
+    media_table = media["table"]
+    id_col = media["id_col"]
+
+    link_table = link["table"]
+    fk_media = link["fk_media"]
+    fk_sj = link["fk_sj"]
+
+    return f"""
+        SELECT m.{id_col}
+        FROM {media_table} m
+        JOIN {link_table} x ON x.{fk_media} = m.{id_col}
+        WHERE x.{fk_sj} = %s
+        ORDER BY m.{id_col} DESC;
+    """
+
