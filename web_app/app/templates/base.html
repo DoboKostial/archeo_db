@@ -9,11 +9,13 @@
 
     <!-- Bootstrap CSS (local version to ensure offline availability) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
-
-    {% block head %}{% endblock %}
-
+    <!-- Your overrides / small custom UI tweaks -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <!-- leaflet styles -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    {% block head %}{% endblock %}
 
 
 </head>
@@ -54,7 +56,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (!token) return;
 
   document.querySelectorAll('form[method="POST"], form[method="post"]').forEach((form) => {
-    // pokud už token existuje, nesahej na to
+    // if token exists, leave it
     if (form.querySelector('input[name="csrf_token"]')) return;
 
     const inp = document.createElement("input");

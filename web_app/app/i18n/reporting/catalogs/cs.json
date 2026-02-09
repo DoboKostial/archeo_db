@@ -1,0 +1,81 @@
+{
+  "common.reports": "Reporty",
+  "common.language": "Jazyk",
+  "common.generate_pdf": "Vygenerovat PDF",
+  "common.generated_on": "Vygenerováno",
+  "common.database": "Databáze",
+  "common.user": "Uživatel",
+
+  "report.sample.title": "Ukázkový report",
+  "report.sample.description": "Demonstrace lokalizace reportů + generování PDF",
+
+
+  "header.sj_list.title": "Seznam strat. jednotek",
+  "header.action": "Akce",
+  "header.database": "Databáze",
+
+  "report.sj_cards.title": "Stratigrafická jednotka",
+  "report.sj_cards.description": "Karta SJ (1 SJ = 1 strana A4)",
+  "section.sj.media": "Grafická dokumentace",
+  "common.no_media": "Bez připojených médií.",
+
+  "field.sj.id": "Strat. jednotka:",
+  "field.sj.type": "Typ SJ:",
+  "field.sj.subtype": "podtyp",
+  "field.sj.author": "Autor:",
+  "field.sj.recorded": "Zapsáno",
+  "field.sj.docu_plan": "Dokumentace v půdorysu",
+  "field.sj.docu_vertical": "Dokumentace vertikála",
+  "field.sj.ref_object": "Objekt",
+  "field.sj.description": "Popis",
+  "field.sj.interpretation": "Interpretace",
+  "field.strat.above": "Nad (SJs nad touto SJ)",
+  "field.strat.below": "Pod (SJs pod touto SJ)",
+  "field.strat.equal": "Stejné (SJs ve stejné úrovni)",
+
+  "section.finds_samples": "Nálezy / vzorky",
+  "field.finds.count": "Nálezy (počet položek)",
+  "field.finds.sum_count": "Nálezy (součet ks)",
+  "field.samples.count": "Vzorky (počet)",
+  "common.more": "více",
+  "common.page": "Strana",
+
+  "media.photos.title": "Photos",
+  "media.drawings.title": "Drawings",
+  "media.sketches.title": "Sketches",
+  "media.photograms.title": "Photograms",
+
+  "media.photos.short": "P",
+  "media.drawings.short": "D",
+  "media.sketches.short": "S",
+  "media.photograms.short": "Ph",
+
+  "field.deposit.deposit_typ": "Zásyp – typ",
+  "field.deposit.color": "Zásyp – barva",
+  "field.deposit.boundary_visibility": "Zásyp – čitelnost hranice",
+  "field.deposit.structure": "Zásyp – struktura",
+  "field.deposit.compactness": "Zásyp – kompaktnost",
+  "field.deposit.deposit_removed": "Zásyp – odstraněno",
+
+  "field.negativ.negativ_typ": "Negativ – typ",
+  "field.negativ.excav_extent": "Negativ – rozsah výkopu",
+  "field.negativ.ident_niveau_cut": "Negativ – identifikace nivelety řezu",
+  "field.negativ.shape_plan": "Negativ – tvar v plánu",
+  "field.negativ.shape_sides": "Negativ – tvar stěn",
+  "field.negativ.shape_bottom": "Negativ – tvar dna",
+
+  "field.structure.structure_typ": "Konstrukce – typ",
+  "field.structure.construction_typ": "Konstrukce – provedení",
+  "field.structure.binder": "Konstrukce – pojivo",
+  "field.structure.basic_material": "Konstrukce – materiál",
+  "field.structure.length_m": "Konstrukce – délka (m)",
+  "field.structure.width_m": "Konstrukce – šířka (m)",
+  "field.structure.height_m": "Konstrukce – výška (m)",
+
+  "field.strat.rel_ref1_lt": "Stratigrafie (SJ jako ref_sj1): '<' → ref_sj2",
+  "field.strat.rel_ref1_gt": "Stratigrafie (SJ jako ref_sj1): '>' → ref_sj2",
+  "field.strat.rel_ref1_eq": "Stratigrafie (SJ jako ref_sj1): '=' → ref_sj2",
+  "field.strat.rel_ref2_lt": "Stratigrafie (SJ jako ref_sj2): ref_sj1 '<' SJ",
+  "field.strat.rel_ref2_gt": "Stratigrafie (SJ jako ref_sj2): ref_sj1 '>' SJ",
+  "field.strat.rel_ref2_eq": "Stratigrafie (SJ jako ref_sj2): ref_sj1 '=' SJ"
+}

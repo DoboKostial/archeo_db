@@ -1,0 +1,7 @@
+{
+  "default_lang": "en",
+  "languages": {
+    "en": { "label": "English", "locale": "en_US", "icon": "flags/GB.png", "file": "catalogs/en.json" },
+    "cs": { "label": "Čeština", "locale": "cs_CZ", "icon": "flags/CZ.png", "file": "catalogs/cs.json" }
+  }
+}

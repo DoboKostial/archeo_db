@@ -1,0 +1,59 @@
+/* Reports: language selector (flags) */
+.lang-flag {
+  width: 56px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.12);
+  transition: transform .12s ease-in-out, box-shadow .12s ease-in-out, border-color .12s ease-in-out;
+  background: #fff;
+}
+
+.lang-flag:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0.35rem 0.9rem rgba(0,0,0,.16);
+}
+
+.lang-flag.active {
+  border: 3px solid var(--bs-primary);
+  box-shadow: 0 0.35rem 1.0rem rgba(13,110,253,.22);
+}
+
+.lang-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 12px;
+  text-decoration: none;
+}
+
+.lang-pill:focus-visible {
+  outline: 3px solid rgba(13,110,253,.35);
+  outline-offset: 2px;
+}
+
+/* fallback when icon is emoji/text */
+.lang-fallback {
+  min-width: 56px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  background: #fff;
+  transition: transform .12s ease-in-out, box-shadow .12s ease-in-out, border-color .12s ease-in-out;
+}
+
+.lang-fallback:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0.35rem 0.9rem rgba(0,0,0,.16);
+}
+
+.lang-fallback.active {
+  border: 3px solid var(--bs-primary);
+  box-shadow: 0 0.35rem 1.0rem rgba(13,110,253,.22);
+}

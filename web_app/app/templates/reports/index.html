@@ -1,0 +1,71 @@
+{# app/templates/reports/index.html #}
+{% extends "base.html" %}
+{% block title %}{{ t("common.reports") }}{% endblock %}
+
+
+{% block content %}
+<div class="alert alert-info" role="alert">
+  You are working with database <strong>{{ selected_db }}</strong>.
+</div>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <h4 class="mb-0">{{ t("common.reports") }}</h4>
+
+<div class="d-flex align-items-center gap-2">
+  <span class="text-muted small">{{ t("common.language") }}:</span>
+
+  {% for l in languages %}
+    <a class="lang-pill"
+       href="{{ url_for('reports.reports_index', lang=l.code) }}"
+       title="{{ l.label }}"
+       aria-label="{{ l.label }}">
+
+      {# icon is a static path like "flags/cz.png" #}
+      {% if l.icon and ('/' in l.icon) %}
+        <img src="{{ url_for('static', filename=l.icon) }}"
+             class="lang-flag {% if l.code == lang %}active{% endif %}"
+             alt="{{ l.label }}">
+      {% else %}
+        <span class="lang-fallback {% if l.code == lang %}active{% endif %}">
+          {{ l.icon if l.icon else l.code|upper }}
+        </span>
+      {% endif %}
+    </a>
+  {% endfor %}
+</div>
+
+</div>
+
+{% if reports|length == 0 %}
+  <div class="alert alert-secondary">
+    No reports available.
+  </div>
+{% else %}
+  <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-3">
+    {% for r in reports %}
+    <div class="col">
+      <div class="card h-100">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="fw-semibold">{{ r.icon }} {{ r.title }}</div>
+            <span class="badge text-bg-light">{{ r.id }}</span>
+          </div>
+
+          <p class="text-muted small mb-3">{{ r.description }}</p>
+
+          <form method="POST"
+                action="{{ url_for('reports.generate_report', report_id=r.id, lang=lang) }}"
+                class="mt-auto">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-success w-100">
+              {{ t("common.generate_pdf") }}
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

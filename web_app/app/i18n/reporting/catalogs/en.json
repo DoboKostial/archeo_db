@@ -1,0 +1,11 @@
+{
+  "common.reports": "Reports",
+  "common.language": "Language",
+  "common.generate_pdf": "Generate PDF",
+  "common.generated_on": "Generated on",
+  "common.database": "Database",
+  "common.user": "User",
+
+  "report.sample.title": "Sample report",
+  "report.sample.description": "Demonstrates report-only i18n + PDF generation"
+}

@@ -3080,14 +3080,16 @@ def rule_orphan_photograms_sql():
 
 # -------------------------------------------------------------------
 # REPORTING: SJ cards (1 SJ = 1 page)
+# ref_sj1 < ref_sj2 means: SJ1 is BELOW SJ2
 # -------------------------------------------------------------------
 
 from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_SJ
 
+
 def report_sj_cards_list_sj_sql():
     """
     Reuse existing SQL used for media select.
-    Returns rows (id_sj, sj_typ, description); report will take only id_sj.
+    Returns rows (id_sj, sj_typ, description); report takes only id_sj.
     """
     return list_su_for_media_select_sql()
 
@@ -3095,10 +3097,12 @@ def report_sj_cards_list_sj_sql():
 def report_sj_cards_detail_sql():
     """
     SJ detail for report card.
+
     Includes:
-      - tab_sj (base)
-      - type-specific 1:1 tables via LEFT JOIN (deposit/negativ/structure)
-      - aggregated stratigraphy relations (tab_sj_stratigraphy)
+      - tab_sj base fields
+      - 1:1 type-specific tables via LEFT JOIN (deposit/negativ/structure)
+      - stratigraphy aggregated into ABOVE / BELOW / EQUAL lists, using rule:
+            ref_sj1 < ref_sj2 => sj1 below sj2
     """
     return """
         SELECT
@@ -3112,10 +3116,10 @@ def report_sj_cards_detail_sql():
             COALESCE(s.docu_vertical, false)  AS docu_vertical,
             s.ref_object                       AS ref_object,
 
-            -- Which 1:1 type table exists (first match wins)
+            -- Which 1:1 type table exists
             CASE
-              WHEN d.id_deposit   IS NOT NULL THEN 'deposit'
-              WHEN n.id_negativ   IS NOT NULL THEN 'negativ'
+              WHEN d.id_deposit    IS NOT NULL THEN 'deposit'
+              WHEN n.id_negativ    IS NOT NULL THEN 'negativ'
               WHEN st.id_structure IS NOT NULL THEN 'structure'
               ELSE ''
             END AS sj_subtype,
@@ -3145,46 +3149,56 @@ def report_sj_cards_detail_sql():
             st.width_m                            AS structure_width_m,
             st.height_m                           AS structure_height_m,
 
-            -- Stratigraphy relations (aggregated lists)
+            -- Stratigraphy aggregated:
+            -- ABOVE current SJ:
+            --   (a) current is ref_sj1 and relation '<' => current below ref_sj2 => ref_sj2 above current
+            --   (b) current is ref_sj2 and relation '>' => ref_sj1 above current
             COALESCE((
-              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj1 = s.id_sj AND r.relation = '<'
-            ), '') AS rel_ref1_lt,
+              SELECT string_agg(x.val, ', ' ORDER BY x.val::int)
+              FROM (
+                SELECT r.ref_sj2::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj1 = s.id_sj AND r.relation = '<'
+                UNION
+                SELECT r.ref_sj1::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj2 = s.id_sj AND r.relation = '>'
+              ) x
+            ), '') AS strat_above,
 
+            -- BELOW current SJ:
+            --   (a) current is ref_sj1 and relation '>' => current above ref_sj2 => ref_sj2 below current
+            --   (b) current is ref_sj2 and relation '<' => ref_sj1 below current
             COALESCE((
-              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj1 = s.id_sj AND r.relation = '>'
-            ), '') AS rel_ref1_gt,
+              SELECT string_agg(x.val, ', ' ORDER BY x.val::int)
+              FROM (
+                SELECT r.ref_sj2::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj1 = s.id_sj AND r.relation = '>'
+                UNION
+                SELECT r.ref_sj1::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj2 = s.id_sj AND r.relation = '<'
+              ) x
+            ), '') AS strat_below,
 
+            -- EQUAL current SJ (either direction)
             COALESCE((
-              SELECT string_agg(r.ref_sj2::text, ', ' ORDER BY r.ref_sj2)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj1 = s.id_sj AND r.relation = '='
-            ), '') AS rel_ref1_eq,
-
-            COALESCE((
-              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj2 = s.id_sj AND r.relation = '<'
-            ), '') AS rel_ref2_lt,
-
-            COALESCE((
-              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj2 = s.id_sj AND r.relation = '>'
-            ), '') AS rel_ref2_gt,
-
-            COALESCE((
-              SELECT string_agg(r.ref_sj1::text, ', ' ORDER BY r.ref_sj1)
-              FROM tab_sj_stratigraphy r
-              WHERE r.ref_sj2 = s.id_sj AND r.relation = '='
-            ), '') AS rel_ref2_eq
+              SELECT string_agg(x.val, ', ' ORDER BY x.val::int)
+              FROM (
+                SELECT r.ref_sj2::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj1 = s.id_sj AND r.relation = '='
+                UNION
+                SELECT r.ref_sj1::text AS val
+                  FROM tab_sj_stratigraphy r
+                 WHERE r.ref_sj2 = s.id_sj AND r.relation = '='
+              ) x
+            ), '') AS strat_equal
 
         FROM tab_sj s
-        LEFT JOIN tab_sj_deposit   d  ON d.id_deposit   = s.id_sj
-        LEFT JOIN tab_sj_negativ   n  ON n.id_negativ   = s.id_sj
+        LEFT JOIN tab_sj_deposit   d  ON d.id_deposit    = s.id_sj
+        LEFT JOIN tab_sj_negativ   n  ON n.id_negativ    = s.id_sj
         LEFT JOIN tab_sj_structure st ON st.id_structure = s.id_sj
         WHERE s.id_sj = %s;
     """
@@ -3217,4 +3231,38 @@ def report_sj_cards_media_ids_sql(kind: str):
         WHERE x.{fk_sj} = %s
         ORDER BY m.{id_col} DESC;
     """
+
+
+def report_sj_cards_finds_count_sql():
+    return "SELECT COUNT(*) FROM tab_finds WHERE ref_sj = %s;"
+
+
+def report_sj_cards_finds_sum_count_sql():
+    return "SELECT COALESCE(SUM(count),0) FROM tab_finds WHERE ref_sj = %s;"
+
+
+def report_sj_cards_samples_count_sql():
+    return "SELECT COUNT(*) FROM tab_samples WHERE ref_sj = %s;"
+
+
+def report_sj_cards_finds_top_sql(limit: int = 3):
+    return f"""
+        SELECT id_find, ref_find_type, count, box
+        FROM tab_finds
+        WHERE ref_sj = %s
+        ORDER BY id_find DESC
+        LIMIT {int(limit)};
+    """
+
+
+def report_sj_cards_samples_top_sql(limit: int = 3):
+    return f"""
+        SELECT id_sample, ref_sample_type
+        FROM tab_samples
+        WHERE ref_sj = %s
+        ORDER BY id_sample DESC
+        LIMIT {int(limit)};
+    """
+
+
 
