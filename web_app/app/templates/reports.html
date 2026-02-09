@@ -16,7 +16,7 @@
 
   {% for l in languages %}
     <a class="lang-pill"
-       href="{{ url_for('reports.reports_index', lang=l.code) }}"
+       href="{{ url_for('reports.reports', lang=l.code) }}"
        title="{{ l.label }}"
        aria-label="{{ l.label }}">
 

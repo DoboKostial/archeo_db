@@ -10,9 +10,7 @@ from app.logger import logger
 from app.i18n.reporting.translator import ReportingTranslator
 from app.reports.registry import REPORT_SPECS
 from app.reports.service import build_report_context, generate_report_pdf
-
-# Adjust this import if your decorator lives elsewhere
-from app.utils.decorators import require_selected_db  # noqa: F401
+from app.utils.decorators import require_selected_db 
 
 reports_bp = Blueprint("reports", __name__)
 
@@ -21,7 +19,7 @@ translator = ReportingTranslator(logger=logger)
 
 @reports_bp.get("/reports")
 @require_selected_db
-def reports_index():
+def reports():
     selected_db = session.get("selected_db") or ""
     user_email = getattr(g, "user_email", "") or ""
 
@@ -58,7 +56,7 @@ def reports_index():
         reports.sort(key=lambda x: x["id"])
 
         return render_template(
-            "reports/index.html",
+            "reports.html",
             lang=lang_norm,
             languages=languages,
             reports=reports,
@@ -70,7 +68,7 @@ def reports_index():
         flash("Error while loading Reports.", "danger")
         # Keep the app responsive; return an empty page with flashed message
         return render_template(
-            "reports/index.html",
+            "reports.html",
             lang=lang_norm,
             languages=[],
             reports=[],
@@ -118,4 +116,4 @@ def generate_report(report_id: str):
         logger.error(f"[{selected_db}] Error while generating report '{report_id}': {e}")
         flash("Error while generating report PDF.", "danger")
         # redirect back to reports page, keep current lang
-        return redirect(url_for("reports.reports_index", lang=translator.normalize_lang(lang)))
+        return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
