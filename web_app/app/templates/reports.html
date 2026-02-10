@@ -62,6 +62,42 @@
             </button>
           </form>
 
+
+
+          <form method="POST"
+      action="{{ url_for('reports.generate_report', report_id=r.id, lang=lang) }}"
+      class="mt-auto">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-success w-100">
+    {{ t("common.generate_pdf") }}
+  </button>
+</form>
+
+<div class="d-grid gap-2 mt-2">
+  <form method="POST" action="{{ url_for('reports.export_excel', export_id=r.id, lang=lang) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-outline-success w-100">
+      {{ t("common.export_excel") }}
+    </button>
+  </form>
+
+  <form method="POST" action="{{ url_for('reports.export_sql', export_id=r.id, lang=lang) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-sm btn-outline-secondary w-100">
+      {{ t("common.export_sql") }}
+    </button>
+  </form>
+</div>
+
+
+
+
+
+
+
+
+
+
         </div>
       </div>
     </div>

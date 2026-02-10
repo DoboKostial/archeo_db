@@ -8,13 +8,13 @@
 
   "report.sample.title": "Ukázkový report",
   "report.sample.description": "Demonstrace lokalizace reportů + generování PDF",
-
-
   "header.sj_list.title": "Seznam strat. jednotek",
   "header.action": "Akce",
   "header.database": "Databáze",
 
   "report.sj_cards.title": "Report strat. jednotek",
+  "common.export_excel": "Export do Excelu",
+  "common.export_sql": "Export z DB",
   "report.sj_cards.description": "1 SJ = 1 strana A4",
   "section.sj.media": "Grafická dokumentace",
   "common.no_media": "Bez grafických médií.",

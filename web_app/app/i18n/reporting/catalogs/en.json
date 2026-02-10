@@ -7,5 +7,7 @@
   "common.user": "User",
 
   "report.sample.title": "Sample report",
-  "report.sample.description": "Demonstrates report-only i18n + PDF generation"
+  "report.sample.description": "Demonstrates report-only i18n + PDF generation",
+  "common.export_excel": "Export to Excel",
+  "common.export_sql": "Export from DB"
 }
