@@ -1,15 +1,17 @@
 # app/routes/reports.py
 from __future__ import annotations
-
+from datetime import datetime
+from io import BytesIO
 import io
 from typing import Any, Dict
-
 from flask import Blueprint, render_template, request, session, send_file, abort, g, flash, redirect, url_for
 
 from app.logger import logger
 from app.i18n.reporting.translator import ReportingTranslator
+from app.reports.context import ReportContext
 from app.reports.registry import REPORT_SPECS
 from app.reports.service import build_report_context, generate_report_pdf
+from app.reports.exporters import get_exporter
 from app.utils.decorators import require_selected_db 
 
 reports_bp = Blueprint("reports", __name__)
@@ -52,6 +54,7 @@ def reports():
                 "icon": spec.icon,
                 "title": ctx.t(spec.title_key),
                 "description": ctx.t(spec.description_key),
+                "formats": spec.formats, #pass through as a set/frozenset :)
             })
         reports.sort(key=lambda x: x["id"])
 
@@ -116,4 +119,82 @@ def generate_report(report_id: str):
         logger.error(f"[{selected_db}] Error while generating report '{report_id}': {e}")
         flash("Error while generating report PDF.", "danger")
         # redirect back to reports page, keep current lang
+        return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
+
+
+@reports_bp.post("/reports/export/excel/<export_id>")
+@require_selected_db
+def export_excel(export_id: str):
+    selected_db = session["selected_db"]
+    user_email = getattr(g, "user_email", "") or ""
+    lang = request.args.get("lang")
+
+    try:
+        ctx = build_report_context(
+            translator=translator,
+            selected_db=selected_db,
+            user_email=user_email,
+            lang=lang,
+        )
+
+        exporter = get_exporter(export_id)
+        data = exporter.to_xlsx(ctx)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"{selected_db}_{export_id}_{ctx.lang}_{ts}.xlsx"
+
+        return send_file(
+            BytesIO(data),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=fname,
+        )
+
+    except KeyError as e:
+        logger.error(f"[{selected_db}] Unknown export id '{export_id}': {e}")
+        flash("Unknown export type.", "warning")
+        return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
+
+    except Exception:
+        logger.exception(f"[{selected_db}] Excel export error ({export_id})")
+        flash("Error while generating Excel export.", "danger")
+        return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
+
+
+@reports_bp.post("/reports/export/sql/<export_id>")
+@require_selected_db
+def export_sql(export_id: str):
+    selected_db = session["selected_db"]
+    user_email = getattr(g, "user_email", "") or ""
+    lang = request.args.get("lang")
+
+    try:
+        ctx = build_report_context(
+            translator=translator,
+            selected_db=selected_db,
+            user_email=user_email,
+            lang=lang,
+        )
+
+        exporter = get_exporter(export_id)
+        sql_text = exporter.to_sql(ctx)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fname = f"{selected_db}_{export_id}_{ctx.lang}_{ts}.sql"
+
+        return send_file(
+            BytesIO(sql_text.encode("utf-8")),
+            mimetype="text/sql; charset=utf-8",
+            as_attachment=True,
+            download_name=fname,
+        )
+
+    except KeyError as e:
+        logger.error(f"[{selected_db}] Unknown export id '{export_id}': {e}")
+        flash("Unknown export type.", "warning")
+        return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
+
+    except Exception:
+        logger.exception(f"[{selected_db}] SQL export error ({export_id})")
+        flash("Error while generating SQL export.", "danger")
         return redirect(url_for("reports.reports", lang=translator.normalize_lang(lang)))
