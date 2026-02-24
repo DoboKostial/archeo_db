@@ -14,7 +14,6 @@ def init_report_generators() -> None:
     Register built-in report generators.
     Call once during app init.
     """
-    REPORT_GENERATORS.setdefault("sample", generate_sample_pdf)
     REPORT_GENERATORS.setdefault("sj_cards", generate_sj_cards_pdf)
 
 

@@ -3,14 +3,11 @@
   "common.language": "Language",
   "common.generate_pdf": "Generate PDF",
   "common.export_excel": "Export to Excel",
-  "common.export_sql": "Export from DB",
+  "common.export_sql": "Export to SQL",
   "common.generated_on": "Generated on",
   "common.more": "more",
   "common.page": "Page",
   "common.no_media": "No media.",
-
-  "report.sample.title": "Sample report",
-  "report.sample.description": "Demonstrates report-only i18n + PDF generation",
 
   "header.sj_list.title": "Stratigraphic units list",
   "header.action": "Action",
