@@ -5,7 +5,6 @@ from typing import Optional, Tuple, Dict
 from app.i18n.reporting.translator import ReportingTranslator
 from app.reports.context import ReportContext
 from app.reports.registry import REPORT_GENERATORS, REPORT_SPECS
-from app.reports.sample_report import generate_sample_pdf
 from app.reports.sj_cards_report import generate_sj_cards_pdf
 
 
