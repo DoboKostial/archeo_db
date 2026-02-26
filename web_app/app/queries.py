@@ -3266,3 +3266,116 @@ def report_sj_cards_samples_top_sql(limit: int = 3):
 
 
 
+
+
+#####
+# SQLs for POLYGON reporting cards
+#####
+
+def report_polygon_cards_list_polygons_sql():
+    """
+    List polygon names for report/export.
+    """
+    return """
+        SELECT polygon_name
+        FROM tab_polygons
+        ORDER BY polygon_name;
+    """
+
+
+def report_polygon_cards_detail_sql():
+    """
+    One polygon detail row for PDF/XLSX.
+    Params: (polygon_name,)
+    NOTE: We intentionally do NOT export geometry itself, only derived attributes.
+    """
+    return """
+        SELECT
+            p.polygon_name,
+            p.parent_name,
+            p.allocation_reason::text AS allocation_reason,
+            p.notes,
+
+            (p.geom_top IS NOT NULL)    AS has_geom_top,
+            (p.geom_bottom IS NOT NULL) AS has_geom_bottom,
+
+            COALESCE(ST_NPoints(p.geom_top), 0)    AS npoints_top,
+            COALESCE(ST_NPoints(p.geom_bottom), 0) AS npoints_bottom,
+
+            (COALESCE(ST_NPoints(p.geom_top), 0) +
+             COALESCE(ST_NPoints(p.geom_bottom), 0)) AS npoints_total,
+
+            NULLIF(ST_SRID(COALESCE(p.geom_top, p.geom_bottom)), 0) AS srid,
+
+            -- Optional: planar area (SRID 5514 => meters; area in m^2)
+            CASE WHEN p.geom_top IS NOT NULL THEN ST_Area(p.geom_top) ELSE NULL END      AS area_top_m2,
+            CASE WHEN p.geom_bottom IS NOT NULL THEN ST_Area(p.geom_bottom) ELSE NULL END AS area_bottom_m2
+
+        FROM tab_polygons p
+        WHERE p.polygon_name = %s;
+    """
+
+
+def report_polygon_cards_bindings_top_sql():
+    """Params: (polygon_name,)"""
+    return """
+        SELECT pts_from, pts_to
+        FROM tab_polygon_geopts_binding_top
+        WHERE ref_polygon = %s
+        ORDER BY pts_from, pts_to;
+    """
+
+
+def report_polygon_cards_bindings_bottom_sql():
+    """Params: (polygon_name,)"""
+    return """
+        SELECT pts_from, pts_to
+        FROM tab_polygon_geopts_binding_bottom
+        WHERE ref_polygon = %s
+        ORDER BY pts_from, pts_to;
+    """
+
+
+def report_polygon_cards_sj_ids_sql():
+    """Params: (polygon_name,)"""
+    return """
+        SELECT ref_sj
+        FROM tabaid_sj_polygon
+        WHERE ref_polygon = %s
+        ORDER BY ref_sj;
+    """
+
+
+def report_polygon_cards_media_ids_sql(kind: str):
+    """
+    Return media IDs bound to polygon, per kind.
+    Params: (polygon_name,)
+    """
+    kind = (kind or "").strip().lower()
+
+    if kind == "photos":
+        return """
+            SELECT ref_photo
+            FROM tabaid_polygon_photos
+            WHERE ref_polygon = %s
+            ORDER BY ref_photo;
+        """
+    if kind == "photograms":
+        return """
+            SELECT ref_photogram
+            FROM tabaid_polygon_photograms
+            WHERE ref_polygon = %s
+            ORDER BY ref_photogram;
+        """
+    if kind == "sketches":
+        return """
+            SELECT ref_sketch
+            FROM tabaid_polygon_sketches
+            WHERE ref_polygon = %s
+            ORDER BY ref_sketch;
+        """
+
+    # fallback: no rows
+    return "SELECT NULL WHERE FALSE;"
+
+

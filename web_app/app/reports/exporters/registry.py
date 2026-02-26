@@ -1,14 +1,14 @@
 # app/reports/exporters/registry.py
 from __future__ import annotations
-
 from typing import Dict
-
 from .base import Exporter
 from .sj_cards import SjCardsExporter
+from .polygon_cards import PolygonCardsExporter
 
 
-EXPORTERS: Dict[str, Exporter] = {
+EXPORTERS = {
     "sj_cards": SjCardsExporter(),
+    "polygon_cards": PolygonCardsExporter(),
 }
 
 

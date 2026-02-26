@@ -36,3 +36,20 @@ def dump_table_inserts(cur, table: str, where_sql: str, params: Tuple[Any, ...])
         values_sql = ", ".join(sql_quote(v) for v in r)
         out_lines.append(f"INSERT INTO {table} ({cols_sql}) VALUES ({values_sql});")
     return "\n".join(out_lines) + "\n"
+
+
+def dump_table_inserts_columns(cur, table: str, columns: List[str], where_sql: str, params: Tuple[Any, ...]) -> str:
+    """
+    Dump rows from table as INSERT statements for explicit columns (allows excluding geometry, blobs, etc).
+    """
+    cols_sql = ", ".join(columns)
+    cur.execute(f"SELECT {cols_sql} FROM {table} {where_sql};", params)
+    rows = cur.fetchall()
+    if not rows:
+        return ""
+
+    out_lines: List[str] = []
+    for r in rows:
+        values_sql = ", ".join(sql_quote(v) for v in r)
+        out_lines.append(f"INSERT INTO {table} ({cols_sql}) VALUES ({values_sql});")
+    return "\n".join(out_lines) + "\n"
