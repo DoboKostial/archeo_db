@@ -3379,3 +3379,53 @@ def report_polygon_cards_media_ids_sql(kind: str):
     return "SELECT NULL WHERE FALSE;"
 
 
+####
+# --- objects_cards report SQLs  ---
+###
+
+def report_objects_cards_list_objects_sql():
+    return """
+        SELECT id_object
+        FROM tab_object
+        ORDER BY id_object;
+    """
+
+
+def report_objects_cards_detail_sql():
+    """
+    Params: (id_object,)
+    Returns base object + aggregated sj_ids.
+    """
+    return """
+        SELECT
+            o.id_object,
+            o.object_typ,
+            o.superior_object,
+            o.notes,
+            ARRAY(
+                SELECT s.id_sj
+                FROM tab_sj s
+                WHERE s.ref_object = o.id_object
+                ORDER BY s.id_sj
+            ) AS sj_ids
+        FROM tab_object o
+        WHERE o.id_object = %s;
+    """
+
+
+def report_objects_cards_inhum_grave_sql():
+    """
+    Params: (id_object,)
+    Returns None if not present.
+    """
+    return """
+        SELECT
+            preservation,
+            orientation_dir,
+            bone_map,
+            notes_grave,
+            anthropo_present,
+            burial_box_type
+        FROM tab_object_inhum_grave
+        WHERE id_object = %s;
+    """

@@ -77,5 +77,24 @@
   "field.polygon.bindings_top": "Vazby TOP (pts)",
   "field.polygon.bindings_bottom": "Vazby BOTTOM (pts)",
   "field.polygon.sj_links": "SJ",
-  "field.polygon.sj_count": "Počet SJ"
+  "field.polygon.sj_count": "Počet SJ",
+
+  "header.objects_list.title": "Seznam objektů",
+  "report.objects_cards.title": "Report objektů",
+  "report.objects_cards.description": "1 objekt = 1 strana A4 (SJ seskupené pod objekt)",
+  "field.object.id": "Objekt",
+  "field.object.type": "Typ",
+  "field.object.superior": "Nadřazený objekt",
+  "field.object.notes": "Poznámky",
+  "field.object.sj_count": "Počet SJ",
+  "field.object.sj_list": "SJ",
+  "section.object.inhum.title": "Inhumační hrob",
+  "field.inhum.preservation": "Zachovalost",
+  "field.inhum.orientation_dir": "Orientace (směr hlavy)",
+  "field.inhum.burial_box_type": "Typ pohřební schránky",
+  "field.inhum.anthropo_present": "Přítomen antropolog",
+  "field.inhum.bone_map_present": "Přítomnost kostí",
+  "field.inhum.notes_grave": "Poznámky (hrob)",
+  "section.object.media": "Grafická dokumentace",
+  "common.no_image": "Bez obrázku"
 }

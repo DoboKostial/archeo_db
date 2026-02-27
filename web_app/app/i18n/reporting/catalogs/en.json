@@ -71,5 +71,24 @@
   "field.polygon.bindings_top": "TOP bindings (pts)",
   "field.polygon.bindings_bottom": "BOTTOM bindings (pts)",
   "field.polygon.sj_links": "SJs",
-  "field.polygon.sj_count": "SJ count"
+  "field.polygon.sj_count": "SJ count",
+
+  "header.objects_list.title": "Objects list",
+  "report.objects_cards.title": "Objects report",
+  "report.objects_cards.description": "1 object = 1 A4 page (SUs grouped under object)",
+  "field.object.id": "Object",
+  "field.object.type": "Type",
+  "field.object.superior": "Superior object",
+  "field.object.notes": "Notes",
+  "field.object.sj_count": "SJ count",
+  "field.object.sj_list": "SJs",
+  "section.object.inhum.title": "Inhumation grave",
+  "field.inhum.preservation": "Preservation",
+  "field.inhum.orientation_dir": "Orientation (head dir.)",
+  "field.inhum.burial_box_type": "Burial box type",
+  "field.inhum.anthropo_present": "Anthropologist present",
+  "field.inhum.bone_map_present": "Bone presence",
+  "field.inhum.notes_grave": "Notes (grave)",
+  "section.object.media": "Graphic documentation",
+  "common.no_image": "No image"
 }

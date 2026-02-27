@@ -4,11 +4,13 @@ from typing import Dict
 from .base import Exporter
 from .sj_cards import SjCardsExporter
 from .polygon_cards import PolygonCardsExporter
+from .objects_cards import ObjectsCardsExporter
 
 
 EXPORTERS = {
-    "sj_cards": SjCardsExporter(),
     "polygon_cards": PolygonCardsExporter(),
+    "sj_cards": SjCardsExporter(),
+    "objects_cards": ObjectsCardsExporter(),
 }
 
 

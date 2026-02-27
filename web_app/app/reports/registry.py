@@ -23,6 +23,13 @@ ReportGenerator = Callable[[Any, dict], bytes]
 
 
 REPORT_SPECS: Dict[str, ReportSpec] = {
+    "polygon_cards": ReportSpec(
+        report_id="polygon_cards",
+        title_key="report.polygon_cards.title",
+        description_key="report.polygon_cards.description",
+        icon="⬠",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+    ),
     "sj_cards": ReportSpec(
         report_id="sj_cards",
         title_key="report.sj_cards.title",
@@ -30,11 +37,11 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         icon="🧾",
         formats=frozenset({"pdf", "xlsx", "sql"}),
     ),
-    "polygon_cards": ReportSpec(
-        report_id="polygon_cards",
-        title_key="report.polygon_cards.title",
-        description_key="report.polygon_cards.description",
-        icon="⬠",
+    "objects_cards": ReportSpec(
+        report_id="objects_cards",
+        title_key="report.objects_cards.title",
+        description_key="report.objects_cards.description",
+        icon="🧱",
         formats=frozenset({"pdf", "xlsx", "sql"}),
     ),
 }
