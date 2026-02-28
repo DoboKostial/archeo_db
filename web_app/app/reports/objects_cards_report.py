@@ -113,11 +113,22 @@ def _try_find_thumb(ctx: ReportContext, kind: str, media_id: str) -> str:
     base_dir = _media_base_dir(ctx, kind)
     if not base_dir:
         return ""
-    base = os.path.join(base_dir, "thumbs", str(media_id))
+
+    mid = str(media_id).strip()
+    if not mid:
+        return ""
+
+    base = os.path.join(base_dir, "thumbs", mid)
+
     for ext in (".jpg", ".jpeg", ".png", ".webp"):
         p = base + ext
         if os.path.exists(p):
             return p
+
+    # keep the same fallback as sj_cards_report.py
+    if os.path.exists(base):
+        return base
+
     return ""
 
 
@@ -177,17 +188,27 @@ def _fetch_media_ids_for_object(conn, sj_ids: List[int], kind: str, limit_ids: i
     """
     seen = set()
     out: List[str] = []
+
     for sj_id in sj_ids:
         with conn.cursor() as cur:
             cur.execute(report_sj_cards_media_ids_sql(kind), (sj_id,))
-            ids = [str(r[0]) for r in cur.fetchall()]
-        for mid in ids:
+            raw_ids = [r[0] for r in cur.fetchall()]
+
+        for rid in raw_ids:
+            if rid is None:
+                continue
+            mid = str(rid).strip()
+            if not mid:
+                continue
             if mid in seen:
                 continue
+
             seen.add(mid)
             out.append(mid)
+
             if len(out) >= limit_ids:
                 return out
+
     return out
 
 
