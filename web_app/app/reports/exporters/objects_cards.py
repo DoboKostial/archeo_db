@@ -4,6 +4,7 @@ from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional
 from openpyxl import Workbook
+import json
 
 from app.logger import logger
 from app.database import get_terrain_connection
@@ -23,6 +24,33 @@ from .utils_sql import dump_table_inserts
 
 class ObjectsCardsExporter:
     export_id = "objects_cards"
+
+    @staticmethod
+    def _bone_map_to_strings(bone_map) -> tuple[str, str]:
+        """
+        Returns (present_keys_text, json_text)
+        Always returns strings safe for Excel cells.
+        """
+        if bone_map is None or bone_map == "":
+            return "", ""
+        try:
+            if isinstance(bone_map, str):
+                obj = json.loads(bone_map)
+            else:
+                obj = bone_map
+
+            present: list[str] = []
+            if isinstance(obj, dict):
+                present = [str(k) for k, v in obj.items() if bool(v)]
+            elif isinstance(obj, list):
+                present = [str(x) for x in obj]
+
+            present_txt = ", ".join(present)
+            json_txt = json.dumps(obj, ensure_ascii=False)
+            return present_txt, json_txt
+        except Exception:
+            return "", str(bone_map)
+
 
     def _fetch_object_ids(self, ctx: ReportContext) -> List[int]:
         with get_terrain_connection(ctx.selected_db) as conn:
@@ -79,7 +107,9 @@ class ObjectsCardsExporter:
             "sj_count", "sj_ids",
             "inhum_present", "inhum_preservation", "inhum_orientation_dir",
             "inhum_burial_box_type", "inhum_anthropo_present",
-            "inhum_notes_grave", "inhum_bone_map",
+            "inhum_notes_grave",
+            "inhum_bone_map_present",   # NEW (human-readable)
+            "inhum_bone_map_json",      # NEW (json string)
             "photos_files", "drawings_files", "sketches_files", "photograms_files",
         ]
         ws.append(headers)
@@ -92,6 +122,7 @@ class ObjectsCardsExporter:
                 o = self._fetch_object_detail(conn, oid)
                 if not o:
                     continue
+
                 sj_ids = o.get("sj_ids") or []
                 inhum = self._fetch_inhum(conn, oid)
 
@@ -107,6 +138,11 @@ class ObjectsCardsExporter:
                     "photograms": self._aggregate_media_files_for_object(ctx, conn, sj_ids, "photograms"),
                 }
 
+                bone_present = ""
+                bone_json = ""
+                if inhum:
+                    bone_present, bone_json = self._bone_map_to_strings(inhum.get("bone_map"))
+
                 ws.append([
                     o.get("id_object"),
                     o.get("object_typ"),
@@ -121,7 +157,8 @@ class ObjectsCardsExporter:
                     (inhum or {}).get("burial_box_type"),
                     (inhum or {}).get("anthropo_present"),
                     (inhum or {}).get("notes_grave"),
-                    (inhum or {}).get("bone_map"),
+                    bone_present,   # <- string
+                    bone_json,      # <- string
 
                     media_files["photos"],
                     media_files["drawings"],
