@@ -90,5 +90,6 @@
   "field.inhum.bone_map_present": "Bone presence",
   "field.inhum.notes_grave": "Notes (grave)",
   "section.object.media": "Graphic documentation",
-  "common.no_image": "No image"
+  "common.no_image": "No image",
+  "common.via_sj": "via SU"
 }

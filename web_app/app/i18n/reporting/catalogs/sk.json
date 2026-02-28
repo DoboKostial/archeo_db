@@ -96,5 +96,6 @@
   "field.inhum.bone_map_present": "Prítomnosť kostí",
   "field.inhum.notes_grave": "Poznámky (hrob)",
   "section.object.media": "Grafická dokumentácia",
-  "common.no_image": "Bez obrázka"
+  "common.no_image": "Bez obrázka",
+  "common.via_sj": "cez SJ"
 }

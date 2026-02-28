@@ -181,13 +181,12 @@ def _fetch_object_ids(ctx: ReportContext) -> List[int]:
             return [int(r[0]) for r in cur.fetchall()]
 
 
-def _fetch_media_ids_for_object(conn, sj_ids: List[int], kind: str, limit_ids: int = 50) -> List[str]:
+def _fetch_media_map_for_object(conn, sj_ids: List[int], kind: str, limit_ids: int = 50) -> Dict[str, int]:
     """
-    Aggregate media IDs across all SJs of the object.
-    Deduplicate while preserving order. Limit to keep it fast.
+    Returns mapping: media_id -> first_sj_id_where_found
+    Deduplicates media_id across SJs, preserves first occurrence.
     """
-    seen = set()
-    out: List[str] = []
+    out: Dict[str, int] = {}
 
     for sj_id in sj_ids:
         with conn.cursor() as cur:
@@ -200,11 +199,10 @@ def _fetch_media_ids_for_object(conn, sj_ids: List[int], kind: str, limit_ids: i
             mid = str(rid).strip()
             if not mid:
                 continue
-            if mid in seen:
+            if mid in out:
                 continue
 
-            seen.add(mid)
-            out.append(mid)
+            out[mid] = int(sj_id)
 
             if len(out) >= limit_ids:
                 return out
@@ -212,8 +210,9 @@ def _fetch_media_ids_for_object(conn, sj_ids: List[int], kind: str, limit_ids: i
     return out
 
 
-def _media_section(ctx: ReportContext, kind: str, ids_desc: List[str]) -> Table:
+def _media_section(ctx: ReportContext, kind: str, media_map: Dict[str, int]) -> Table:
     title = Paragraph(ctx.t(f"media.{kind}.title"), SECTION_TITLE)
+    ids_desc = list(media_map.keys())
     top4, more = _top4_and_more(ids_desc)
     more_txt = Paragraph((f"+ {more} {ctx.t('common.more')}" if more > 0 else ""), SMALL)
 
@@ -224,7 +223,9 @@ def _media_section(ctx: ReportContext, kind: str, ids_desc: List[str]) -> Table:
     for mid in top4:
         thumb_path = _try_find_thumb(ctx, kind, mid)
         img = _safe_image(thumb_path, max_w=cell_w - 4 * mm, max_h=cell_h - 10 * mm)
-        caption = Paragraph(f"{mid}", CAPTION)
+        sj_ref = media_map.get(mid)
+        suffix = f" ({ctx.t('common.via_sj')} {sj_ref})" if sj_ref else ""
+        caption = Paragraph(f"{mid}{suffix}", CAPTION)
 
         if img is None:
             box = Table([[Paragraph(f"{mid}", SMALL)]], colWidths=[cell_w], rowHeights=[cell_h])
@@ -469,11 +470,11 @@ def generate_objects_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
             sj_ids = o.get("sj_ids") or []
             inhum = _fetch_inhum(conn, oid)
 
-            media_ids = {
-                "photos": _fetch_media_ids_for_object(conn, sj_ids, "photos", limit_ids=60),
-                "drawings": _fetch_media_ids_for_object(conn, sj_ids, "drawings", limit_ids=60),
-                "sketches": _fetch_media_ids_for_object(conn, sj_ids, "sketches", limit_ids=60),
-                "photograms": _fetch_media_ids_for_object(conn, sj_ids, "photograms", limit_ids=60),
+            media_map = {
+                "photos": _fetch_media_map_for_object(conn, sj_ids, "photos", limit_ids=60),
+                "drawings": _fetch_media_map_for_object(conn, sj_ids, "drawings", limit_ids=60),
+                "sketches": _fetch_media_map_for_object(conn, sj_ids, "sketches", limit_ids=60),
+                "photograms": _fetch_media_map_for_object(conn, sj_ids, "photograms", limit_ids=60),
             }
 
         story.append(_page_header(ctx))
@@ -494,10 +495,10 @@ def generate_objects_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
 
         story.append(Paragraph(ctx.t("section.object.media"), SECTION_TITLE))
         story.append(Spacer(1, 2 * mm))
-        story.append(_media_section(ctx, "photos", media_ids["photos"]))
-        story.append(_media_section(ctx, "drawings", media_ids["drawings"]))
-        story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
-        story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
+        story.append(_media_section(ctx, "photos", media_map["photos"]))
+        story.append(_media_section(ctx, "drawings", media_map["drawings"]))
+        story.append(_media_section(ctx, "sketches", media_map["sketches"]))
+        story.append(_media_section(ctx, "photograms", media_map["photograms"]))
 
         if idx != len(obj_ids):
             story.append(PageBreak())
