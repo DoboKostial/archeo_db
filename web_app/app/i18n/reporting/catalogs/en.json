@@ -103,5 +103,25 @@
   "field.section.ranges": "Point ranges",
   "field.section.sj_nr": "SJ count cut by section",
   "field.section.sj_list": "SJs",
-  "section.section.media": "Graphic documentation"
+  "section.section.media": "Graphic documentation",
+
+  "report.finds_table.title": "Finds report",
+  "report.finds_table.description": "Tabular report with photos & sketches thumbnails",
+  "field.find.id": "Find",
+  "field.find.type": "Type",
+  "field.find.sj": "SJ",
+  "field.find.count": "Count",
+  "field.find.box": "Box",
+  "field.find.polygon": "Polygon",
+  "field.find.geopt": "Geopt",
+  "field.find.description": "Description",
+
+  "report.samples_table.title": "Samples report",
+  "report.samples_table.description": "Tabular report with photos & sketches thumbnails",
+  "field.sample.id": "Sample",
+  "field.sample.type": "Type",
+  "field.sample.sj": "SJ",
+  "field.sample.polygon": "Polygon",
+  "field.sample.geopt": "Geopt",
+  "field.sample.description": "Description"
 }

@@ -6,6 +6,8 @@ from .sj_cards import SjCardsExporter
 from .polygon_cards import PolygonCardsExporter
 from .objects_cards import ObjectsCardsExporter
 from .sections_cards import SectionsCardsExporter
+from .finds_table import FindsTableExporter
+from .samples_table import SamplesTableExporter
 
 
 EXPORTERS = {
@@ -13,6 +15,8 @@ EXPORTERS = {
     "sj_cards": SjCardsExporter(),
     "objects_cards": ObjectsCardsExporter(),
     "sections_cards": SectionsCardsExporter(),
+    "finds_table": FindsTableExporter(),
+    "samples_table": SamplesTableExporter(),
 }
 
 

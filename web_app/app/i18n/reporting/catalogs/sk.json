@@ -109,5 +109,25 @@
   "field.section.ranges": "Rozsahy bodov",
   "field.section.sj_nr": "Počet SJ pretínaných rezom",
   "field.section.sj_list": "SJ",
-  "section.section.media": "Grafická dokumentácia"
+  "section.section.media": "Grafická dokumentácia",
+
+  "report.finds_table.title": "Nálezy",
+  "report.finds_table.description": "Prírastkový katalóg s náhǎdmi graf. dokumentácie",
+  "field.find.id": "Nález",
+  "field.find.type": "Typ",
+  "field.find.sj": "SJ",
+  "field.find.count": "Počet",
+  "field.find.box": "Krabica",
+  "field.find.polygon": "Polygon",
+  "field.find.geopt": "Bod",
+  "field.find.description": "Opis",
+
+  "report.samples_table.title": "Vzorky",
+  "report.samples_table.description": "Zoznam vzoriek",
+  "field.sample.id": "Vzorka",
+  "field.sample.type": "Typ",
+  "field.sample.sj": "SJ",
+  "field.sample.polygon": "Polygon",
+  "field.sample.geopt": "Bod",
+  "field.sample.description": "Opis"
 }

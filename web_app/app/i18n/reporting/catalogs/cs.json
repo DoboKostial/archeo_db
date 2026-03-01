@@ -109,5 +109,25 @@
   "field.section.ranges": "Rozsahy bodů",
   "field.section.sj_nr": "Počet SJ protínaných řezem",
   "field.section.sj_list": "SJ",
-  "section.section.media": "Grafická dokumentace"
+  "section.section.media": "Grafická dokumentace",
+
+  "report.finds_table.title": "Nálezy",
+  "report.finds_table.description": "Tabulkový seznam s náhledy fotek a skic",
+  "field.find.id": "Nález",
+  "field.find.type": "Typ",
+  "field.find.sj": "SJ",
+  "field.find.count": "Počet",
+  "field.find.box": "Krabica",
+  "field.find.polygon": "Polygon",
+  "field.find.geopt": "Bod",
+  "field.find.description": "Popis",
+
+  "report.samples_table.title": "Vzorky",
+  "report.samples_table.description": "Tabulkový report s náhledy fotek a skic",
+  "field.sample.id": "Vzorek",
+  "field.sample.type": "Typ",
+  "field.sample.sj": "SJ",
+  "field.sample.polygon": "Polygon",
+  "field.sample.geopt": "Bod",
+  "field.sample.description": "Popis"
 }

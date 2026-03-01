@@ -3539,3 +3539,81 @@ def report_sections_cards_media_ids_sql(kind: str):
             ORDER BY ref_photogram;
         """
     return "SELECT NULL WHERE FALSE;"
+
+
+###
+# --- finds_table report SQL ---
+###
+
+def report_finds_list_all_sql():
+    """
+    List all finds for report/export.
+    """
+    return """
+        SELECT
+          id_find, ref_find_type, ref_sj, count, box,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_finds
+        ORDER BY id_find DESC;
+    """
+
+
+def report_finds_media_ids_sql(kind: str):
+    """
+    Params: (id_find,)
+    """
+    kind = (kind or "").strip().lower()
+    if kind == "photos":
+        return """
+            SELECT ref_photo
+            FROM tabaid_finds_photos
+            WHERE ref_find = %s
+            ORDER BY ref_photo;
+        """
+    if kind == "sketches":
+        return """
+            SELECT ref_sketch
+            FROM tabaid_finds_sketches
+            WHERE ref_find = %s
+            ORDER BY ref_sketch;
+        """
+    return "SELECT NULL WHERE FALSE;"
+
+###
+# --- samples_table report SQLs --- for reporting of samples
+###
+def report_samples_list_all_sql():
+    """
+    List all samples for report/export.
+    """
+    return """
+        SELECT
+          id_sample, ref_sample_type, ref_sj,
+          ref_polygon, ref_geopt,
+          COALESCE(description,'') AS description
+        FROM tab_samples
+        ORDER BY id_sample DESC;
+    """
+
+
+def report_samples_media_ids_sql(kind: str):
+    """
+    Params: (id_sample,)
+    """
+    kind = (kind or "").strip().lower()
+    if kind == "photos":
+        return """
+            SELECT ref_photo
+            FROM tabaid_samples_photos
+            WHERE ref_sample = %s
+            ORDER BY ref_photo;
+        """
+    if kind == "sketches":
+        return """
+            SELECT ref_sketch
+            FROM tabaid_samples_sketches
+            WHERE ref_sample = %s
+            ORDER BY ref_sketch;
+        """
+    return "SELECT NULL WHERE FALSE;"

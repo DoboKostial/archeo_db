@@ -22,19 +22,40 @@ def list_files_for_media_id(ctx: ReportContext, kind: str, media_id: str) -> Lis
     """
     Return filenames (NOT thumbnails) for media_id in:
       DATA_DIR/<db>/<kind>/
-    We list files that start with '<id>.' (any ext).
+
+    Supports both patterns:
+      1) media_id is an ID prefix (e.g. "123") -> matches "123.*", "123_*", "123-*"
+      2) media_id is already a filename (e.g. "111_photo03.jpg") -> returns it if exists
     """
     base = media_dir(ctx, kind)
     if not base or not os.path.isdir(base):
         return []
 
+    mid = (str(media_id) or "").strip()
+    if not mid:
+        return []
+
+    # 1) If mid looks like a filename (has an extension), return it if present
+    if "." in mid:
+        p = os.path.join(base, mid)
+        if os.path.isfile(p):
+            return [mid]
+        # sometimes case differs; fallback to scan
+        # (still continue to prefix scan below)
+
     out: List[str] = []
-    prefix = f"{media_id}."
     try:
         for fn in os.listdir(base):
-            if fn.startswith(prefix):
+            # ignore thumbs folder and other directories
+            if fn == "thumbs":
+                continue
+            full = os.path.join(base, fn)
+            if not os.path.isfile(full):
+                continue
+
+            if fn.startswith(mid + ".") or fn.startswith(mid + "_") or fn.startswith(mid + "-") or fn == mid:
                 out.append(fn)
     except Exception:
         return []
 
-    return sorted(out)
+    return sorted(set(out))
