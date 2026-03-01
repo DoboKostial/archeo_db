@@ -44,6 +44,13 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         icon="🧱",
         formats=frozenset({"pdf", "xlsx", "sql"}),
     ),
+    "sections_cards": ReportSpec(
+        report_id="sections_cards",
+        title_key="report.sections_cards.title",
+        description_key="report.sections_cards.description",
+        icon="📐",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+    ),
 }
 
 REPORT_GENERATORS: Dict[str, ReportGenerator] = {}

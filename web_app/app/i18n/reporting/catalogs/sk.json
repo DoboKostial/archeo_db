@@ -52,7 +52,7 @@
   "field.negativ.shape_bottom": "Negatív – tvar dna:",
   "field.structure.structure_typ": "Typ štruktúry:",
   "field.structure.construction_typ": "Konštrukcia štruktúry:",
-  "field.structure.binder": "Štruktúra – spojivo:",
+  "field.structure.binder": "Štruktúra – pojivo:",
   "field.structure.basic_material": "Stav. materiál štruktúry:",
   "field.structure.length_m": "Štruktúra – dĺžka (m)",
   "field.structure.width_m": "Štruktúra – šírka (m)",
@@ -97,5 +97,17 @@
   "field.inhum.notes_grave": "Poznámky (hrob)",
   "section.object.media": "Grafická dokumentácia",
   "common.no_image": "Bez obrázka",
-  "common.via_sj": "cez SJ"
+  "common.via_sj": "cez SJ",
+
+  "header.sections_list.title": "Zoznam rezov",
+  "report.sections_cards.title": "Report rezov",
+  "report.sections_cards.description": "1 rez = 1 strana A4",
+  "field.section.id": "Rez",
+  "field.section.type": "Typ",
+  "field.section.description": "Popis",
+  "field.section.srid": "SRID",
+  "field.section.ranges": "Rozsahy bodov",
+  "field.section.sj_nr": "Počet SJ pretínaných rezom",
+  "field.section.sj_list": "SJ",
+  "section.section.media": "Grafická dokumentácia"
 }

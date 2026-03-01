@@ -5,12 +5,14 @@ from .base import Exporter
 from .sj_cards import SjCardsExporter
 from .polygon_cards import PolygonCardsExporter
 from .objects_cards import ObjectsCardsExporter
+from .sections_cards import SectionsCardsExporter
 
 
 EXPORTERS = {
     "polygon_cards": PolygonCardsExporter(),
     "sj_cards": SjCardsExporter(),
     "objects_cards": ObjectsCardsExporter(),
+    "sections_cards": SectionsCardsExporter(),
 }
 
 

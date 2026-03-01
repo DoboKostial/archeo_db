@@ -97,5 +97,17 @@
   "field.inhum.notes_grave": "Poznámky (hrob)",
   "section.object.media": "Grafická dokumentace",
   "common.no_image": "Bez obrázku",
-  "common.via_sj": "přez SJ"
+  "common.via_sj": "přez SJ",
+
+  "header.sections_list.title": "Seznam řezů",
+  "report.sections_cards.title": "Report řezů",
+  "report.sections_cards.description": "1 řez = 1 strana A4",
+  "field.section.id": "Řez",
+  "field.section.type": "Typ",
+  "field.section.description": "Popis",
+  "field.section.srid": "SRID",
+  "field.section.ranges": "Rozsahy bodů",
+  "field.section.sj_nr": "Počet SJ protínaných řezem",
+  "field.section.sj_list": "SJ",
+  "section.section.media": "Grafická dokumentace"
 }

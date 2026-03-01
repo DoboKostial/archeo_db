@@ -8,6 +8,7 @@ from app.reports.registry import REPORT_GENERATORS, REPORT_SPECS
 from app.reports.sj_cards_report import generate_sj_cards_pdf
 from app.reports.polygon_cards_report import generate_polygon_cards_pdf
 from app.reports.objects_cards_report import generate_objects_cards_pdf
+from app.reports.sections_cards_report import generate_sections_cards_pdf
 from app.logger import logger
 
 
@@ -15,6 +16,7 @@ def init_report_generators() -> None:
     REPORT_GENERATORS.setdefault("polygon_cards", generate_polygon_cards_pdf)
     REPORT_GENERATORS.setdefault("sj_cards", generate_sj_cards_pdf)
     REPORT_GENERATORS.setdefault("objects_cards", generate_objects_cards_pdf)
+    REPORT_GENERATORS.setdefault("sections_cards", generate_sections_cards_pdf)
     logger.info(f"[reports] Registered generators: {sorted(REPORT_GENERATORS.keys())}")
 
 

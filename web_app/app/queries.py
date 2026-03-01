@@ -3429,3 +3429,113 @@ def report_objects_cards_inhum_grave_sql():
         FROM tab_object_inhum_grave
         WHERE id_object = %s;
     """
+
+###
+# --- sections_cards report SQLs ---
+### queries for reporting sections
+
+def report_sections_cards_list_sections_sql():
+    return """
+        SELECT id_section
+        FROM tab_section
+        ORDER BY id_section;
+    """
+
+
+def report_sections_cards_detail_sql():
+    """
+    Returns basic info + derived srid_txt and ranges_txt (same logic as get_sections_list_sql()).
+    Params: (id_section,)
+    """
+    return """
+        WITH r AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                STRING_AGG((b.pts_from::text || '-' || b.pts_to::text), ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt
+            FROM tab_section_geopts_binding b
+            WHERE b.ref_section::int4 = %s
+            GROUP BY b.ref_section::int4
+        ),
+        sj AS (
+            SELECT
+                x.ref_section::int4 AS id_section,
+                COUNT(*)::int AS sj_nr
+            FROM tabaid_sj_section x
+            WHERE x.ref_section::int4 = %s
+            GROUP BY x.ref_section::int4
+        ),
+        sr AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                CASE
+                    WHEN COUNT(g.id_pts) = 0 THEN '—'
+                    WHEN COUNT(DISTINCT ST_SRID(g.pts_geom)) = 1 THEN MIN(ST_SRID(g.pts_geom))::text
+                    ELSE 'mixed'
+                END AS srid_txt
+            FROM tab_section_geopts_binding b
+            LEFT JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+            WHERE b.ref_section::int4 = %s
+            GROUP BY b.ref_section::int4
+        )
+        SELECT
+            s.id_section,
+            s.section_type,
+            s.description,
+            COALESCE(sr.srid_txt, '—') AS srid_txt,
+            COALESCE(r.ranges_txt, '—') AS ranges_txt,
+            COALESCE(sj.sj_nr, 0) AS sj_nr
+        FROM tab_section s
+        LEFT JOIN r  ON r.id_section  = s.id_section
+        LEFT JOIN sj ON sj.id_section = s.id_section
+        LEFT JOIN sr ON sr.id_section = s.id_section
+        WHERE s.id_section = %s;
+    """
+
+
+def report_sections_cards_sj_ids_sql():
+    """Params: (id_section,)"""
+    return """
+        SELECT ref_sj
+        FROM tabaid_sj_section
+        WHERE ref_section = %s
+        ORDER BY ref_sj;
+    """
+
+
+def report_sections_cards_media_ids_sql(kind: str):
+    """
+    Media ids bound directly to section.
+    Params: (id_section,)
+    """
+    kind = (kind or "").strip().lower()
+
+    if kind == "photos":
+        return """
+            SELECT ref_photo
+            FROM tabaid_section_photos
+            WHERE ref_section = %s
+            ORDER BY ref_photo;
+        """
+    if kind == "drawings":
+        return """
+            SELECT ref_drawing
+            FROM tabaid_section_drawings
+            WHERE ref_section = %s
+            ORDER BY ref_drawing;
+        """
+    if kind == "sketches":
+        return """
+            SELECT ref_sketch
+            FROM tabaid_section_sketches
+            WHERE ref_section = %s
+            ORDER BY ref_sketch;
+        """
+    if kind == "photograms":
+        return """
+            SELECT ref_photogram
+            FROM tabaid_section_photograms
+            WHERE ref_section = %s
+            ORDER BY ref_photogram;
+        """
+    return "SELECT NULL WHERE FALSE;"

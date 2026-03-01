@@ -91,5 +91,17 @@
   "field.inhum.notes_grave": "Notes (grave)",
   "section.object.media": "Graphic documentation",
   "common.no_image": "No image",
-  "common.via_sj": "via SU"
+  "common.via_sj": "via SU",
+
+  "header.sections_list.title": "Sections list",
+  "report.sections_cards.title": "Sections report",
+  "report.sections_cards.description": "1 section = 1 A4 page",
+  "field.section.id": "Section",
+  "field.section.type": "Type",
+  "field.section.description": "Description",
+  "field.section.srid": "SRID",
+  "field.section.ranges": "Point ranges",
+  "field.section.sj_nr": "SJ count cut by section",
+  "field.section.sj_list": "SJs",
+  "section.section.media": "Graphic documentation"
 }
