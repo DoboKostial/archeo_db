@@ -16,6 +16,7 @@ class ReportSpec:
     description_key: str
     icon: str = "📄"
     formats: FrozenSet[str] = frozenset({"pdf"})  # default: only PDF
+    order: int = 1000  # UI ordering (lower = earlier)
 
 
 # generator signature: (ctx, payload) -> bytes (PDF)
@@ -23,19 +24,13 @@ ReportGenerator = Callable[[Any, dict], bytes]
 
 
 REPORT_SPECS: Dict[str, ReportSpec] = {
-    "polygon_cards": ReportSpec(
-        report_id="polygon_cards",
-        title_key="report.polygon_cards.title",
-        description_key="report.polygon_cards.description",
-        icon="⬠",
-        formats=frozenset({"pdf", "xlsx", "sql"}),
-    ),
     "sj_cards": ReportSpec(
         report_id="sj_cards",
         title_key="report.sj_cards.title",
         description_key="report.sj_cards.description",
         icon="🧾",
         formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=10,
     ),
     "objects_cards": ReportSpec(
         report_id="objects_cards",
@@ -43,6 +38,15 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         description_key="report.objects_cards.description",
         icon="🧱",
         formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=20,
+    ),
+    "polygon_cards": ReportSpec(
+        report_id="polygon_cards",
+        title_key="report.polygon_cards.title",
+        description_key="report.polygon_cards.description",
+        icon="⬠",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=30,
     ),
     "sections_cards": ReportSpec(
         report_id="sections_cards",
@@ -50,6 +54,7 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         description_key="report.sections_cards.description",
         icon="📐",
         formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=40,
     ),
 }
 

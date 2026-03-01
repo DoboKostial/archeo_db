@@ -55,8 +55,9 @@ def reports():
                 "title": ctx.t(spec.title_key),
                 "description": ctx.t(spec.description_key),
                 "formats": spec.formats, #pass through as a set/frozenset :)
+                "order": getattr(spec, "order", 1000),
             })
-        reports.sort(key=lambda x: x["id"])
+        reports.sort(key=lambda x: (x.get("order", 1000), x["id"]))
 
         return render_template(
             "reports.html",
