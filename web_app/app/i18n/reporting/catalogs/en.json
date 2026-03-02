@@ -134,5 +134,20 @@
   "field.geopt.y": "Y",
   "field.geopt.h": "h",
   "field.geopt.code": "code",
-  "field.geopt.notes": "notes"
+  "field.geopt.notes": "notes",
+
+  "report.photos_table.title": "Photos report",
+  "report.photos_table.description": "Tabular report with thumbnails and link targets",
+  "field.photo.thumb": "Thumb",
+  "field.photo.id": "Photo",
+  "field.photo.type": "Type",
+  "field.photo.date": "Date",
+  "field.photo.author": "Author",
+  "field.photo.notes": "Notes",
+  "field.photo.links_sj": "SJs",
+  "field.photo.links_section": "Sections",
+  "field.photo.links_polygon": "Polygons",
+  "field.photo.links_find": "Finds",
+  "field.photo.links_sample": "Samples",
+  "field.photo.file_size": "Size"
 }

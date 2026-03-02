@@ -3632,3 +3632,59 @@ def report_geopts_list_all_sql():
         FROM tab_geopts
         ORDER BY id_pts;
     """
+
+###
+# --- photos_table report SQL ---
+###
+def report_photos_table_list_all_sql():
+    return """
+        SELECT
+            p.id_photo,
+            p.photo_typ,
+            p.datum,
+            p.author,
+            COALESCE(p.notes,'') AS notes,
+            p.mime_type,
+            p.file_size,
+            p.checksum_sha256,
+            p.shoot_datetime,
+            p.gps_lat, p.gps_lon, p.gps_alt,
+            p.exif_json,
+            CASE
+              WHEN p.photo_centroid IS NULL THEN NULL
+              ELSE ST_AsText(ST_Force2D(p.photo_centroid))
+            END AS photo_centroid_wkt,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_sj ORDER BY x.ref_sj)
+                FROM tabaid_photo_sj x
+                WHERE x.ref_photo = p.id_photo
+            ), ARRAY[]::int4[]) AS sj_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_section ORDER BY x.ref_section)
+                FROM tabaid_section_photos x
+                WHERE x.ref_photo = p.id_photo
+            ), ARRAY[]::int4[]) AS section_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_polygon ORDER BY x.ref_polygon)
+                FROM tabaid_polygon_photos x
+                WHERE x.ref_photo = p.id_photo
+            ), ARRAY[]::text[]) AS polygon_names,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_find ORDER BY x.ref_find)
+                FROM tabaid_finds_photos x
+                WHERE x.ref_photo = p.id_photo
+            ), ARRAY[]::int4[]) AS find_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_sample ORDER BY x.ref_sample)
+                FROM tabaid_samples_photos x
+                WHERE x.ref_photo = p.id_photo
+            ), ARRAY[]::int4[]) AS sample_ids
+
+        FROM tab_photos p
+        ORDER BY p.id_photo;
+    """

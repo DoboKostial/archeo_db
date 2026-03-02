@@ -9,6 +9,7 @@ from .sections_cards import SectionsCardsExporter
 from .finds_table import FindsTableExporter
 from .samples_table import SamplesTableExporter
 from .geopts_table import GeoptsTableExporter
+from .photos_table import PhotosTableExporter
 
 
 EXPORTERS = {
@@ -19,6 +20,7 @@ EXPORTERS = {
     "finds_table": FindsTableExporter(),
     "samples_table": SamplesTableExporter(),
     "geopts_table": GeoptsTableExporter(),
+    "photos_table": PhotosTableExporter(),
 }
 
 

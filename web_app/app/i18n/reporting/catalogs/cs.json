@@ -140,5 +140,20 @@
   "field.geopt.y": "Y",
   "field.geopt.h": "h",
   "field.geopt.code": "kód",
-  "field.geopt.notes": "poznámka"
+  "field.geopt.notes": "poznámka",
+
+  "report.photos_table.title": "Fotodokumentace",
+  "report.photos_table.description": "Tabulkový report s náhledy a vazbami",
+  "field.photo.thumb": "Náhled",
+  "field.photo.id": "Fotka",
+  "field.photo.type": "Typ",
+  "field.photo.date": "Datum",
+  "field.photo.author": "Autor",
+  "field.photo.notes": "Poznámky",
+  "field.photo.links_sj": "SJ",
+  "field.photo.links_section": "Řezy",
+  "field.photo.links_polygon": "Polygony",
+  "field.photo.links_find": "Nálezy",
+  "field.photo.links_sample": "Vzorky",
+  "field.photo.file_size": "Velikost souboru"
 }
