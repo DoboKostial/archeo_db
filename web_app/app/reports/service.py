@@ -11,6 +11,7 @@ from app.reports.objects_cards_report import generate_objects_cards_pdf
 from app.reports.sections_cards_report import generate_sections_cards_pdf
 from app.reports.finds_table_report import generate_finds_table_pdf
 from app.reports.samples_table_report import generate_samples_table_pdf
+from app.reports.geopts_table_report import generate_geopts_table_pdf
 from app.logger import logger
 
 
@@ -21,6 +22,7 @@ def init_report_generators() -> None:
     REPORT_GENERATORS.setdefault("sections_cards", generate_sections_cards_pdf)
     REPORT_GENERATORS.setdefault("finds_table", generate_finds_table_pdf)
     REPORT_GENERATORS.setdefault("samples_table", generate_samples_table_pdf)
+    REPORT_GENERATORS.setdefault("geopts_table", generate_geopts_table_pdf)
     logger.info(f"[reports] Registered generators: {sorted(REPORT_GENERATORS.keys())}")
 
 

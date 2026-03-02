@@ -129,5 +129,16 @@
   "field.sample.sj": "SJ",
   "field.sample.polygon": "Polygon",
   "field.sample.geopt": "Bod",
-  "field.sample.description": "Opis"
+  "field.sample.description": "Opis",
+
+  "report.geopts_table.title": "Geodetické body",
+  "report.geopts_table.description": "Tabuľkový export tab_geopts",
+  "field.geopts.srid": "SRID/EPSG",
+  "field.geopts.detected_srids": "detekovaný",
+  "field.geopt.id_pts": "ID bodu",
+  "field.geopt.x": "X",
+  "field.geopt.y": "Y",
+  "field.geopt.h": "h",
+  "field.geopt.code": "kód",
+  "field.geopt.notes": "poznámka"
 }

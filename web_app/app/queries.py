@@ -3617,3 +3617,18 @@ def report_samples_media_ids_sql(kind: str):
             ORDER BY ref_sketch;
         """
     return "SELECT NULL WHERE FALSE;"
+
+
+###
+# --- geopts_table report SQL ---
+###
+def report_geopts_list_all_sql():
+    return """
+        SELECT
+            id_pts,
+            x, y, h,
+            code,
+            COALESCE(notes, '') AS notes
+        FROM tab_geopts
+        ORDER BY id_pts;
+    """

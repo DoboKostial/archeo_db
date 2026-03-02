@@ -183,7 +183,7 @@ def generate_samples_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
             ])
 
     col_widths = [
-        14*mm, 18*mm, 12*mm, 18*mm, 16*mm, 70*mm, 28*mm, 28*mm
+        14*mm, 28*mm, 8*mm, 18*mm, 14*mm, 66*mm, 28*mm, 28*mm
     ]
 
     t = Table(data, colWidths=col_widths, repeatRows=1)

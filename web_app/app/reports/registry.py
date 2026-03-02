@@ -71,7 +71,15 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         icon="🧪",
         formats=frozenset({"pdf", "xlsx", "sql"}),
         order=60,
-),
+    ),
+    "geopts_table": ReportSpec(
+        report_id="geopts_table",
+        title_key="report.geopts_table.title",
+        description_key="report.geopts_table.description",
+        icon="📍",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=70,
+    ),
 }
 
 REPORT_GENERATORS: Dict[str, ReportGenerator] = {}

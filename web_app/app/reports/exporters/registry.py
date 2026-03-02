@@ -8,6 +8,7 @@ from .objects_cards import ObjectsCardsExporter
 from .sections_cards import SectionsCardsExporter
 from .finds_table import FindsTableExporter
 from .samples_table import SamplesTableExporter
+from .geopts_table import GeoptsTableExporter
 
 
 EXPORTERS = {
@@ -17,6 +18,7 @@ EXPORTERS = {
     "sections_cards": SectionsCardsExporter(),
     "finds_table": FindsTableExporter(),
     "samples_table": SamplesTableExporter(),
+    "geopts_table": GeoptsTableExporter(),
 }
 
 

@@ -129,5 +129,16 @@
   "field.sample.sj": "SJ",
   "field.sample.polygon": "Polygon",
   "field.sample.geopt": "Bod",
-  "field.sample.description": "Popis"
+  "field.sample.description": "Popis",
+
+  "report.geopts_table.title": "Geodetické body",
+  "report.geopts_table.description": "Tabulkový export tab_geopts",
+  "field.geopts.srid": "SRID/EPSG",
+  "field.geopts.detected_srids": "detekováno",
+  "field.geopt.id_pts": "ID bodu",
+  "field.geopt.x": "X",
+  "field.geopt.y": "Y",
+  "field.geopt.h": "h",
+  "field.geopt.code": "kód",
+  "field.geopt.notes": "poznámka"
 }

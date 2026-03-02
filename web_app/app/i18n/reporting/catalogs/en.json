@@ -123,5 +123,16 @@
   "field.sample.sj": "SJ",
   "field.sample.polygon": "Polygon",
   "field.sample.geopt": "Geopt",
-  "field.sample.description": "Description"
+  "field.sample.description": "Description",
+
+  "report.geopts_table.title": "Geodetic points",
+  "report.geopts_table.description": "Tabular export of tab_geopts",
+  "field.geopts.srid": "SRID/EPSG",
+  "field.geopts.detected_srids": "detected",
+  "field.geopt.id_pts": "Point ID",
+  "field.geopt.x": "X",
+  "field.geopt.y": "Y",
+  "field.geopt.h": "h",
+  "field.geopt.code": "code",
+  "field.geopt.notes": "notes"
 }
