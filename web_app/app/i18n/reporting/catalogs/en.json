@@ -149,5 +149,20 @@
   "field.photo.links_polygon": "Polygons",
   "field.photo.links_find": "Finds",
   "field.photo.links_sample": "Samples",
-  "field.photo.file_size": "Size"
+  "field.photo.file_size": "Size",
+
+  "report.photograms_table.title": "Photograms report",
+  "report.photograms_table.description": "Tabular report with thumbnails and link targets",
+  "field.photogram.thumb": "Thumb",
+  "field.photogram.id": "Photogram",
+  "field.photogram.type": "Type",
+  "field.photogram.size": "Size",
+  "field.photogram.ref_sketch": "Sketch",
+  "field.photogram.ref_photo_from": "Photo from",
+  "field.photogram.ref_photo_to": "Photo to",
+  "field.photogram.notes": "Notes",
+  "field.photogram.links_sj": "SJs",
+  "field.photogram.links_section": "Sections",
+  "field.photogram.links_polygon": "Polygons",
+  "field.photogram.geopt_ranges": "Geopt ranges"
 }

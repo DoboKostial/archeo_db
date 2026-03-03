@@ -3688,3 +3688,52 @@ def report_photos_table_list_all_sql():
         FROM tab_photos p
         ORDER BY p.id_photo;
     """
+
+###
+# SQL for photograms reporting
+###
+
+def report_photograms_table_list_all_sql():
+    """
+    One row per photogram with aggregated link targets + geopt ranges.
+    """
+    return """
+        SELECT
+            p.id_photogram,
+            p.photogram_typ,
+            p.ref_sketch,
+            COALESCE(p.notes,'') AS notes,
+            p.mime_type,
+            p.file_size,
+            p.checksum_sha256,
+            p.ref_photo_from,
+            p.ref_photo_to,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_sj ORDER BY x.ref_sj)
+                FROM tabaid_photogram_sj x
+                WHERE x.ref_photogram = p.id_photogram
+            ), ARRAY[]::int4[]) AS sj_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_section ORDER BY x.ref_section)
+                FROM tabaid_section_photograms x
+                WHERE x.ref_photogram = p.id_photogram
+            ), ARRAY[]::int4[]) AS section_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_polygon ORDER BY x.ref_polygon)
+                FROM tabaid_polygon_photograms x
+                WHERE x.ref_photogram = p.id_photogram
+            ), ARRAY[]::text[]) AS polygon_names,
+
+            COALESCE((
+                SELECT ARRAY_AGG((g.ref_geopt_from::text || '-' || g.ref_geopt_to::text)
+                                ORDER BY g.ref_geopt_from, g.ref_geopt_to)
+                FROM tabaid_photogram_geopts g
+                WHERE g.ref_photogram = p.id_photogram
+            ), ARRAY[]::text[]) AS geopt_ranges
+
+        FROM tab_photograms p
+        ORDER BY p.id_photogram;
+    """
