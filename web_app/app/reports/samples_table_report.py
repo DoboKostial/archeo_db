@@ -125,10 +125,22 @@ def _thumb_cell(ctx: ReportContext, kind: str, ids: List[str], max_thumbs: int =
     ]))
     return t
 
+def _footer(canv, doc, left_text: str, right_text: str) -> None:
+    canv.saveState()
+    canv.setFont(FONT_REG, 8)
+    canv.setFillColor(colors.grey)
+    canv.drawString(doc.leftMargin, 8 * mm, left_text)
+    canv.drawRightString(doc.pagesize[0] - doc.rightMargin, 8 * mm, right_text)
+    canv.restoreState()
+
+
 def generate_samples_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
     buf = io.BytesIO()
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    def _on_page(canv, d):
+        page_no = canv.getPageNumber()
+        _footer(canv, d, footer_left, f"{ctx.t('common.page')} {page_no}")
     title = Paragraph(ctx.t("report.samples_table.title"), TITLE)
     subtitle = Paragraph(f"{ctx.t('common.generated_on')}: {ts} — {ctx.t('header.database')}: {ctx.selected_db}", SMALL)
 
@@ -142,6 +154,8 @@ def generate_samples_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
         title="Samples table",
         author=ctx.user_email or "",
     )
+
+    footer_left = f"{ctx.t('common.generated_on')}: {ts}"
 
     with get_terrain_connection(ctx.selected_db) as conn:
         with conn.cursor() as cur:
@@ -198,5 +212,5 @@ def generate_samples_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
     ]))
 
     story: List[Any] = [title, Spacer(1, 2*mm), subtitle, Spacer(1, 4*mm), t]
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

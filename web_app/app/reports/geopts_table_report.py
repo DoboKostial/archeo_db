@@ -85,11 +85,25 @@ def _detect_srid(ctx: ReportContext) -> Tuple[str, str]:
         extra = ", ".join(detected)
     return srid_txt, extra
 
+def _footer(canv, doc, left_text: str, right_text: str) -> None:
+    canv.saveState()
+    canv.setFont(FONT_REG, 8)
+    canv.setFillColor(colors.grey)
+    canv.drawString(doc.leftMargin, 8 * mm, left_text)
+    canv.drawRightString(doc.pagesize[0] - doc.rightMargin, 8 * mm, right_text)
+    canv.restoreState()
+
 
 def generate_geopts_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
     buf = io.BytesIO()
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    footer_left = f"{ctx.t('common.generated_on')}: {ts}"
+
+    def _on_page(canv, d):
+        page_no = canv.getPageNumber()
+        _footer(canv, d, footer_left, f"{ctx.t('common.page')} {page_no}")
+
     srid_txt, detected_txt = _detect_srid(ctx)
 
     title = Paragraph(ctx.t("report.geopts_table.title"), TITLE)
@@ -159,5 +173,5 @@ def generate_geopts_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
     ]))
 
     story: List[Any] = [title, Spacer(1, 2*mm), subtitle, Spacer(1, 4*mm), t]
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

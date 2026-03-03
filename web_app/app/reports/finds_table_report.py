@@ -132,6 +132,15 @@ def _thumb_cell(ctx: ReportContext, kind: str, ids: List[str], max_thumbs: int =
     ]))
     return t
 
+def _footer(canv, doc, left_text: str, right_text: str) -> None:
+    canv.saveState()
+    canv.setFont(FONT_REG, 8)
+    canv.setFillColor(colors.grey)
+    canv.drawString(doc.leftMargin, 8 * mm, left_text)
+    canv.drawRightString(doc.pagesize[0] - doc.rightMargin, 8 * mm, right_text)
+    canv.restoreState()
+
+
 def generate_finds_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
     buf = io.BytesIO()
 
@@ -209,6 +218,12 @@ def generate_finds_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
         ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
     ]))
 
+    footer_left = f"{ctx.t('common.generated_on')}: {ts}"
+
+    def _on_page(canv, d):
+        page_no = canv.getPageNumber()
+        _footer(canv, d, footer_left, f"{ctx.t('common.page')} {page_no}")
+
     story: List[Any] = [title, Spacer(1, 2*mm), subtitle, Spacer(1, 4*mm), t]
-    doc.build(story)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()
