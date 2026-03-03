@@ -14,6 +14,8 @@ from app.reports.samples_table_report import generate_samples_table_pdf
 from app.reports.geopts_table_report import generate_geopts_table_pdf
 from app.reports.photos_table_report import generate_photos_table_pdf
 from app.reports.photograms_table_report import generate_photograms_table_pdf
+from app.reports.drawings_table_report import generate_drawings_table_pdf
+from app.reports.sketches_table_report import generate_sketches_table_pdf
 from app.logger import logger
 
 
@@ -27,6 +29,8 @@ def init_report_generators() -> None:
     REPORT_GENERATORS.setdefault("geopts_table", generate_geopts_table_pdf)
     REPORT_GENERATORS.setdefault("photos_table", generate_photos_table_pdf)
     REPORT_GENERATORS.setdefault("photograms_table", generate_photograms_table_pdf)
+    REPORT_GENERATORS.setdefault("drawings_table", generate_drawings_table_pdf)
+    REPORT_GENERATORS.setdefault("sketches_table", generate_sketches_table_pdf)
     logger.info(f"[reports] Registered generators: {sorted(REPORT_GENERATORS.keys())}")
 
 

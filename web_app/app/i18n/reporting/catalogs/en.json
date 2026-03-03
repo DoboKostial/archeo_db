@@ -164,5 +164,29 @@
   "field.photogram.links_sj": "SJs",
   "field.photogram.links_section": "Sections",
   "field.photogram.links_polygon": "Polygons",
-  "field.photogram.geopt_ranges": "Geopt ranges"
+  "field.photogram.geopt_ranges": "Geopt ranges",
+
+  "report.drawings_table.title": "Drawings report",
+  "report.drawings_table.description": "Tabular report with thumbnails and link targets",
+  "field.drawing.thumb": "Thumb",
+  "field.drawing.id": "Drawing",
+  "field.drawing.author": "Author",
+  "field.drawing.date": "Date",
+  "field.drawing.size": "Size",
+  "field.drawing.notes": "Notes",
+  "field.drawing.links_sj": "SJs",
+  "field.drawing.links_section": "Sections",
+
+  "report.sketches_table.title": "Sketches report",
+  "report.sketches_table.description": "Tabular report with thumbnails and link targets",
+  "field.sketch.thumb": "Thumb",
+  "field.sketch.id": "Sketch",
+  "field.sketch.type": "Type",
+  "field.sketch.author": "Author",
+  "field.sketch.date": "Date",
+  "field.sketch.size": "Size",
+  "field.sketch.notes": "Notes",
+  "field.sketch.links_find": "Finds",
+  "field.sketch.links_sample": "Samples",
+  "field.sketch.links_polygon": "Polygons"
 }

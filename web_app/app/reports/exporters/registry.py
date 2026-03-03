@@ -11,6 +11,8 @@ from .samples_table import SamplesTableExporter
 from .geopts_table import GeoptsTableExporter
 from .photos_table import PhotosTableExporter
 from .photograms_table import PhotogramsTableExporter
+from .drawings_table import DrawingsTableExporter
+from .sketches_table import SketchesTableExporter
 
 
 EXPORTERS = {
@@ -23,6 +25,8 @@ EXPORTERS = {
     "geopts_table": GeoptsTableExporter(),
     "photos_table": PhotosTableExporter(),
     "photograms_table": PhotogramsTableExporter(),
+    "drawings_table": DrawingsTableExporter(),
+    "sketches_table": SketchesTableExporter(),
 }
 
 

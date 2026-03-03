@@ -3,6 +3,12 @@
   "languages": {
     "en": { "label": "English", "locale": "en_US", "icon": "flags/GB.png", "file": "catalogs/en.json" },
     "cs": { "label": "Čeština", "locale": "cs_CZ", "icon": "flags/CZ.png", "file": "catalogs/cs.json" },
-    "sk": { "label": "Slovenčina", "locale": "sk_SK", "icon": "flags/SK.png", "file": "catalogs/sk.json" }
+    "sk": { "label": "Slovenčina", "locale": "sk_SK", "icon": "flags/SK.png", "file": "catalogs/sk.json" },
+    "pl": { "label": "Polski", "locale": "pl_PL", "icon": "flags/PL.png", "file": "catalogs/pl.json" },
+    "hu": { "label": "Magyar", "locale": "hu_HU", "icon": "flags/HU.png", "file": "catalogs/hu.json" },
+    "de": { "label": "Deutsch", "locale": "de_DE", "icon": "flags/DE.png", "file": "catalogs/de.json" },
+    "it": { "label": "Italiano", "locale": "it_IT", "icon": "flags/IT.png", "file": "catalogs/it.json" },
+    "fr": { "label": "Français", "locale": "fr_FR", "icon": "flags/FR.png", "file": "catalogs/fr.json" },
+    "ua": { "label": "Українська", "locale": "ua_UA", "icon": "flags/UA.png", "file": "catalogs/ua.json" }
   }
 }

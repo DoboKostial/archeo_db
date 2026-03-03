@@ -170,5 +170,29 @@
   "field.photogram.links_sj": "SJ",
   "field.photogram.links_section": "Řezy",
   "field.photogram.links_polygon": "Polygony",
-  "field.photogram.geopt_ranges": "Rozsah vl. bodů"
+  "field.photogram.geopt_ranges": "Rozsah vl. bodů",
+
+  "report.drawings_table.title": "Seznam výkresů",
+  "report.drawings_table.description": "Tabulkový report s náhledy",
+  "field.drawing.thumb": "Thumb",
+  "field.drawing.id": "Výkres",
+  "field.drawing.author": "Autor",
+  "field.drawing.date": "Datum",
+  "field.drawing.size": "Velikost",
+  "field.drawing.notes": "Poznámky",
+  "field.drawing.links_sj": "SJ",
+  "field.drawing.links_section": "Řezy",
+
+  "report.sketches_table.title": "Seznam skic",
+  "report.sketches_table.description": "Tabulkový přehled s náhledy",
+  "field.sketch.thumb": "Thumb",
+  "field.sketch.id": "Skica",
+  "field.sketch.type": "Typ",
+  "field.sketch.author": "Autor",
+  "field.sketch.date": "Datmu",
+  "field.sketch.size": "Velikost",
+  "field.sketch.notes": "Poznámky",
+  "field.sketch.links_find": "Nálezy",
+  "field.sketch.links_sample": "Vzorky",
+  "field.sketch.links_polygon": "Polygony"
 }

@@ -3737,3 +3737,75 @@ def report_photograms_table_list_all_sql():
         FROM tab_photograms p
         ORDER BY p.id_photogram;
     """
+
+
+###
+# Reporting drawings SQl
+###
+def report_drawings_table_list_all_sql():
+    """
+    One row per drawing with aggregated link targets.
+    """
+    return """
+        SELECT
+            d.id_drawing,
+            d.author,
+            d.datum,
+            COALESCE(d.notes,'') AS notes,
+            d.file_size,
+            d.checksum_sha256,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_sj ORDER BY x.ref_sj)
+                FROM tabaid_sj_drawings x
+                WHERE x.ref_drawing = d.id_drawing
+            ), ARRAY[]::int4[]) AS sj_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_section ORDER BY x.ref_section)
+                FROM tabaid_section_drawings x
+                WHERE x.ref_drawing = d.id_drawing
+            ), ARRAY[]::int4[]) AS section_ids
+
+        FROM tab_drawings d
+        ORDER BY d.id_drawing;
+    """
+
+###
+# reporting sketches SQL
+###
+def report_sketches_table_list_all_sql():
+    """
+    One row per sketch with aggregated link targets (finds/samples/polygons).
+    """
+    return """
+        SELECT
+            s.id_sketch,
+            s.sketch_typ,
+            s.author,
+            s.datum,
+            COALESCE(s.notes,'') AS notes,
+            s.file_size,
+            s.checksum_sha256,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_find ORDER BY x.ref_find)
+                FROM tabaid_finds_sketches x
+                WHERE x.ref_sketch = s.id_sketch
+            ), ARRAY[]::int4[]) AS find_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_sample ORDER BY x.ref_sample)
+                FROM tabaid_samples_sketches x
+                WHERE x.ref_sketch = s.id_sketch
+            ), ARRAY[]::int4[]) AS sample_ids,
+
+            COALESCE((
+                SELECT ARRAY_AGG(x.ref_polygon ORDER BY x.ref_polygon)
+                FROM tabaid_polygon_sketches x
+                WHERE x.ref_sketch = s.id_sketch
+            ), ARRAY[]::text[]) AS polygon_names
+
+        FROM tab_sketches s
+        ORDER BY s.id_sketch;
+    """

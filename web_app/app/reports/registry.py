@@ -96,6 +96,22 @@ REPORT_SPECS: Dict[str, ReportSpec] = {
         formats=frozenset({"pdf", "xlsx", "sql"}),
         order=90,
     ),
+    "drawings_table": ReportSpec(
+        report_id="drawings_table",
+        title_key="report.drawings_table.title",
+        description_key="report.drawings_table.description",
+        icon="🖍️",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=100,
+    ),
+    "sketches_table": ReportSpec(
+        report_id="sketches_table",
+        title_key="report.sketches_table.title",
+        description_key="report.sketches_table.description",
+        icon="✏️",
+        formats=frozenset({"pdf", "xlsx", "sql"}),
+        order=110,
+    ),
 }
 
 REPORT_GENERATORS: Dict[str, ReportGenerator] = {}
