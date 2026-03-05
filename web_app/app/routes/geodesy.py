@@ -168,7 +168,7 @@ def geodesy():
 
     # Optional: expose codes list for UI
     codes = ['SU', 'FX', 'EP', 'FP', 'NI', 'PF', 'SP']
-    return render_template('geodesy.html', target_srid=target_srid, codes=codes)
+    return render_template('geodesy.html', selected_db=selected_db, target_srid=target_srid, codes=codes)
 
 
 @geodesy_bp.route('/geodesy/upload', methods=['POST'])

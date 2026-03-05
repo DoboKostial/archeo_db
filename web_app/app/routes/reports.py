@@ -61,6 +61,7 @@ def reports():
 
         return render_template(
             "reports.html",
+            selected_db=selected_db,
             lang=lang_norm,
             languages=languages,
             reports=reports,

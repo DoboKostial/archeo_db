@@ -126,6 +126,7 @@ def finds_samples():
 
     return render_template(
         "finds_samples.html",
+        selected_db=selected_db,
         find_types=find_types,
         sample_types=sample_types,
         polygons=polygons,
