@@ -1,6 +1,6 @@
 {# web_app/app/templates/objects.html #}
 {% extends "base.html" %}
-{% block title %}Zadání objektu{% endblock %}
+{% block title %}Object definition{% endblock %}
 
 {% block content %}
 <div class="alert alert-info" role="alert">
@@ -50,16 +50,16 @@
             <input type="hidden" name="inhum_burial_box_type" id="inhum_burial_box_type" value="{{ form_data.get('inhum_burial_box_type','') if form_data else '' }}">
 
             <div class="mb-3">
-              <label for="id_object" class="form-label">ID objektu</label>
+              <label for="id_object" class="form-label">Object ID</label>
               <input type="number" class="form-control" id="id_object" name="id_object" required
                      value="{{ form_data.get('id_object', suggested_id) if form_data else suggested_id }}">
             </div>
 
             <div class="mb-3">
-              <label for="object_typ" class="form-label">Typ objektu</label>
+              <label for="object_typ" class="form-label">Object type</label>
               <div class="input-group">
                 <select class="form-select" id="object_typ" name="object_typ" required>
-                  <option value="">-- vyber typ --</option>
+                  <option value="">-- choose type --</option>
                   {% for typ in object_types %}
                     <option value="{{ typ }}" {% if form_data and form_data.get('object_typ') == typ %}selected{% endif %}>
                       {{ typ }}
@@ -288,8 +288,8 @@
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="saveEdit">Uložit změny</button>
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zavřít</button>
+        <button type="button" class="btn btn-primary" id="saveEdit">Save changes</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
@@ -393,7 +393,7 @@
 
             <div class="col-12">
               <label class="form-label">Bone presence map</label>
-              <div class="form-text mb-2">Zaškrtni, co je přítomné / identifikovatelné.</div>
+	      <div class="form-text mb-2">Check boxes for bone presence (checked = "present").</div>
 
               {# You can replace the image path with your real static file #}
               <div class="border rounded p-2">
