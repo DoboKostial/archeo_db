@@ -942,21 +942,6 @@ $$;
 
 
 
--- This function is optional - rebuilds the geometry of all polygons 
-CREATE OR REPLACE FUNCTION rebuild_all_polygons_from_geopts()
-RETURNS void
-LANGUAGE plpgsql AS
-$$
-DECLARE r record;
-BEGIN
-  FOR r IN SELECT DISTINCT ref_polygon FROM tab_polygon_geopts_binding LOOP
-    PERFORM rebuild_polygon_geom_from_geopts(r.ref_polygon);
-  END LOOP;
-END
-$$;
-
-
-
 -- #################################
 -- TRIGGERS
 -- #################################
