@@ -622,7 +622,7 @@ CREATE INDEX tabaid_sj_polygon_polygon_idx ON tabaid_sj_polygon(ref_polygon);
 -- 3) M:N POLYGONS <-> PHOTOS
 CREATE TABLE tabaid_polygon_photos (
   ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photo    varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo    varchar(150) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
   PRIMARY KEY (ref_polygon, ref_photo)
 );
 -- (volitelně) reverzní index pro dotazy z fotky na polygony
@@ -668,7 +668,7 @@ CREATE INDEX IF NOT EXISTS tab_section_geopts_binding_idx ON tab_section_geopts_
 CREATE TABLE IF NOT EXISTS tabaid_section_photos (
   id_aut   serial PRIMARY KEY,
   ref_section int4 NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_photo varchar(120) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_photo varchar(150) NOT NULL REFERENCES tab_photos(id_photo) ON UPDATE CASCADE ON DELETE CASCADE,
   UNIQUE (ref_section, ref_photo)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_photos_idx ON tabaid_section_photos(ref_section, ref_photo);
@@ -698,7 +698,7 @@ CREATE INDEX IF NOT EXISTS tabaid_section_photograms_idx ON tabaid_section_photo
 CREATE TABLE IF NOT EXISTS tabaid_section_drawings (
   id_aut    serial PRIMARY KEY,
   ref_section   int NOT NULL REFERENCES tab_section(id_section) ON UPDATE CASCADE ON DELETE CASCADE,
-  ref_drawing varchar(120) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE,
+  ref_drawing varchar(150) NOT NULL REFERENCES tab_drawings(id_drawing) ON UPDATE CASCADE ON DELETE CASCADE,
   UNIQUE (ref_section, ref_drawing)
 );
 CREATE INDEX IF NOT EXISTS tabaid_section_drawings_idx ON tabaid_section_drawings(ref_section, ref_drawing);
