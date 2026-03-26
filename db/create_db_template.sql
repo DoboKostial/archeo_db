@@ -1271,15 +1271,16 @@ CREATE OR REPLACE FUNCTION fnc_get_photograms_by_photo(fotopattern CHARACTER VAR
  RETURNS TABLE(id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING, ref_sketch CHARACTER VARYING)
  LANGUAGE plpgsql
 AS $function$
-	BEGIN
-		RETURN QUERY
-		SELECT fg.id_photogram, fg.photogram_typ, fg.ref_sketch
-		FROM tab_photograms fg
-		INNER JOIN tabaid_photogram_photo tff ON fg.id_photogram = tff.ref_photogram
-		INNER JOIN tab_photos fo ON tff.ref_photo = fo.id_photo
-		WHERE fo.id_photo ILIKE fotopattern;
-
-	END;
+BEGIN
+	RETURN QUERY
+	SELECT
+		fg.id_photogram,
+		fg.photogram_typ,
+		fg.ref_sketch
+	FROM tab_photograms fg
+	WHERE fg.ref_photo_from ILIKE fotopattern
+	   OR fg.ref_photo_to ILIKE fotopattern;
+END;
    $function$
 ;
 
@@ -1288,15 +1289,18 @@ CREATE OR REPLACE FUNCTION fnc_get_photos_by_photogram(fotogramm CHARACTER VARYI
  RETURNS TABLE(id_photo CHARACTER VARYING, photo_typ CHARACTER VARYING, notes text)
  LANGUAGE plpgsql
 AS $function$
-	BEGIN
-		RETURN QUERY
-		SELECT fo.id_photo, fo.typ, fo.notes
-		FROM tab_photos fo
-		INNER JOIN tabaid_photogram_photo tff ON fo.id_photo = tff.ref_photo
-		INNER JOIN tab_photograms tf ON tff.ref_photogram = tf.id_photogram
-		WHERE tf.id_photogram ILIKE fotogramm;
-
-	END;
+BEGIN
+	RETURN QUERY
+	SELECT DISTINCT
+		fo.id_photo,
+		fo.photo_typ,
+		fo.notes
+	FROM tab_photograms tf
+	JOIN tab_photos fo
+	  ON fo.id_photo = tf.ref_photo_from
+	  OR fo.id_photo = tf.ref_photo_to
+	WHERE tf.id_photogram ILIKE fotogramm;
+END;
    $function$
 ;
 
