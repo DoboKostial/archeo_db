@@ -85,7 +85,7 @@ def login():
             role = None
         role = role or ""
 
-        # update last_login on successful login (správná semantika)
+        # update last_login on successful login (correct semantics)
         try:
             update_last_login(conn, email)
         except Exception as e:
@@ -108,7 +108,7 @@ def login():
         if request.is_json:
             resp = make_response(jsonify({"success": True}))
         else:
-            # pokud přijde next=, vrať se tam
+            # if next= is provided, redirect there
             nxt = request.args.get("next")
             resp = make_response(redirect(nxt or url_for("main.index")))
 
@@ -278,7 +278,7 @@ def forgot_password():
 
 @auth_bp.route("/logout")
 def logout():
-    # logout je chráněný (gatekeeper), ale i kdyby token chyběl, redirect na login je OK
+    # logout is protected by the gatekeeper, but redirecting to login is still fine if the token is missing
     response = make_response(redirect(url_for("auth.login")))
     response.set_cookie("token", "", expires=0)
     return response
@@ -286,7 +286,7 @@ def logout():
 
 @auth_bp.route("/profile", methods=["GET", "POST"])
 def profile():
-    # Tady už žádné ruční čtení tokenu – gatekeeper garantuje přihlášení
+    # No manual token reading here; the gatekeeper guarantees authentication
     from flask import g
 
     user_email = getattr(g, "user_email", "")
@@ -309,7 +309,7 @@ def profile():
             password_hash = generate_password_hash(new_password)
             update_user_password_hash(conn, user_email, password_hash)
 
-            # pro e-mail vezmeme jméno z DB, fallback token
+            # for the email, use the name from DB, falling back to the token
             user_name_for_email = get_user_name_by_email(conn, user_email) or user_name_from_token or "user"
             send_password_change_email(user_email, user_name_for_email)
 

@@ -21,7 +21,7 @@ def root():
 
 @main_bp.route("/index")
 def index():
-    # Gatekeeper garantuje přihlášení
+    # The gatekeeper guarantees authentication
     user_email = g.user_email
     user_role = g.user_role
     user_name_from_token = g.user_name
@@ -30,7 +30,7 @@ def index():
         conn = get_auth_connection()
         cur = conn.cursor()
 
-        # User info (pokud chceš last_login z DB)
+        # User info (including last_login from DB if available)
         user_data = get_user_name_and_last_login(conn, user_email)
         if user_data:
             user_name, last_login = user_data
@@ -78,14 +78,14 @@ def index():
 
 @main_bp.route("/select-db", methods=["POST"])
 def select_db():
-    # Gatekeeper garantuje přihlášení
+    # The gatekeeper guarantees authentication
     selected_db = session.get("selected_db")
     chosen = None
 
     chosen = (session.get("selected_db") or "").strip()
-    # (pozn.: tvoje původní logika bere z formu; nechávám správně z formu)
-    # ---- oprava: čti z formu ----
-    # (při přepsání si pohlídej, ať tady skutečně bereš request.form)
+    # Note: the correct source here is the submitted form data
+    # ---- fix: read from request.form ----
+    # If this gets refactored later, make sure it still reads request.form here
     from flask import request
     selected_db = request.form.get("selected_db")
 

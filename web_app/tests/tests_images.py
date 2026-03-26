@@ -80,7 +80,7 @@ def test_extract_exif_with_gps(tmp_path):
     assert math.isclose(lon, 14 + 42/60 + 16.02/3600, rel_tol=0, abs_tol=1e-6)
     assert math.isclose(alt, 311.0, rel_tol=0, abs_tol=1e-6)
 
-    # EXIF JSON je „compact“ and serializable
+    # EXIF JSON is "compact" and serializable
     s = json.dumps(exif_json, ensure_ascii=False)
     assert "UnitTestCam" in s
     assert "ModelX" in s
@@ -115,4 +115,3 @@ def test_detect_mime_fallback_mimetypes(tmp_path, monkeypatch):
     fpath = _make_jpeg_with_exif(tmp_path, "mime.jpg", with_gps=False)
     mt = detect_mime(str(fpath))
     assert mt in ("image/jpeg", "image/pjpeg")
-

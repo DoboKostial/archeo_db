@@ -167,7 +167,7 @@ def analyze_run():
                 "code": code,
                 "title": title,
                 "count": len(rows),
-                "rows": rows,           # analyze.html si to případně vykreslí do tabulky
+                "rows": rows,           # analyze.html can render this into a table if needed
                 "module_url": module_url,
                 "error": None,
             })

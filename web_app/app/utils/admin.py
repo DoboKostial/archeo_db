@@ -17,11 +17,11 @@ from app.queries import get_terrain_db_list
 
 def _get_base_url() -> str:
     """
-    Vrátí base URL aplikace podle aktuálního requestu, nebo fallback:
-    - Config.BASE_URL (pokud existuje),
-    - APP_BASE_URL z env,
-    - SERVER_NAME z Flask configu,
-    - jinak http://localhost:5000
+    Return the application's base URL from the current request, or fall back to:
+    - Config.BASE_URL (if defined),
+    - APP_BASE_URL from the environment,
+    - SERVER_NAME from Flask config,
+    - otherwise http://localhost:5000
     """
     try:
         from flask import request, current_app
