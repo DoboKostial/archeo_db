@@ -17,12 +17,15 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO app_terrain_db;
 
 SET ROLE app_terrain_db;
 
-CREATE TABLE app_users (
-    mail VARCHAR(80) NOT NULL PRIMARY KEY,
-    name VARCHAR(150) NOT NULL,
-    password_hash VARCHAR(250) NOT NULL,
-    group_role VARCHAR(40) NOT NULL,
-    last_login DATE
+
+CREATE TABLE public.app_users (
+	mail varchar(80) NOT NULL,
+	"name" varchar(150) NOT NULL,
+	password_hash varchar(250) NOT NULL,
+	group_role varchar(40) NOT NULL,
+	last_login date NULL,
+	enabled bool DEFAULT true NOT NULL,
+	CONSTRAINT app_users_pkey PRIMARY KEY (mail)
 );
 
 RESET ROLE;
