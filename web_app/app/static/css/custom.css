@@ -57,3 +57,19 @@
   border: 3px solid var(--bs-primary);
   box-shadow: 0 0.35rem 1.0rem rgba(13,110,253,.22);
 }
+
+.dashboard-grid {
+  padding-top: .25rem;
+}
+
+.dashboard-chart-wrap {
+  min-height: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.dashboard-qr {
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+}

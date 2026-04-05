@@ -1,33 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
-
-    <h4>Welcome, {{ user_name }}!</h4>
-    <p>Last login: {{ last_login }}</p>
-
-    <hr>
-
-    <h4>PostgreSQL and App version</h4>
-    <p>{{ pg_version }}</p>
-    <p>Application version: {{ app_version }} 
-        (<a href="https://github.com/DoboKostial/archeo_db" target="_blank">see GitHub for latest releases</a>)
-    </p>
-
-    <p>For data standard and business logic see this: 
-        (<a href="https://archeoconsult.org/good-data/good-data-internal/excavation-docu-standard/" target="_blank">Excav. docu standard.</a>)
-    </p>
-    <p>For further reading about field data acquisition see this: 
-        (<a href="https://behindthetrowel.wordpress.com/wp-content/uploads/2018/04/molasmanual94.pdf" target="_blank">MoLAS 1994</a>)
-    </p>
-
-    <hr>
-
-    <h4>Sizes of terrain databases</h4>
-    <div class="mb-4" style="max-height: 400px; overflow-y: auto;">
-        <canvas id="dbSizeChart"></canvas>
-    </div>
-
+<div class="dashboard-grid">
     {% if db_selected_message %}
         <div class="alert alert-success alert-dismissible fade show" role="alert">
             {{ db_selected_message }}
@@ -35,27 +9,137 @@
         </div>
     {% endif %}
 
-    <div class="card">
-        <div class="card-body bg-light border border-danger">
-            <h4 class="card-title">Choose the database to work with:</h4>
-            <form action="/select-db" method="POST" class="row g-3 align-items-center">
-                <div class="col-auto">
-                    <label for="selected_db" class="col-form-label">Database:</label>
+    <div class="row g-4">
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h4 class="card-title mb-3">Welcome, {{ user_name }}!</h4>
+                    <p class="mb-2"><strong>Last login:</strong> {{ last_login }}</p>
+                    <p class="mb-2"><strong>PostgreSQL:</strong> {{ pg_version }}</p>
+                    <p class="mb-0">
+                        <strong>Application version:</strong> {{ app_version }}
+                        <a href="https://github.com/DoboKostial/archeo_db" target="_blank" rel="noopener">
+                            see GitHub for latest releases
+                        </a>
+                    </p>
                 </div>
-                <div class="col-auto">
-                    <select name="selected_db" id="selected_db" class="form-select">
-                        {% for db in db_sizes %}
-                            <option value="{{ db.name }}">{{ db.name }} ({{ db.size_mb }} MB)</option>
-                        {% endfor %}
-                    </select>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h4 class="card-title mb-3">External Links</h4>
+                    <div class="list-group list-group-flush">
+                        <a
+                            href="https://behindthetrowel.wordpress.com/wp-content/uploads/2018/04/molasmanual94.pdf"
+                            target="_blank"
+                            rel="noopener"
+                            class="list-group-item list-group-item-action px-0"
+                        >
+                            MoLAS 1994
+                        </a>
+                        <a
+                            href="https://archeoconsult.org/good-data/good-data-internal/excavation-docu-standard/"
+                            target="_blank"
+                            rel="noopener"
+                            class="list-group-item list-group-item-action px-0"
+                        >
+                            Excavation Documentation Standard
+                        </a>
+                        <a
+                            href="https://archeoconsult.org/good-data/good-data-internal/excavation-docu-standard/"
+                            target="_blank"
+                            rel="noopener"
+                            class="list-group-item list-group-item-action px-0"
+                        >
+                            Mobile app download
+                        </a>
+
+                    </div>
                 </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">Choose</button>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h4 class="card-title mb-3">Sizes of Terrain Databases</h4>
+                    <div class="dashboard-chart-wrap">
+                        <canvas id="dbSizeChart"></canvas>
+                    </div>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Database</th>
+                                    <th class="text-end">PostgreSQL (MB)</th>
+                                    <th class="text-end">Files (MB)</th>
+                                    <th class="text-end">Total (MB)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for db in db_sizes %}
+                                    <tr>
+                                        <td>{{ db.name }}</td>
+                                        <td class="text-end">{{ db.db_size_mb }}</td>
+                                        <td class="text-end">{{ db.files_size_mb }}</td>
+                                        <td class="text-end fw-semibold">{{ db.total_size_mb }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </form>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h4 class="card-title mb-3">Mobile App Setup</h4>
+                    {% if mobile_api_base_url %}
+                        <p class="mb-2">
+                            Configuration of Android app by scanning this QR code from the mobile.
+                        </p>
+                        <p class="mb-3"><strong>Mobile API URI:</strong> {{ mobile_api_base_url }}</p>
+                        <div class="text-center text-lg-start">
+                            <img
+                                src="{{ url_for('main.mobile_api_qr') }}"
+                                alt="Mobile API setup QR"
+                                class="dashboard-qr img-fluid border rounded p-2 bg-white"
+                            >
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-0" role="alert">
+                            MOBILE_API_BASE_URL is not configured in web_app/config.py.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body bg-light border border-danger rounded">
+                    <h4 class="card-title mb-3">Choose the Database to Work With</h4>
+                    <form action="/select-db" method="POST" class="row g-3 align-items-end">
+                        <div class="col-12 col-md-8 col-xl-6">
+                            <label for="selected_db" class="form-label">Database</label>
+                            <select name="selected_db" id="selected_db" class="form-select">
+                                {% for db in db_sizes %}
+                                    <option value="{{ db.name }}">{{ db.name }} ({{ db.size_mb }} MB)</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-auto">
+                            <button type="submit" class="btn btn-primary w-100">Choose</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
-
 </div>
 {% endblock %}
 

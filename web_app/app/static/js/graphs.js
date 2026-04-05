@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!dbSizeChartElement || !window.dbSizes) return;
 
     const labels = window.dbSizes.map(item => item.name);
-    const data = window.dbSizes.map(item => item.size_mb);
+    const data = window.dbSizes.map(item => item.total_size_mb ?? item.size_mb);
 
     // Každý sloupec jinou barvou
     const backgroundColors = labels.map((_, i) => {
@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
         data: {
             labels: labels,
             datasets: [{
-                label: 'Database size (MB)',
+                label: 'Total project size (MB)',
                 data: data,
                 backgroundColor: backgroundColors,
                 borderColor: '#444',
@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 title: {
                     display: true,
-                    text: 'Database size'
+                    text: 'Total project size'
                 }
             },
             scales: {
@@ -60,4 +60,3 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
-

@@ -1,6 +1,11 @@
 # web_app/app/routes/main.py
-from flask import Blueprint, render_template, redirect, session, flash, get_flashed_messages
+import os
+from urllib.parse import quote
+from flask import Blueprint, render_template, redirect, session, flash, get_flashed_messages, Response
 from flask import g
+from reportlab.graphics import renderSVG
+from reportlab.graphics.barcode import qr
+from reportlab.graphics.shapes import Drawing
 
 from config import Config
 from app.logger import logger
@@ -12,6 +17,41 @@ from app.queries import (
 )
 
 main_bp = Blueprint("main", __name__)
+
+
+def _directory_size_bytes(path: str) -> int:
+    total = 0
+    if not os.path.isdir(path):
+        return total
+
+    for root, _dirs, files in os.walk(path):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            try:
+                total += os.path.getsize(file_path)
+            except OSError:
+                logger.warning(f"Skipping unreadable file while counting data size: {file_path}")
+    return total
+
+
+def _mobile_api_qr_payload() -> str:
+    mobile_api_base_url = (getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip()
+    return f"archeodb-mobile://configure?server={quote(mobile_api_base_url, safe='')}"
+
+
+def _mobile_api_qr_svg(payload: str) -> str:
+    qr_widget = qr.QrCodeWidget(payload)
+    left, bottom, right, top = qr_widget.getBounds()
+    width = right - left
+    height = top - bottom
+
+    drawing = Drawing(
+        width,
+        height,
+        transform=[1, 0, 0, 1, -left, -bottom],
+    )
+    drawing.add(qr_widget)
+    return renderSVG.drawToString(drawing)
 
 
 @main_bp.route("/")
@@ -44,7 +84,21 @@ def index():
         # Existing databases
         cur.execute(get_terrain_db_sizes())
         terrain_dbs = cur.fetchall()
-        db_sizes = [{"name": row[0], "size_mb": round(row[1] / (1024 * 1024), 2)} for row in terrain_dbs]
+        db_sizes = []
+        for row in terrain_dbs:
+            db_name = row[0]
+            db_bytes = int(row[1] or 0)
+            files_bytes = _directory_size_bytes(os.path.join(Config.DATA_DIR, db_name))
+            total_bytes = db_bytes + files_bytes
+            db_sizes.append(
+                {
+                    "name": db_name,
+                    "db_size_mb": round(db_bytes / (1024 * 1024), 2),
+                    "files_size_mb": round(files_bytes / (1024 * 1024), 2),
+                    "total_size_mb": round(total_bytes / (1024 * 1024), 2),
+                    "size_mb": round(total_bytes / (1024 * 1024), 2),
+                }
+            )
 
     except Exception as e:
         logger.error(f"Error fetching data for /index: {e}")
@@ -73,7 +127,23 @@ def index():
         user_role=user_role,
         db_selected_message=db_selected_message,
         app_version=getattr(Config, "APP_VERSION", ""),
+        mobile_api_base_url=(getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip(),
     )
+
+
+@main_bp.route("/mobile-api-qr.svg")
+def mobile_api_qr():
+    mobile_api_base_url = (getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip()
+    if not mobile_api_base_url:
+        return Response(status=404)
+
+    try:
+        svg = _mobile_api_qr_svg(_mobile_api_qr_payload())
+    except Exception as e:
+        logger.error(f"Error generating mobile API QR: {e}")
+        return Response(status=500)
+
+    return Response(svg, mimetype="image/svg+xml")
 
 
 @main_bp.route("/select-db", methods=["POST"])
