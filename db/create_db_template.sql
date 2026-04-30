@@ -2,36 +2,104 @@
 --- ArcheoDB project; author dobo@dobo.sk
 
 
----
--- BASIX ROLES AND PRIVILEGES
--- making database with owner grp_dbas creating all tables under this account
+/*
+Role and privilege model (tree view)
+====================================
 
-CREATE ROLE grp_dbas WITH CREATEDB INHERIT;
-GRANT pg_write_all_data TO grp_dbas;
-CREATE ROLE grp_analysts WITH INHERIT;
-GRANT pg_read_all_data TO grp_analysts;
-CREATE ROLE app_terrain_db WITH LOGIN;
-ALTER ROLE app_terrain_db WITH createdb;
-GRANT grp_dbas TO app_terrain_db;
+ArcheoDB
+├── Owner roles (NOLOGIN)
+│   ├── own_auth_db
+│   └── own_terrain_db
+│       └── owns: terrain_db_template and all concrete terrain DBs
+│
+├── Privilege roles (NOLOGIN)
+│   ├── grp_app_auth_ro
+│   ├── grp_app_auth_rw
+│   ├── grp_app_terrain_ro
+│   │   └── readonly access to terrain DBs
+│   └── grp_app_terrain_rw
+│       └── readwrite access to terrain DBs
+│
+└── Technical stack roles (LOGIN)
+    ├── app_terrain_db
+    │   └── full management stack, may access template DB
+    ├── app_desktop_db
+    │   └── full management stack, may access template DB
+    ├── app_mobile_db
+    │   └── runtime client, no access to template DB
+    └── app_gis_db
+        └── runtime client, no access to template DB
 
--- This database is intended to be a template while assuming
--- cluster would server for more terrain DBs. After template creation You are able to create new database with 'CREATE DATABASE XYZ WITH TEMPLATE = 'terrain_db_template;''
-CREATE DATABASE terrain_db_template OWNER app_terrain_db ENCODING 'UTF8' IS_TEMPLATE true;
+Terrain DB access model
+=======================
+- terrain_db_template is visible only to web and desktop stacks
+- concrete terrain DBs created from template should later grant:
+    GRANT CONNECT ON DATABASE <terrain_db_name>
+    TO grp_app_terrain_ro, grp_app_terrain_rw;
+- readonly role grp_app_terrain_ro is prepared for future analysts/RO clients
+*/
 
--- Connect to the template database to configure it
-\c terrain_db_template;
+-- ---------------------------------------------------------------------
+-- 1. Template database
+-- ---------------------------------------------------------------------
+CREATE DATABASE terrain_db_template
+    OWNER own_terrain_db
+    ENCODING 'UTF8'
+    IS_TEMPLATE true;
 
--- default privileges for users
-ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO app_terrain_db;
-ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO app_terrain_db;
-ALTER DEFAULT PRIVILEGES GRANT ALL ON FUNCTIONS TO app_terrain_db;
-ALTER DEFAULT PRIVILEGES GRANT ALL ON TYPES TO app_terrain_db;
-ALTER DEFAULT PRIVILEGES GRANT ALL ON SCHEMAS TO app_terrain_db;
+\c terrain_db_template
 
+ALTER DATABASE terrain_db_template OWNER TO own_terrain_db;
+ALTER SCHEMA public OWNER TO own_terrain_db;
+
+-- lock down PUBLIC
+REVOKE ALL ON DATABASE terrain_db_template FROM PUBLIC;
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+
+-- only management stacks may connect to template DB
+GRANT CONNECT ON DATABASE terrain_db_template TO app_terrain_db;
+GRANT CONNECT ON DATABASE terrain_db_template TO app_desktop_db;
+
+-- terrain privilege groups may use schema
+GRANT USAGE ON SCHEMA public TO grp_app_terrain_ro;
+GRANT USAGE ON SCHEMA public TO grp_app_terrain_rw;
+
+-- owner role must be able to create objects in public schema
+GRANT USAGE, CREATE ON SCHEMA public TO own_terrain_db;
+
+-- ---------------------------------------------------------------------
+-- 2. Extensions
+-- ---------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS postgis;
 
-SET ROLE app_terrain_db;
+-- ---------------------------------------------------------------------
+-- 3. Default privileges for future terrain objects
+-- ---------------------------------------------------------------------
+SET ROLE own_terrain_db;
 
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT ON TABLES TO grp_app_terrain_ro;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO grp_app_terrain_rw;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT USAGE, SELECT ON SEQUENCES TO grp_app_terrain_ro;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO grp_app_terrain_rw;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT EXECUTE ON FUNCTIONS TO grp_app_terrain_ro, grp_app_terrain_rw;
+
+
+
+
+
+-- ---------------------------------------------------------------------
+-- 4. Create terrain objects as owner role
+-- ---------------------------------------------------------------------
+SET ROLE own_terrain_db;
 
 
 --###### TABLES definitions here #######
@@ -1506,3 +1574,46 @@ BEGIN
 END;
 $function$
 ;
+
+
+----
+-- END OF CREATEING OBJECTS
+----
+
+-- ---------------------------------------------------------------------
+-- 5. Grants to already created objects in template
+-- ---------------------------------------------------------------------
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO grp_app_terrain_ro;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO grp_app_terrain_rw;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_ro;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_rw;
+
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO grp_app_terrain_ro, grp_app_terrain_rw;
+
+-- grant usage on custom enum / custom types explicitly
+GRANT USAGE ON TYPE public.section_type TO grp_app_terrain_ro, grp_app_terrain_rw;
+GRANT USAGE ON TYPE public.geopt_code TO grp_app_terrain_ro, grp_app_terrain_rw;
+GRANT USAGE ON TYPE public.allocation_reason TO grp_app_terrain_ro, grp_app_terrain_rw;
+
+RESET ROLE;
+
+/*
+Provisioning note for future concrete terrain DBs
+=================================================
+
+Use this pattern from web/desktop stack:
+
+CREATE DATABASE some_terrain_db
+    OWNER own_terrain_db
+    ENCODING 'UTF8'
+    TEMPLATE terrain_db_template;
+
+REVOKE ALL ON DATABASE some_terrain_db FROM PUBLIC;
+GRANT CONNECT ON DATABASE some_terrain_db TO grp_app_terrain_ro;
+GRANT CONNECT ON DATABASE some_terrain_db TO grp_app_terrain_rw;
+
+Important:
+- mobile/GIS connect only to SPECIFIC terrain DBs
+- mobile/GIS do not connect to terrain_db_template
+*/

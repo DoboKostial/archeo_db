@@ -2,11 +2,6 @@
 -- create_auth_db.sql
 -- ArcheoDB - central authentication database + shared role model
 -- Run first.
--- The purpose of this script is to create one indepedent DB and one table
--- used for authentication for app user in whole PG cluster. While the cluster
--- could have more identical databases ("projects"), the independent authentication mechanizm
--- has to be deployed
---- ArcheoDB project; author dobo@dobo.sk
 -- =====================================================================
 
 /*
@@ -61,9 +56,6 @@ Notes
 - grp_app_terrain_ro is prepared for future read-only stacks / analysts
 */
 
-
-\set ON_ERROR_STOP on
-
 -- ---------------------------------------------------------------------
 -- 1. Shared owner roles
 -- ---------------------------------------------------------------------
@@ -90,24 +82,19 @@ CREATE ROLE app_gis_db LOGIN PASSWORD 'CHANGE_ME_GIS';
 -- ---------------------------------------------------------------------
 -- 4. Memberships
 -- ---------------------------------------------------------------------
-
--- web stack = full auth + full terrain + ownership/provisioning
 GRANT grp_app_auth_rw TO app_terrain_db;
 GRANT grp_app_terrain_rw TO app_terrain_db;
 GRANT own_auth_db TO app_terrain_db;
 GRANT own_terrain_db TO app_terrain_db;
 
--- desktop stack = same as web
 GRANT grp_app_auth_rw TO app_desktop_db;
 GRANT grp_app_terrain_rw TO app_desktop_db;
 GRANT own_auth_db TO app_desktop_db;
 GRANT own_terrain_db TO app_desktop_db;
 
--- mobile stack = auth readonly + terrain readwrite
 GRANT grp_app_auth_ro TO app_mobile_db;
 GRANT grp_app_terrain_rw TO app_mobile_db;
 
--- GIS stack = auth readonly + terrain readwrite
 GRANT grp_app_auth_ro TO app_gis_db;
 GRANT grp_app_terrain_rw TO app_gis_db;
 
@@ -116,6 +103,7 @@ GRANT grp_app_terrain_rw TO app_gis_db;
 -- ---------------------------------------------------------------------
 CREATE DATABASE auth_db OWNER own_auth_db ENCODING 'UTF8';
 
+-- switch to the new database
 \c auth_db
 
 ALTER DATABASE auth_db OWNER TO own_auth_db;
@@ -133,10 +121,23 @@ GRANT CONNECT ON DATABASE auth_db TO grp_app_auth_rw;
 GRANT USAGE ON SCHEMA public TO grp_app_auth_ro;
 GRANT USAGE ON SCHEMA public TO grp_app_auth_rw;
 
+-- owner role must be able to create objects in public schema
+GRANT USAGE, CREATE ON SCHEMA public TO own_auth_db;
+
 -- ---------------------------------------------------------------------
 -- 6. Auth objects - create as owner role
 -- ---------------------------------------------------------------------
 SET ROLE own_auth_db;
+
+-- default privileges for future auth objects created by own_auth_db
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO grp_app_auth_rw;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO grp_app_auth_rw;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+GRANT EXECUTE ON FUNCTIONS TO grp_app_auth_rw;
 
 CREATE TABLE public.app_users (
     mail varchar(80) NOT NULL,
@@ -148,7 +149,7 @@ CREATE TABLE public.app_users (
     CONSTRAINT app_users_pkey PRIMARY KEY (mail)
 );
 
--- readonly stacks will read through view, not directly from table grants
+-- readonly stacks read through this view
 CREATE VIEW public.v_app_login_users AS
 SELECT
     mail,
@@ -159,26 +160,28 @@ SELECT
     enabled
 FROM public.app_users;
 
+CREATE TABLE public.random_citation (
+    id serial4 NOT NULL,
+    citation varchar(500) NULL,
+    CONSTRAINT random_citation_pk PRIMARY KEY (id)
+);
+
+INSERT INTO public.random_citation (citation) VALUES
+    ('"Archaeology is like a pornography - no fun without pictures." (V.F.)'),
+    ('"Little did ancient people suspect that the garbage they discarded would one day be resurrected by these scientific rag-and-bone merchants." (P.B.)'),
+    ('"Why are archaeologists so romantic? They''re experts in dating methods!" (N.N.)'),
+    ('"The work of archaeologists is reminiscent of that of garbage collectors - they even often dress the same way." (P.B.)');
+
 RESET ROLE;
 
 -- ---------------------------------------------------------------------
 -- 7. Grants in auth_db
 -- ---------------------------------------------------------------------
 
--- mobile/GIS/etc. readonly auth access
-GRANT SELECT ON TABLE public.v_app_login_users TO grp_app_auth_ro;
+-- readonly auth access for mobile / GIS / future clients
+GRANT SELECT ON public.v_app_login_users TO grp_app_auth_ro;
 
--- web/desktop full auth management
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.app_users TO grp_app_auth_rw;
-GRANT SELECT ON TABLE public.v_app_login_users TO grp_app_auth_rw;
-
--- default privileges for future auth objects created by owner role
-ALTER DEFAULT PRIVILEGES FOR ROLE own_auth_db IN SCHEMA public
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO grp_app_auth_rw;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE own_auth_db IN SCHEMA public
-GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO grp_app_auth_rw;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE own_auth_db IN SCHEMA public
-GRANT EXECUTE ON FUNCTIONS TO grp_app_auth_rw;
-
+-- full auth management for web / desktop
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_users TO grp_app_auth_rw;
+GRANT SELECT ON public.v_app_login_users TO grp_app_auth_rw;
+GRANT SELECT ON public.random_citation TO grp_app_auth_rw;
