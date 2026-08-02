@@ -1,12 +1,20 @@
 # app/utils/storage.py
 # handlers for storage and paths manipulation
 
-import os, re, time, shutil
+import os, re, shutil, tempfile
 from typing import Tuple
 from werkzeug.datastructures import FileStorage
 
+from config import Config
+
 # --- PK building & validation ---
+_DB_NAME_REGEX = re.compile(r"^[0-9][A-Za-z0-9_]*$")
 _PK_REGEX = re.compile(r"^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$")
+
+
+def validate_db_name(dbname: str) -> None:
+    if not isinstance(dbname, str) or not _DB_NAME_REGEX.fullmatch(dbname):
+        raise ValueError("Invalid terrain database name.")
 
 def db_prefix_from_name(dbname: str) -> str:
     m = re.match(r"^(\d+)_", dbname)
@@ -34,12 +42,18 @@ def validate_pk(pk: str) -> None:
         raise ValueError("PK must match '<digits>_<name>.<lowerext>'.")
 
 # --- Safe paths & final locations ---
-def safe_join(*parts: str) -> str:
-    for p in parts:
-        if ".." in p.split(os.sep):
-            raise ValueError("Path traversal not allowed.")
-    path = os.path.join(*parts)
-    return os.path.normpath(path)
+def safe_join(base: str, *parts: str) -> str:
+    base_path = os.path.realpath(os.path.abspath(base))
+    candidate = os.path.realpath(os.path.join(base_path, *parts))
+
+    try:
+        is_contained = os.path.commonpath((base_path, candidate)) == base_path
+    except ValueError:
+        is_contained = False
+
+    if not is_contained:
+        raise ValueError("Path traversal not allowed.")
+    return candidate
 
 def final_paths(data_dir: str, dbname: str, media_dir: str, pk_name: str) -> Tuple[str, str]:
     base = safe_join(data_dir, dbname, media_dir)
@@ -51,12 +65,41 @@ def final_paths(data_dir: str, dbname: str, media_dir: str, pk_name: str) -> Tup
 # --- Uploads temp area ---
 def save_to_uploads(upload_folder: str, file_storage: FileStorage) -> Tuple[str, int]:
     os.makedirs(upload_folder, exist_ok=True)
-    tmp_name = f"tmp_{int(time.time()*1000)}_{os.getpid()}"
-    tmp_path = os.path.join(upload_folder, tmp_name)
-    file_storage.stream.seek(0)
-    with open(tmp_path, "wb") as f:
-        f.write(file_storage.stream.read())
-    return tmp_path, os.path.getsize(tmp_path)
+    max_bytes = int(getattr(Config, "MAX_UPLOAD_FILE_BYTES", 64 * 1024 * 1024))
+    tmp_file = tempfile.NamedTemporaryFile(prefix="upload_", dir=upload_folder, delete=False)
+    tmp_path = tmp_file.name
+    total = 0
+    try:
+        file_storage.stream.seek(0)
+        with tmp_file:
+            while True:
+                chunk = file_storage.stream.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError("Uploaded file is too large.")
+                tmp_file.write(chunk)
+    except Exception:
+        cleanup_upload(tmp_path)
+        raise
+    return tmp_path, total
+
+
+def read_upload_bytes(file_storage: FileStorage, max_bytes: int | None = None) -> bytes:
+    limit = int(max_bytes or getattr(Config, "MAX_TEXT_UPLOAD_BYTES", 8 * 1024 * 1024))
+    stream = getattr(file_storage, "stream", file_storage)
+    stream.seek(0)
+    chunks = []
+    total = 0
+    while True:
+        chunk = stream.read(min(1024 * 1024, limit - total + 1))
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > limit:
+            raise ValueError("Uploaded file is too large.")
 
 def cleanup_upload(path: str) -> None:
     try:
@@ -84,20 +127,9 @@ def delete_media_files(file_path: str, thumb_path: str) -> Tuple[bool, bool]:
         pass
     return fd, td
 
-
-
-def _sanitize_filename(name: str) -> Tuple[str, str]:
-    base, ext = os.path.splitext(name)
-    ext = ext.lower().lstrip(".")
-    safe_base = re.sub(r"[^A-Za-z0-9._-]", "_", base).strip("_")
-    if not safe_base or not ext:
-        raise ValueError("Invalid filename after sanitization.")
-    return safe_base, ext
-
 # Public helper: keep extension, return full sanitized name ---
 # Return safe filename preserving (lowercased) extension.
 # Example: 'My Bad File.JPG' -> 'My_Bad_File.jpg'
 def sanitize_filename_keep_ext(name: str) -> str:
     base, ext = _sanitize_filename(name)
     return f"{base}.{ext}"
-

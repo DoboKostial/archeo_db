@@ -7,6 +7,17 @@ import tarfile
 import gzip
 import shutil
 from app.logger import logger
+from app.utils.storage import safe_join, validate_db_name
+
+
+class ClosingConnection(psycopg2.extensions.connection):
+    """A psycopg2 connection whose context manager also closes the socket."""
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        try:
+            return super().__exit__(exc_type, exc_value, traceback)
+        finally:
+            self.close()
 
 
 def get_auth_connection():
@@ -15,7 +26,8 @@ def get_auth_connection():
         user=Config.AUTH_DB_USER,
         password=Config.AUTH_DB_PASSWORD,
         host=Config.AUTH_DB_HOST,
-        port=Config.AUTH_DB_PORT
+        port=Config.AUTH_DB_PORT,
+        connection_factory=ClosingConnection,
     )
 
 def get_terrain_connection(dbname):
@@ -24,12 +36,14 @@ def get_terrain_connection(dbname):
         user=Config.TERRAIN_DB_USER,
         password=Config.TERRAIN_DB_PASSWORD,
         host=Config.TERRAIN_DB_HOST,
-        port=Config.TERRAIN_DB_PORT
+        port=Config.TERRAIN_DB_PORT,
+        connection_factory=ClosingConnection,
     )
 
 
 # here the logic for DB backups - will be used in routes.py
 def create_database_backup(dbname):
+    validate_db_name(dbname)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     os.makedirs(Config.BACKUP_DIR, exist_ok=True)
 
@@ -39,45 +53,52 @@ def create_database_backup(dbname):
     gz_dump_path = f"{dump_path}.gz"
 
     env = os.environ.copy()
-    env["PGPASSWORD"] = Config.AUTH_DB_PASSWORD
+    env["PGPASSWORD"] = Config.TERRAIN_DB_PASSWORD
 
     logger.info(f"Starting pg_dump for DB '{dbname}' into '{dump_path}'")
 
-    result = subprocess.run(
-        [
-            Config.PGDUMP_PATH,
-            '-h', Config.AUTH_DB_HOST,
-            '-U', Config.AUTH_DB_USER,
-            '-d', dbname,
-            '-Fc',
-            '-f', dump_path
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env
-    )
+    data_dir_path = safe_join(Config.DATA_DIR, dbname)
+    gz_files_path = safe_join(Config.BACKUP_DIR, f"{dbname}_files_{timestamp}.tar.gz")
+    artifacts = (dump_path, gz_dump_path, gz_files_path)
 
-    logger.info(f"pg_dump stdout: {result.stdout.strip()}")
-    if result.stderr.strip():
-        logger.warning(f"pg_dump stderr: {result.stderr.strip()}")
+    try:
+        result = subprocess.run(
+            [
+                Config.PGDUMP_PATH,
+                '-h', Config.TERRAIN_DB_HOST,
+                '-p', str(Config.TERRAIN_DB_PORT),
+                '-U', Config.TERRAIN_DB_USER,
+                '-d', dbname,
+                '-Fc',
+                '-f', dump_path
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env
+        )
 
-    # gzip dump
-    with open(dump_path, 'rb') as f_in, gzip.open(gz_dump_path, 'wb') as f_out:
-        shutil.copyfileobj(f_in, f_out)
-    os.remove(dump_path)
+        logger.info(f"pg_dump stdout: {result.stdout.strip()}")
+        if result.stderr.strip():
+            logger.warning(f"pg_dump stderr: {result.stderr.strip()}")
 
-    logger.info(f"Gzipped dump created at '{gz_dump_path}'")
+        with open(dump_path, 'rb') as f_in, gzip.open(gz_dump_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+        os.remove(dump_path)
 
-    # --- 2. Tar data directory ---
-    data_dir_path = os.path.join(Config.DATA_DIR, dbname)
-    gz_files_path = os.path.join(Config.BACKUP_DIR, f"{dbname}_files_{timestamp}.tar.gz")
+        logger.info(f"Gzipped dump created at '{gz_dump_path}'")
+        logger.info(f"Creating tar.gz of data directory '{data_dir_path}'")
 
-    logger.info(f"Creating tar.gz of data directory '{data_dir_path}'")
+        with tarfile.open(gz_files_path, "w:gz") as tar:
+            tar.add(data_dir_path, arcname=dbname)
 
-    with tarfile.open(gz_files_path, "w:gz") as tar:
-        tar.add(data_dir_path, arcname=dbname)
-
-    logger.info(f"Data directory archive created at '{gz_files_path}'")
-
-    return gz_dump_path, gz_files_path
+        logger.info(f"Data directory archive created at '{gz_files_path}'")
+        return gz_dump_path, gz_files_path
+    except Exception:
+        for path in artifacts:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                logger.warning(f"Could not remove incomplete backup artifact: {path}")
+        raise

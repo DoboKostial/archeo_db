@@ -331,8 +331,8 @@ def generate_sections_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
 
     story: List[Any] = []
 
-    for idx, sid in enumerate(section_ids, start=1):
-        with get_terrain_connection(ctx.selected_db) as conn:
+    with get_terrain_connection(ctx.selected_db) as conn:
+        for idx, sid in enumerate(section_ids, start=1):
             s = _fetch_section_detail(conn, sid)
             if not s:
                 continue
@@ -346,27 +346,27 @@ def generate_sections_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
                 "photograms": _fetch_media_ids(conn, sid, "photograms"),
             }
 
-        story.append(_page_header(ctx))
-        story.append(Spacer(1, 3 * mm))
+            story.append(_page_header(ctx))
+            story.append(Spacer(1, 3 * mm))
 
-        story.append(_section1_orange(ctx, s))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section1_orange(ctx, s))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section2_grey(ctx, s))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section2_grey(ctx, s))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section3_blue(ctx, sj_ids))
-        story.append(Spacer(1, 4 * mm))
+            story.append(_section3_blue(ctx, sj_ids))
+            story.append(Spacer(1, 4 * mm))
 
-        story.append(Paragraph(ctx.t("section.section.media"), SECTION_TITLE))
-        story.append(Spacer(1, 2 * mm))
-        story.append(_media_section(ctx, "photos", media_ids["photos"]))
-        story.append(_media_section(ctx, "drawings", media_ids["drawings"]))
-        story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
-        story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
+            story.append(Paragraph(ctx.t("section.section.media"), SECTION_TITLE))
+            story.append(Spacer(1, 2 * mm))
+            story.append(_media_section(ctx, "photos", media_ids["photos"]))
+            story.append(_media_section(ctx, "drawings", media_ids["drawings"]))
+            story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
+            story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
 
-        if idx != len(section_ids):
-            story.append(PageBreak())
+            if idx != len(section_ids):
+                story.append(PageBreak())
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

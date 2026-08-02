@@ -136,8 +136,9 @@ def process_polygon_upload(file):
     logger.info(f"Processing polygon upload file: {filename}")
 
     # Read as text (robust for typical UTF-8 / Windows exports)
-    file.stream.seek(0)
-    raw = file.stream.read()
+    from app.utils.storage import read_upload_bytes
+
+    raw = read_upload_bytes(file)
     if isinstance(raw, bytes):
         text = raw.decode("utf-8", errors="replace")
     else:

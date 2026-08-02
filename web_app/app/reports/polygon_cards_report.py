@@ -437,8 +437,8 @@ def generate_polygon_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
         page_no = canv.getPageNumber()
         _footer(canv, d, footer_left, f"{ctx.t('common.page')} {page_no}/{total_pages}")
 
-    for idx, poly_name in enumerate(polygon_names, start=1):
-        with get_terrain_connection(ctx.selected_db) as conn:
+    with get_terrain_connection(ctx.selected_db) as conn:
+        for idx, poly_name in enumerate(polygon_names, start=1):
             p = _fetch_polygon_detail(conn, poly_name)
             if not p:
                 logger.warning(f"[{ctx.selected_db}] Polygon cards: polygon '{poly_name}' not found")
@@ -454,26 +454,26 @@ def generate_polygon_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
                 "photograms": _fetch_media_ids(conn, poly_name, "photograms"),
             }
 
-        story.append(_page_header(ctx))
-        story.append(Spacer(1, 3 * mm))
+            story.append(_page_header(ctx))
+            story.append(Spacer(1, 3 * mm))
 
-        story.append(_section1_orange(ctx, p))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section1_orange(ctx, p))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section2_grey(ctx, p))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section2_grey(ctx, p))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section3_blue(ctx, bindings_top, bindings_bottom, sj_ids))
-        story.append(Spacer(1, 4 * mm))
+            story.append(_section3_blue(ctx, bindings_top, bindings_bottom, sj_ids))
+            story.append(Spacer(1, 4 * mm))
 
-        story.append(Paragraph(ctx.t("section.polygon.media"), SECTION_TITLE))
-        story.append(Spacer(1, 2 * mm))
-        story.append(_media_section(ctx, "photos", media_ids["photos"]))
-        story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
-        story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
+            story.append(Paragraph(ctx.t("section.polygon.media"), SECTION_TITLE))
+            story.append(Spacer(1, 2 * mm))
+            story.append(_media_section(ctx, "photos", media_ids["photos"]))
+            story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
+            story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
 
-        if idx != len(polygon_names):
-            story.append(PageBreak())
+            if idx != len(polygon_names):
+                story.append(PageBreak())
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

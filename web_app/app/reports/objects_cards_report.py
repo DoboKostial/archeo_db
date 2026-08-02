@@ -461,8 +461,8 @@ def generate_objects_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
 
     story: List[Any] = []
 
-    for idx, oid in enumerate(obj_ids, start=1):
-        with get_terrain_connection(ctx.selected_db) as conn:
+    with get_terrain_connection(ctx.selected_db) as conn:
+        for idx, oid in enumerate(obj_ids, start=1):
             o = _fetch_object_detail(conn, oid)
             if not o:
                 continue
@@ -477,31 +477,31 @@ def generate_objects_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
                 "photograms": _fetch_media_map_for_object(conn, sj_ids, "photograms", limit_ids=60),
             }
 
-        story.append(_page_header(ctx))
-        story.append(Spacer(1, 3 * mm))
+            story.append(_page_header(ctx))
+            story.append(Spacer(1, 3 * mm))
 
-        story.append(_section1_orange(ctx, o))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section1_orange(ctx, o))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section2_grey(ctx, o))
-        story.append(Spacer(1, 2.5 * mm))
+            story.append(_section2_grey(ctx, o))
+            story.append(Spacer(1, 2.5 * mm))
 
-        story.append(_section3_blue(ctx, o))
-        story.append(Spacer(1, 4 * mm))
-
-        if inhum:
-            story.append(_inhum_grave_block(ctx, inhum))
+            story.append(_section3_blue(ctx, o))
             story.append(Spacer(1, 4 * mm))
 
-        story.append(Paragraph(ctx.t("section.object.media"), SECTION_TITLE))
-        story.append(Spacer(1, 2 * mm))
-        story.append(_media_section(ctx, "photos", media_map["photos"]))
-        story.append(_media_section(ctx, "drawings", media_map["drawings"]))
-        story.append(_media_section(ctx, "sketches", media_map["sketches"]))
-        story.append(_media_section(ctx, "photograms", media_map["photograms"]))
+            if inhum:
+                story.append(_inhum_grave_block(ctx, inhum))
+                story.append(Spacer(1, 4 * mm))
 
-        if idx != len(obj_ids):
-            story.append(PageBreak())
+            story.append(Paragraph(ctx.t("section.object.media"), SECTION_TITLE))
+            story.append(Spacer(1, 2 * mm))
+            story.append(_media_section(ctx, "photos", media_map["photos"]))
+            story.append(_media_section(ctx, "drawings", media_map["drawings"]))
+            story.append(_media_section(ctx, "sketches", media_map["sketches"]))
+            story.append(_media_section(ctx, "photograms", media_map["photograms"]))
+
+            if idx != len(obj_ids):
+                story.append(PageBreak())
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

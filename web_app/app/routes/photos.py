@@ -129,26 +129,22 @@ def _sql_link_not_exists(kind: str) -> str:
     return f"NOT EXISTS (SELECT 1 FROM {m['table']} l WHERE l.{m['fk_media']} = p.id_photo)"
 
 
-def _sql_link_count(kind: str) -> str:
-    m = LINKS[kind]
-    return f"SELECT COUNT(*) FROM {m['table']} WHERE {m['fk_media']}=%s;"
-
-
 # -------------------------
 # FS helpers
 # -------------------------
 
 def _photo_dir(selected_db: str) -> str:
-    return os.path.join(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS[PHOTO_MEDIA_TYPE])
+    return storage.safe_join(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS[PHOTO_MEDIA_TYPE])
 
 
 def _photo_thumb_dir(selected_db: str) -> str:
-    return os.path.join(_photo_dir(selected_db), "thumbs")
+    return storage.safe_join(_photo_dir(selected_db), "thumbs")
 
 
 def _final_paths(selected_db: str, id_photo: str) -> Tuple[str, str]:
-    final_path = os.path.join(_photo_dir(selected_db), id_photo)
-    thumb_path = os.path.join(_photo_thumb_dir(selected_db), id_photo)
+    storage.validate_pk(id_photo)
+    final_path = storage.safe_join(_photo_dir(selected_db), id_photo)
+    thumb_path = storage.safe_join(_photo_thumb_dir(selected_db), id_photo)
     return final_path, thumb_path
 
 
@@ -332,12 +328,6 @@ def photos():
 
             photos_data = []
             for r in rows:
-                id_photo = r[0]
-                counts = {}
-                for kind in ("sj", "polygon", "section", "find", "sample"):
-                    cur.execute(_sql_link_count(kind), (id_photo,))
-                    counts[kind] = cur.fetchone()[0]
-
                 photos_data.append({
                     "id_photo": r[0],
                     "photo_typ": r[1],
@@ -351,7 +341,13 @@ def photos():
                     "gps_lat": r[9],
                     "gps_lon": r[10],
                     "gps_alt": r[11],
-                    "link_counts": counts,
+                    "link_counts": {
+                        "sj": r[12],
+                        "polygon": r[13],
+                        "section": r[14],
+                        "find": r[15],
+                        "sample": r[16],
+                    },
                 })
 
     finally:
@@ -631,7 +627,7 @@ def upload_photos():
 # Serve file / thumb
 # -------------------------
 
-@photos_bp.get("/photos/file/<path:id_photo>")
+@photos_bp.get("/photos/file/<string:id_photo>")
 @require_selected_db
 def serve_photo_file(id_photo: str):
     selected_db = session["selected_db"]
@@ -643,7 +639,7 @@ def serve_photo_file(id_photo: str):
     return send_file(final_path, as_attachment=False)
 
 
-@photos_bp.get("/photos/thumb/<path:id_photo>")
+@photos_bp.get("/photos/thumb/<string:id_photo>")
 @require_selected_db
 def serve_photo_thumb(id_photo: str):
     selected_db = session["selected_db"]
@@ -658,7 +654,7 @@ def serve_photo_thumb(id_photo: str):
 # Detail API (edit modal preload)
 # -------------------------
 
-@photos_bp.get("/photos/api/detail/<path:id_photo>")
+@photos_bp.get("/photos/api/detail/<string:id_photo>")
 @require_selected_db
 def api_photo_detail(id_photo: str):
     selected_db = session["selected_db"]
@@ -703,7 +699,7 @@ def api_photo_detail(id_photo: str):
 # Edit (replace links)
 # -------------------------
 
-@photos_bp.post("/photos/edit/<path:id_photo>")
+@photos_bp.post("/photos/edit/<string:id_photo>")
 @require_selected_db
 def edit_photo(id_photo: str):
     selected_db = session["selected_db"]
@@ -778,7 +774,7 @@ def edit_photo(id_photo: str):
 # Delete (DB first, then FS)
 # -------------------------
 
-@photos_bp.post("/photos/delete/<path:id_photo>")
+@photos_bp.post("/photos/delete/<string:id_photo>")
 @require_selected_db
 def delete_photo(id_photo: str):
     selected_db = session["selected_db"]

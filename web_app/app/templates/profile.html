@@ -22,11 +22,11 @@
             <form id="passwordForm">
                 <div class="mb-3">
                     <label for="newPassword" class="form-label">New password</label>
-                    <input type="password" class="form-control" id="newPassword" required>
+                    <input type="password" class="form-control" id="newPassword" minlength="12" autocomplete="new-password" required>
                 </div>
                 <div class="mb-3">
                     <label for="confirmPassword" class="form-label">Repeat new password</label>
-                    <input type="password" class="form-control" id="confirmPassword" required>
+                    <input type="password" class="form-control" id="confirmPassword" minlength="12" autocomplete="new-password" required>
                 </div>
                 <button type="submit" class="btn btn-primary">Change password</button>
             </form>

@@ -535,8 +535,8 @@ def generate_sj_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
         page_no = canv.getPageNumber()
         _footer(canv, d, footer_left, f"{ctx.t('common.page')} {page_no}/{total_pages}")
 
-    for idx, sj_id in enumerate(sj_ids, start=1):
-        with get_terrain_connection(ctx.selected_db) as conn:
+    with get_terrain_connection(ctx.selected_db) as conn:
+        for idx, sj_id in enumerate(sj_ids, start=1):
             sj = _fetch_sj_detail(conn, sj_id)
             if not sj:
                 logger.warning(f"[{ctx.selected_db}] SJ cards: SJ {sj_id} not found")
@@ -549,32 +549,32 @@ def generate_sj_cards_pdf(ctx: ReportContext, payload: dict) -> bytes:
                 "photograms": _fetch_media_ids(conn, sj_id, "photograms"),
             }
 
-        # Header (page-level)
-        story.append(_page_header(ctx))
-        story.append(Spacer(1, 3 * mm))
+            # Header (page-level)
+            story.append(_page_header(ctx))
+            story.append(Spacer(1, 3 * mm))
 
-        # 1) orange
-        story.append(_section1_orange(ctx, sj))
-        story.append(Spacer(1, 2.5 * mm))
+            # 1) orange
+            story.append(_section1_orange(ctx, sj))
+            story.append(Spacer(1, 2.5 * mm))
 
-        # 2) grey
-        story.append(_section2_grey(ctx, sj))
-        story.append(Spacer(1, 2.5 * mm))
+            # 2) grey
+            story.append(_section2_grey(ctx, sj))
+            story.append(Spacer(1, 2.5 * mm))
 
-        # 3) blue
-        story.append(_section3_blue(ctx, sj))
-        story.append(Spacer(1, 4 * mm))
+            # 3) blue
+            story.append(_section3_blue(ctx, sj))
+            story.append(Spacer(1, 4 * mm))
 
-        # 4) media (no background, keep as is)
-        story.append(Paragraph(ctx.t("section.sj.media"), SECTION_TITLE))
-        story.append(Spacer(1, 2 * mm))
-        story.append(_media_section(ctx, "photos", media_ids["photos"]))
-        story.append(_media_section(ctx, "drawings", media_ids["drawings"]))
-        story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
-        story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
+            # 4) media (no background, keep as is)
+            story.append(Paragraph(ctx.t("section.sj.media"), SECTION_TITLE))
+            story.append(Spacer(1, 2 * mm))
+            story.append(_media_section(ctx, "photos", media_ids["photos"]))
+            story.append(_media_section(ctx, "drawings", media_ids["drawings"]))
+            story.append(_media_section(ctx, "sketches", media_ids["sketches"]))
+            story.append(_media_section(ctx, "photograms", media_ids["photograms"]))
 
-        if idx != len(sj_ids):
-            story.append(PageBreak())
+            if idx != len(sj_ids):
+                story.append(PageBreak())
 
     doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
     return buf.getvalue()

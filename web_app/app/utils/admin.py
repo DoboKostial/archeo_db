@@ -3,7 +3,9 @@
 
 # imports from standard library
 import os
-from flask import request, current_app, session
+from urllib.parse import urlsplit
+
+from flask import current_app, has_app_context, session
 
 #imports from app
 from config import Config
@@ -16,33 +18,23 @@ from app.queries import get_terrain_db_list
 ####
 
 def _get_base_url() -> str:
-    """
-    Return the application's base URL from the current request, or fall back to:
-    - Config.BASE_URL (if defined),
-    - APP_BASE_URL from the environment,
-    - SERVER_NAME from Flask config,
-    - otherwise http://localhost:5000
-    """
-    try:
-        from flask import request, current_app
-        if getattr(request, "url_root", None):
-            return request.url_root.rstrip("/")
-        # fallback via SERVER_NAME (if set)
-        if current_app:
-            srv = current_app.config.get("SERVER_NAME")
-            if srv:
-                scheme = "https" if current_app.config.get("PREFERRED_URL_SCHEME", "http") == "https" else "http"
-                return f"{scheme}://{srv}".rstrip("/")
-    except Exception:
-        pass
+    """Return a configured public URL without trusting the request Host header."""
+    candidates = []
+    if has_app_context():
+        candidates.append(current_app.config.get("BASE_URL"))
+    candidates.extend((getattr(Config, "BASE_URL", None), os.environ.get("APP_BASE_URL")))
 
-    base = getattr(Config, "BASE_URL", None)
-    if base:
-        return str(base).rstrip("/")
+    for candidate in candidates:
+        value = str(candidate or "").rstrip("/")
+        parsed = urlsplit(value)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return value
 
-    env_base = os.environ.get("APP_BASE_URL")
-    if env_base:
-        return env_base.rstrip("/")
+    if has_app_context():
+        server_name = current_app.config.get("SERVER_NAME")
+        if server_name:
+            scheme = current_app.config.get("PREFERRED_URL_SCHEME", "http")
+            return f"{scheme}://{server_name}".rstrip("/")
 
     return "http://localhost:5000"
 

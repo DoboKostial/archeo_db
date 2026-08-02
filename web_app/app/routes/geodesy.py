@@ -11,6 +11,7 @@ from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db, float_or_none
+from app.utils.storage import read_upload_bytes
 
 from app.queries import (
     find_geopts_srid_sql,
@@ -35,7 +36,7 @@ def _read_text_file(file_storage) -> str:
     """
     Read uploaded file as text. Tries UTF-8 first, then CP1250, then Latin-1.
     """
-    raw = file_storage.read()
+    raw = read_upload_bytes(file_storage)
     for enc in ("utf-8", "cp1250", "latin-1"):
         try:
             return raw.decode(enc)

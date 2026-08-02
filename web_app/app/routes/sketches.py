@@ -523,7 +523,7 @@ def bulk_sketches():
 # ---------------------------------------
 # API: DETAIL (edit modal)
 # ---------------------------------------
-@sketches_bp.get("/sketches/api/detail/<path:id_sketch>")
+@sketches_bp.get("/sketches/api/detail/<string:id_sketch>")
 @require_selected_db
 def api_detail(id_sketch: str):
     selected_db = session["selected_db"]
@@ -559,7 +559,7 @@ def api_detail(id_sketch: str):
 # ---------------------------------------
 # EDIT (replace file optional)
 # ---------------------------------------
-@sketches_bp.post("/sketches/edit/<path:id_sketch>")
+@sketches_bp.post("/sketches/edit/<string:id_sketch>")
 @require_selected_db
 def edit_sketch(id_sketch: str):
     selected_db = session["selected_db"]
@@ -723,7 +723,7 @@ def edit_sketch(id_sketch: str):
 # ---------------------------------------
 # DELETE
 # ---------------------------------------
-@sketches_bp.post("/sketches/delete/<path:id_sketch>")
+@sketches_bp.post("/sketches/delete/<string:id_sketch>")
 @require_selected_db
 def delete_sketch(id_sketch: str):
     selected_db = session["selected_db"]
@@ -754,7 +754,7 @@ def delete_sketch(id_sketch: str):
 # ---------------------------------------
 # FILE SERVE
 # ---------------------------------------
-@sketches_bp.get("/sketches/file/<path:id_sketch>")
+@sketches_bp.get("/sketches/file/<string:id_sketch>")
 @require_selected_db
 def serve_sketch_file(id_sketch: str):
     from flask import send_from_directory
@@ -764,7 +764,7 @@ def serve_sketch_file(id_sketch: str):
     return send_from_directory(dir_path, sid, as_attachment=False)
 
 
-@sketches_bp.get("/sketches/thumb/<path:id_sketch>")
+@sketches_bp.get("/sketches/thumb/<string:id_sketch>")
 @require_selected_db
 def serve_sketch_thumb(id_sketch: str):
     from flask import send_from_directory

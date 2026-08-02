@@ -9,10 +9,7 @@ from app.logger import logger
 from app.database import get_terrain_connection
 from app.reports.context import ReportContext
 
-from app.queries import (
-    report_finds_list_all_sql,
-    report_finds_media_ids_sql,
-)
+from app.queries import report_finds_list_all_sql
 
 from .utils_excel import set_basic_column_widths
 from .utils_media import list_files_for_media_id
@@ -30,11 +27,6 @@ class FindsTableExporter:
                 cols = [d[0] for d in cur.description]
         return [dict(zip(cols, r)) for r in rows]
 
-    def _fetch_media_ids(self, conn, id_find: int, kind: str) -> List[str]:
-        with conn.cursor() as cur:
-            cur.execute(report_finds_media_ids_sql(kind), (id_find,))
-            return [str(r[0]).strip() for r in cur.fetchall() if r and r[0] is not None and str(r[0]).strip()]
-
     def to_xlsx(self, ctx: ReportContext) -> bytes:
         finds = self._fetch_finds(ctx)
         logger.info(f"[{ctx.selected_db}] Export XLSX finds_table: {len(finds)} finds lang={ctx.lang}")
@@ -50,32 +42,30 @@ class FindsTableExporter:
         ]
         ws.append(headers)
 
-        with get_terrain_connection(ctx.selected_db) as conn:
-            for f in finds:
-                fid = int(f["id_find"])
-                photo_ids = self._fetch_media_ids(conn, fid, "photos")
-                sketch_ids = self._fetch_media_ids(conn, fid, "sketches")
+        for f in finds:
+            photo_ids = [str(value) for value in (f.get("photo_ids") or [])]
+            sketch_ids = [str(value) for value in (f.get("sketch_ids") or [])]
 
-                photo_files: List[str] = []
-                for mid in photo_ids:
-                    photo_files.extend(list_files_for_media_id(ctx, "photos", mid))
+            photo_files: List[str] = []
+            for mid in photo_ids:
+                photo_files.extend(list_files_for_media_id(ctx, "photos", mid))
 
-                sketch_files: List[str] = []
-                for mid in sketch_ids:
-                    sketch_files.extend(list_files_for_media_id(ctx, "sketches", mid))
+            sketch_files: List[str] = []
+            for mid in sketch_ids:
+                sketch_files.extend(list_files_for_media_id(ctx, "sketches", mid))
 
-                ws.append([
-                    f.get("id_find"),
-                    f.get("ref_find_type"),
-                    f.get("ref_sj"),
-                    f.get("count"),
-                    f.get("box"),
-                    f.get("ref_polygon"),
-                    f.get("ref_geopt"),
-                    f.get("description"),
-                    ", ".join(sorted(set(photo_files))),
-                    ", ".join(sorted(set(sketch_files))),
-                ])
+            ws.append([
+                f.get("id_find"),
+                f.get("ref_find_type"),
+                f.get("ref_sj"),
+                f.get("count"),
+                f.get("box"),
+                f.get("ref_polygon"),
+                f.get("ref_geopt"),
+                f.get("description"),
+                ", ".join(sorted(set(photo_files))),
+                ", ".join(sorted(set(sketch_files))),
+            ])
 
         set_basic_column_widths(ws, headers)
 

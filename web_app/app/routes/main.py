@@ -1,7 +1,9 @@
 # web_app/app/routes/main.py
 import os
+import threading
+import time
 from urllib.parse import quote
-from flask import Blueprint, render_template, redirect, session, flash, get_flashed_messages, Response
+from flask import Blueprint, render_template, redirect, request, session, flash, get_flashed_messages, Response
 from flask import g
 from reportlab.graphics import renderSVG
 from reportlab.graphics.barcode import qr
@@ -13,13 +15,26 @@ from app.database import get_auth_connection
 from app.queries import (
     get_user_name_and_last_login,
     get_pg_version,
+    get_terrain_db_list,
     get_terrain_db_sizes,
 )
+from app.utils.storage import validate_db_name
 
 main_bp = Blueprint("main", __name__)
 
+_DIRECTORY_SIZE_CACHE = {}
+_DIRECTORY_SIZE_CACHE_LOCK = threading.Lock()
+
 
 def _directory_size_bytes(path: str) -> int:
+    cache_key = os.path.realpath(path)
+    now = time.monotonic()
+    ttl = int(getattr(Config, "DIRECTORY_SIZE_CACHE_SECONDS", 300))
+    with _DIRECTORY_SIZE_CACHE_LOCK:
+        cached = _DIRECTORY_SIZE_CACHE.get(cache_key)
+        if cached and now - cached[0] < ttl:
+            return cached[1]
+
     total = 0
     if not os.path.isdir(path):
         return total
@@ -31,6 +46,11 @@ def _directory_size_bytes(path: str) -> int:
                 total += os.path.getsize(file_path)
             except OSError:
                 logger.warning(f"Skipping unreadable file while counting data size: {file_path}")
+
+    with _DIRECTORY_SIZE_CACHE_LOCK:
+        if len(_DIRECTORY_SIZE_CACHE) >= 256:
+            _DIRECTORY_SIZE_CACHE.clear()
+        _DIRECTORY_SIZE_CACHE[cache_key] = (now, total)
     return total
 
 
@@ -149,20 +169,32 @@ def mobile_api_qr():
 @main_bp.route("/select-db", methods=["POST"])
 def select_db():
     # The gatekeeper guarantees authentication
-    selected_db = session.get("selected_db")
-    chosen = None
+    selected_db = (request.form.get("selected_db") or "").strip()
 
-    chosen = (session.get("selected_db") or "").strip()
-    # Note: the correct source here is the submitted form data
-    # ---- fix: read from request.form ----
-    # If this gets refactored later, make sure it still reads request.form here
-    from flask import request
-    selected_db = request.form.get("selected_db")
-
-    if selected_db:
-        session["selected_db"] = selected_db
-        flash(f'Terrain DB "{selected_db}" was chosen ---> this will be Your working DB while logged in.', "success")
-    else:
+    try:
+        validate_db_name(selected_db)
+    except ValueError:
+        session.pop("selected_db", None)
         flash("No terrain DB was chosen!", "warning")
+        return redirect("/index")
+
+    conn = None
+    try:
+        conn = get_auth_connection()
+        if selected_db not in get_terrain_db_list(conn):
+            session.pop("selected_db", None)
+            logger.warning(f"Rejected unavailable terrain DB selection: {selected_db}")
+            flash("The selected terrain DB is not available.", "warning")
+            return redirect("/index")
+    except Exception as e:
+        logger.error(f"Failed to validate terrain DB selection: {e}")
+        flash("The terrain DB selection could not be validated.", "danger")
+        return redirect("/index")
+    finally:
+        if conn is not None:
+            conn.close()
+
+    session["selected_db"] = selected_db
+    flash(f'Terrain DB "{selected_db}" was chosen ---> this will be Your working DB while logged in.', "success")
 
     return redirect("/index")

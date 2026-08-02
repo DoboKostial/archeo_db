@@ -4,6 +4,10 @@
 import hashlib
 from typing import Set
 
+
+_BLOCKED_ACTIVE_MEDIA_EXTENSIONS = {"svg", "svgz"}
+_BLOCKED_ACTIVE_MEDIA_MIMES = {"image/svg+xml"}
+
 # --- SHA-256 ---
 def sha256_file(path: str) -> str:
     h = hashlib.sha256()
@@ -14,11 +18,13 @@ def sha256_file(path: str) -> str:
 
 # --- allowlists ---
 def validate_extension(ext: str, allowed: Set[str]) -> None:
-    if ext not in allowed:
+    normalized = (ext or "").lower()
+    if normalized in _BLOCKED_ACTIVE_MEDIA_EXTENSIONS or normalized not in allowed:
         raise ValueError("Extension not allowed.")
 
 def validate_mime(mime: str, allowed_mime: Set[str]) -> None:
-    if mime not in allowed_mime:
+    normalized = (mime or "").lower()
+    if normalized in _BLOCKED_ACTIVE_MEDIA_MIMES or normalized not in allowed_mime:
         raise ValueError(f"MIME not allowed: {mime}")
 
 # pattern_check: callable(pk) -> raises on invalid (e.g.. storage.validate_pk)

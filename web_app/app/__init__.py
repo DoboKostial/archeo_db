@@ -1,13 +1,19 @@
 # web_app/app/__init__.py
 import jwt
-from flask import Flask, request, redirect, url_for, jsonify, g
+from flask import Flask, request, redirect, url_for, jsonify, g, make_response
+from werkzeug.exceptions import RequestEntityTooLarge
+
 from config import Config
+from app.database import get_auth_connection
 from app.logger import logger
 from app.extensions import csrf
+from app.queries import get_user_access_state
 from app.reports.service import init_report_generators
+from app.utils.tokens import decode_session_token
 
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
+    app.config.from_object(Config)
     app.secret_key = Config.SECRET_KEY
 
     # init CSRF protection
@@ -48,11 +54,15 @@ def create_app():
             return True
         return False
 
-    def _unauthorized():
+    def _unauthorized(clear_token: bool = True):
         if _wants_json_response():
-            return jsonify({"error": "Unauthorized"}), 401
-        nxt = request.full_path if request.query_string else request.path
-        return redirect(url_for("auth.login", next=nxt))
+            response = make_response(jsonify({"error": "Unauthorized"}), 401)
+        else:
+            nxt = request.full_path if request.query_string else request.path
+            response = make_response(redirect(url_for("auth.login", next=nxt)))
+        if clear_token:
+            response.delete_cookie("token")
+        return response
 
     def _forbidden():
         if _wants_json_response():
@@ -76,7 +86,7 @@ def create_app():
             return _unauthorized()
 
         try:
-            payload = jwt.decode(token, Config.SECRET_KEY, algorithms=["HS256"])
+            payload = decode_session_token(token)
         except jwt.ExpiredSignatureError:
             logger.info(f"Expired token: {request.method} {request.path}")
             return _unauthorized()
@@ -84,15 +94,40 @@ def create_app():
             logger.warning(f"Invalid token: {e} ({request.method} {request.path})")
             return _unauthorized()
 
-        g.user_email = payload.get("email", "") or ""
-        g.user_role = payload.get("role", "") or ""
-        g.user_name = payload.get("name", "") or ""
+        email = payload.get("email", "") or ""
+        conn = None
+        try:
+            conn = get_auth_connection()
+            user_state = get_user_access_state(conn, email)
+        except Exception as e:
+            logger.error(f"Current user validation failed for {email}: {e}")
+            return _unauthorized()
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+        if not user_state or user_state[2] is not True:
+            logger.warning(f"Disabled or missing user rejected: {email}")
+            return _unauthorized()
+
+        g.user_email = email
+        g.user_name = user_state[0] or ""
+        g.user_role = user_state[1] or ""
         g.user_last_login = payload.get("last_login", "") or ""  # NEW
 
         # admin policy
         if request.endpoint.startswith("admin.") and g.user_role != "archeolog":
             logger.warning(f"Forbidden admin access for {g.user_email} role={g.user_role} -> {request.path}")
             return _forbidden()
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def upload_too_large(_error):
+        if _wants_json_response():
+            return jsonify({"error": "Uploaded data is too large."}), 413
+        return "Uploaded data is too large.", 413
 
     @app.context_processor
     def inject_user_info():

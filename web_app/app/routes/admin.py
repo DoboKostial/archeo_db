@@ -1,8 +1,9 @@
 # web_app/app/routes/admin.py
-import os, re, shutil, subprocess, jwt, psycopg2
+import os, re, shutil, subprocess, psycopg2
 from zipfile import ZipFile
 
-from flask import Blueprint, request, render_template, redirect, url_for, flash, send_file, jsonify
+from flask import Blueprint, request, render_template, redirect, url_for, flash, send_file, jsonify, g
+from werkzeug.wsgi import ClosingIterator
 from werkzeug.security import generate_password_hash
 from psycopg2 import sql
 
@@ -10,7 +11,6 @@ from config import Config
 from app.logger import logger
 from app.database import get_auth_connection, create_database_backup, get_terrain_connection
 from app.queries import (
-    get_user_role,
     get_terrain_db_list,
     get_terrain_db_sizes,
     count_app_users_sql,
@@ -22,8 +22,18 @@ from app.utils.auth import generate_random_password, send_new_account_email
 from app.utils.admin import sync_single_user_to_all_terrain_dbs, sync_single_db
 from app.utils.geom_utils import update_geometry_srid, detect_db_srid, epsg_exists_in_template_spatial_ref_sys
 from app.utils.decorators import archeolog_required
+from app.utils.storage import safe_join, validate_db_name
 
 admin_bp = Blueprint('admin', __name__)
+
+
+def _terrain_database_available(dbname: str) -> bool:
+    validate_db_name(dbname)
+    conn = get_auth_connection()
+    try:
+        return dbname in get_terrain_db_list(conn)
+    finally:
+        conn.close()
 
 
 @admin_bp.get("/admin/srid/search")
@@ -65,28 +75,10 @@ def srid_search():
 @admin_bp.route('/admin')
 @archeolog_required
 def admin():
-    token = request.cookies.get('token')
-    if not token:
-        logger.warning("Access to /admin with no token ---> redirecting to /login")
-        return redirect('/login')
-
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_email = payload['email']
-    except jwt.ExpiredSignatureError:
-        logger.warning("JWT token expired ---> redirecting to /login")
-        return redirect('/login')
+    user_email = g.user_email
 
     conn = get_auth_connection()
     cur = conn.cursor()
-
-    # check role
-    cur.execute(get_user_role(), (user_email,))
-    user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
-    if user_role != 'archeolog':
-        logger.warning(f"User {user_email} with role '{user_role}' is not allowed to /admin ---> redirected to /index")
-        conn.close()
-        return redirect('/index')
 
     # pagination
     try:
@@ -134,24 +126,9 @@ def admin():
 @admin_bp.route('/add_user', methods=['POST'])
 @archeolog_required
 def add_user():
-    token = request.cookies.get('token')
-    if not token:
-        return redirect('/login')
-
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        current_user_email = payload['email']
-    except jwt.ExpiredSignatureError:
-        return redirect('/login')
-
-    # verify the role rights
+    current_user_email = g.user_email
     conn = get_auth_connection()
     cur = conn.cursor()
-    cur.execute(get_user_role(), (current_user_email,))
-    user_role = cur.fetchone()[0] if cur.rowcount else 'neznámá'
-    if user_role != 'archeolog':
-        conn.close()
-        return redirect('/index')
 
     # reading data from form
     name = request.form.get('name')
@@ -202,17 +179,7 @@ def add_user():
 @admin_bp.route('/disable-user', methods=['POST'])
 @archeolog_required
 def disable_user():
-    token = request.cookies.get('token')
-    if not token:
-        logger.warning("An access to/disable-user with no token ---> redirecting to /login")
-        return redirect('/login')
-
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        current_user = payload['email']
-    except jwt.ExpiredSignatureError:
-        logger.warning("JWT token expiration during the action of user deactivation.")
-        return redirect('/login')
+    current_user = g.user_email
 
     user_to_disable = request.form.get('mail')
     if not user_to_disable:
@@ -238,26 +205,10 @@ def disable_user():
 @admin_bp.route('/enable-user', methods=['POST'])
 @archeolog_required
 def enable_user():
-    token = request.cookies.get('token')
-    if not token:
-        return redirect('/login')
-
-    try:
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_email = payload['email']
-    except jwt.ExpiredSignatureError:
-        return redirect('/login')
+    user_email = g.user_email
 
     conn = get_auth_connection()
     cur = conn.cursor()
-
-    # Check if current user is archeolog
-    cur.execute(get_user_role(), (user_email,))
-    role = cur.fetchone()[0]
-    if role != 'archeolog':
-        conn.close()
-        flash("You have no rights to enable user. Must be an archeolog.", "danger")
-        return redirect('/admin')
 
     mail_to_enable = request.form.get('mail')
     if not mail_to_enable:
@@ -281,28 +232,49 @@ def enable_user():
 @admin_bp.route('/backup-database', methods=['POST'])
 @archeolog_required
 def backup_database():
-    dbname = request.form.get('dbname')
-    if not dbname:
-        flash("The name of DB was not provided", "danger")
+    dbname = (request.form.get('dbname') or '').strip()
+    try:
+        available = _terrain_database_available(dbname)
+    except Exception as e:
+        logger.warning(f"Rejected backup database selection '{dbname}': {e}")
+        available = False
+    if not available:
+        flash("The selected terrain DB is not available.", "danger")
         return redirect('/admin')
 
+    artifacts = []
+    cleanup_scheduled = False
     try:
         gz_dump_path, gz_files_path = create_database_backup(dbname)
+        artifacts.extend((gz_dump_path, gz_files_path))
         logger.info(f"Backup of DB '{dbname}' created: dump at '{gz_dump_path}', files at '{gz_files_path}'")
 
         # pack all in one .zip and provide for download
-        zip_path = gz_dump_path.replace('.backup.gz', '_full_backup.zip')
+        zip_name = os.path.basename(gz_dump_path).replace('.backup.gz', '_full_backup.zip')
+        zip_path = safe_join(Config.BACKUP_DIR, zip_name)
+        artifacts.append(zip_path)
         with ZipFile(zip_path, 'w') as zipf:
             zipf.write(gz_dump_path, arcname=os.path.basename(gz_dump_path))
             zipf.write(gz_files_path, arcname=os.path.basename(gz_files_path))
 
         logger.info(f"Full backup zip created at '{zip_path}' and sent to user")
 
-        return send_file(
+        def remove_backup_artifacts():
+            for path in artifacts:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except OSError as e:
+                    logger.warning(f"Could not remove temporary backup artifact '{path}': {e}")
+
+        response = send_file(
             zip_path,
             as_attachment=True,
             download_name=os.path.basename(zip_path)
         )
+        response.response = ClosingIterator(response.response, [remove_backup_artifacts])
+        cleanup_scheduled = True
+        return response
 
     except subprocess.CalledProcessError as e:
         logger.error(f"Error while backing up DB '{dbname}': {e.stderr.strip() if e.stderr else e}")
@@ -310,6 +282,14 @@ def backup_database():
     except Exception as e:
         logger.error(f"Unexpected error while backing up DB '{dbname}': {e}")
         flash(f"Unexpected error during backup of DB '{dbname}'.", "danger")
+    finally:
+        if not cleanup_scheduled:
+            for path in artifacts:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    pass
 
     return redirect('/admin')
 
@@ -317,9 +297,14 @@ def backup_database():
 @admin_bp.route('/delete-database', methods=['POST'])
 @archeolog_required
 def delete_database():
-    dbname = request.form.get('dbname')
-    if not dbname:
-        flash("The name of DB was not provided.", "danger")
+    dbname = (request.form.get('dbname') or '').strip()
+    try:
+        available = _terrain_database_available(dbname)
+    except Exception as e:
+        logger.warning(f"Rejected database deletion selection '{dbname}': {e}")
+        available = False
+    if not available:
+        flash("The selected terrain DB is not available.", "danger")
         return redirect('/admin')
 
     try:
@@ -336,7 +321,7 @@ def delete_database():
         flash(f"Database '{dbname}' was successfully deleted.", "warning")
 
         # 2. deleting respective folders from FS
-        db_folder_path = os.path.join(Config.DATA_DIR, dbname)
+        db_folder_path = safe_join(Config.DATA_DIR, dbname)
         if os.path.exists(db_folder_path) and os.path.isdir(db_folder_path):
             shutil.rmtree(db_folder_path)
             logger.info(f"Folder structure for DB '{dbname}' was removed from {db_folder_path}")

@@ -555,7 +555,7 @@ def bulk_photograms():
 # ---------------------------------------
 # API: DETAIL (for edit modal)
 # ---------------------------------------
-@photograms_bp.get("/photograms/api/detail/<path:id_photogram>")
+@photograms_bp.get("/photograms/api/detail/<string:id_photogram>")
 @require_selected_db
 def api_detail(id_photogram: str):
     selected_db = session["selected_db"]
@@ -594,7 +594,7 @@ def api_detail(id_photogram: str):
 # ---------------------------------------
 # EDIT (replace file optional)
 # ---------------------------------------
-@photograms_bp.post("/photograms/edit/<path:id_photogram>")
+@photograms_bp.post("/photograms/edit/<string:id_photogram>")
 @require_selected_db
 def edit_photogram(id_photogram: str):
     selected_db = session["selected_db"]
@@ -761,7 +761,7 @@ def edit_photogram(id_photogram: str):
 # ---------------------------------------
 # DELETE
 # ---------------------------------------
-@photograms_bp.post("/photograms/delete/<path:id_photogram>")
+@photograms_bp.post("/photograms/delete/<string:id_photogram>")
 @require_selected_db
 def delete_photogram(id_photogram: str):
     selected_db = session["selected_db"]
@@ -793,7 +793,7 @@ def delete_photogram(id_photogram: str):
 # ---------------------------------------
 # FILE SERVE
 # ---------------------------------------
-@photograms_bp.get("/photograms/file/<path:id_photogram>")
+@photograms_bp.get("/photograms/file/<string:id_photogram>")
 @require_selected_db
 def serve_photogram_file(id_photogram: str):
     from flask import send_from_directory
@@ -805,7 +805,7 @@ def serve_photogram_file(id_photogram: str):
     return send_from_directory(dir_path, pid, as_attachment=False)
 
 
-@photograms_bp.get("/photograms/thumb/<path:id_photogram>")
+@photograms_bp.get("/photograms/thumb/<string:id_photogram>")
 @require_selected_db
 def serve_photogram_thumb(id_photogram: str):
     from flask import send_from_directory

@@ -23,6 +23,11 @@ class Config:
     # Secret key for JWT
     SECRET_KEY = "XXX"
 
+    # Cookies are expected to be transported over HTTPS in production.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
     # CSRF (Flask-WTF)
     WTF_CSRF_HEADERS = ["X-CSRFToken", "X-CSRF-Token"]
 
@@ -45,6 +50,13 @@ class Config:
     # Directory for file uploads
     UPLOAD_FOLDER = "XXX"  # e.g. "/var/www/archeodb_web_app/uploads/"
 
+    # Request and individual file limits.
+    MAX_CONTENT_LENGTH = 128 * 1024 * 1024
+    MAX_FORM_MEMORY_SIZE = 2 * 1024 * 1024
+    MAX_UPLOAD_FILE_BYTES = 64 * 1024 * 1024
+    MAX_TEXT_UPLOAD_BYTES = 8 * 1024 * 1024
+    DIRECTORY_SIZE_CACHE_SECONDS = 300
+
     # General data directory (for graphics, binaries, ...), e.g. images, PDF
     DATA_DIR = "XXX"  # e.g. "/var/www/archeodb_web_app/data/"
 
@@ -53,7 +65,7 @@ class Config:
     THUMB_MAX_SIDE = 256
 
     # Allowed extensions for graphic docu (lowercase):
-    ALLOWED_EXTENSIONS = {"jpeg", "jpg", "png", "tiff", "svg", "pdf"}
+    ALLOWED_EXTENSIONS = {"jpeg", "jpg", "png", "tiff", "pdf"}
 
     # Mapping of types -> subfolders under DATA_DIR
     MEDIA_DIRS = {
@@ -68,7 +80,6 @@ class Config:
         "image/jpeg",
         "image/png",
         "image/tiff",
-        "image/svg+xml",
         "application/pdf",
     }
     

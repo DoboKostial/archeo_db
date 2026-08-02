@@ -512,23 +512,21 @@ def find_detail(id_find: int):
         if not r:
             return Response("Not found.", status=404)
 
-        html = f"""
-        <html><head><meta charset="utf-8"><title>Find {id_find}</title></head>
-        <body style="font-family: sans-serif">
-          <h2>Find {id_find}</h2>
-          <ul>
-            <li>Type: <b>{r[1]}</b> ({_humanize_code(r[1])})</li>
-            <li>SJ: <b>{r[2]}</b></li>
-            <li>Count: <b>{r[3]}</b></li>
-            <li>Box: <b>{r[4]}</b></li>
-            <li>Polygon: {r[5] or "—"}</li>
-            <li>Geopt: {r[6] or "—"}</li>
-            <li>Description: {r[7] or "—"}</li>
-          </ul>
-          <p><a href="{url_for('finds_samples.finds_samples')}">Back</a></p>
-        </body></html>
-        """
-        return Response(html, mimetype="text/html")
+        return render_template(
+            "find_sample_detail.html",
+            item_kind="Find",
+            item_id=id_find,
+            type_code=r[1],
+            type_label=_humanize_code(r[1]),
+            details=(
+                ("SJ", r[2], True),
+                ("Count", r[3], True),
+                ("Box", r[4], True),
+                ("Polygon", r[5], False),
+                ("Geopt", r[6], False),
+                ("Description", r[7], False),
+            ),
+        )
     finally:
         conn.close()
 
@@ -545,21 +543,19 @@ def sample_detail(id_sample: int):
         if not r:
             return Response("Not found.", status=404)
 
-        html = f"""
-        <html><head><meta charset="utf-8"><title>Sample {id_sample}</title></head>
-        <body style="font-family: sans-serif">
-          <h2>Sample {id_sample}</h2>
-          <ul>
-            <li>Type: <b>{r[1]}</b> ({_humanize_code(r[1])})</li>
-            <li>SJ: <b>{r[2]}</b></li>
-            <li>Polygon: {r[3] or "—"}</li>
-            <li>Geopt: {r[4] or "—"}</li>
-            <li>Description: {r[5] or "—"}</li>
-          </ul>
-          <p><a href="{url_for('finds_samples.finds_samples')}">Back</a></p>
-        </body></html>
-        """
-        return Response(html, mimetype="text/html")
+        return render_template(
+            "find_sample_detail.html",
+            item_kind="Sample",
+            item_id=id_sample,
+            type_code=r[1],
+            type_label=_humanize_code(r[1]),
+            details=(
+                ("SJ", r[2], True),
+                ("Polygon", r[3], False),
+                ("Geopt", r[4], False),
+                ("Description", r[5], False),
+            ),
+        )
     finally:
         conn.close()
 

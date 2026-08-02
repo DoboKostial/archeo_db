@@ -18,10 +18,7 @@ from app.logger import logger
 from app.reports.context import ReportContext
 from app.database import get_terrain_connection
 
-from app.queries import (
-    report_samples_list_all_sql,
-    report_samples_media_ids_sql,
-)
+from app.queries import report_samples_list_all_sql
 
 from config import Config
 
@@ -97,11 +94,6 @@ def _safe_image(path: str, max_w: float, max_h: float) -> Optional[Image]:
         return img
     except Exception:
         return None
-
-def _fetch_media_ids(conn, id_sample: int, kind: str) -> List[str]:
-    with conn.cursor() as cur:
-        cur.execute(report_samples_media_ids_sql(kind), (id_sample,))
-        return [str(r[0]).strip() for r in cur.fetchall() if r and r[0] is not None and str(r[0]).strip()]
 
 def _thumb_cell(ctx: ReportContext, kind: str, ids: List[str], max_thumbs: int = 2) -> Any:
     ids = ids[:max_thumbs]
@@ -179,22 +171,20 @@ def generate_samples_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
 
     data: List[List[Any]] = [header_row]
 
-    with get_terrain_connection(ctx.selected_db) as conn:
-        for s in samples:
-            sid = int(s["id_sample"])
-            photo_ids = _fetch_media_ids(conn, sid, "photos")
-            sketch_ids = _fetch_media_ids(conn, sid, "sketches")
+    for s in samples:
+        photo_ids = [str(value) for value in (s.get("photo_ids") or [])]
+        sketch_ids = [str(value) for value in (s.get("sketch_ids") or [])]
 
-            data.append([
-                Paragraph(_v(s.get("id_sample")), CELL),
-                Paragraph(_v(s.get("ref_sample_type")), CELL),
-                Paragraph(_v(s.get("ref_sj")), CELL),
-                Paragraph(_v(s.get("ref_polygon")), CELL),
-                Paragraph(_v(s.get("ref_geopt")), CELL),
-                Paragraph(_truncate(_v(s.get("description")), 200), CELL),
-                _thumb_cell(ctx, "photos", photo_ids, max_thumbs=2),
-                _thumb_cell(ctx, "sketches", sketch_ids, max_thumbs=2),
-            ])
+        data.append([
+            Paragraph(_v(s.get("id_sample")), CELL),
+            Paragraph(_v(s.get("ref_sample_type")), CELL),
+            Paragraph(_v(s.get("ref_sj")), CELL),
+            Paragraph(_v(s.get("ref_polygon")), CELL),
+            Paragraph(_v(s.get("ref_geopt")), CELL),
+            Paragraph(_truncate(_v(s.get("description")), 200), CELL),
+            _thumb_cell(ctx, "photos", photo_ids, max_thumbs=2),
+            _thumb_cell(ctx, "sketches", sketch_ids, max_thumbs=2),
+        ])
 
     col_widths = [
         14*mm, 28*mm, 8*mm, 18*mm, 14*mm, 66*mm, 28*mm, 28*mm

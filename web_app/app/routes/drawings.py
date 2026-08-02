@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import mimetypes
+import uuid
 from typing import Any, Dict, List, Tuple
 
 from flask import (
@@ -133,7 +134,7 @@ def _jsonb_list(v):
 # serving files (fix: no direct FS paths in HTML)
 # ---------------------------
 
-@drawings_bp.get("/drawings/file/<path:id_drawing>")
+@drawings_bp.get("/drawings/file/<string:id_drawing>")
 @require_selected_db
 def serve_drawing(id_drawing: str):
     selected_db = session["selected_db"]
@@ -149,7 +150,7 @@ def serve_drawing(id_drawing: str):
     return send_file(final_path, mimetype=mt, as_attachment=False)
 
 
-@drawings_bp.get("/drawings/thumb/<path:id_drawing>")
+@drawings_bp.get("/drawings/thumb/<string:id_drawing>")
 @require_selected_db
 def serve_drawing_thumb(id_drawing: str):
     selected_db = session["selected_db"]
@@ -524,7 +525,7 @@ def upload_drawings():
 # detail API for edit modal
 # ---------------------------
 
-@drawings_bp.get("/drawings/api/detail/<path:id_drawing>")
+@drawings_bp.get("/drawings/api/detail/<string:id_drawing>")
 @require_selected_db
 def api_drawing_detail(id_drawing: str):
     selected_db = session["selected_db"]
@@ -558,7 +559,7 @@ def api_drawing_detail(id_drawing: str):
 # edit (replace file optional) + replace links
 # ---------------------------
 
-@drawings_bp.post("/drawings/edit/<path:id_drawing>")
+@drawings_bp.post("/drawings/edit/<string:id_drawing>")
 @require_selected_db
 def edit_drawing(id_drawing: str):
     selected_db = session["selected_db"]
@@ -580,7 +581,12 @@ def edit_drawing(id_drawing: str):
     do_replace = bool(f and f.filename)
 
     staged_paths: List[str] = []
-    final_pairs: List[Tuple[str, str]] = []
+    replacement_path = None
+    replacement_thumb_path = None
+    backup_path = None
+    backup_thumb_path = None
+    replacement_installed = False
+    replacement_thumb_installed = False
 
     conn = get_terrain_connection(selected_db)
     conn.autocommit = False
@@ -613,6 +619,8 @@ def edit_drawing(id_drawing: str):
 
             # replace file if requested
             if do_replace:
+                ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+                validate_extension(ext, Config.ALLOWED_EXTENSIONS)
                 tmp_path, _ = save_to_uploads(Config.UPLOAD_FOLDER, f)
                 staged_paths.append(tmp_path)
 
@@ -623,20 +631,20 @@ def edit_drawing(id_drawing: str):
                 cur.execute(drawing_checksum_exists_sql(), (checksum,))
                 hit = cur.fetchone()
                 if hit:
-                    # allow if it's the same drawing (optional strictness); keep strict like Photos:
                     raise ValueError("Duplicate content (checksum already exists).")
 
-                # move into place + new thumb
-                move_into_place(tmp_path, final_path)
-                staged_paths.remove(tmp_path)
-                final_pairs.append((final_path, thumb_path))
+                replacement_id = uuid.uuid4().hex
+                replacement_path = f"{final_path}.replace-{replacement_id}"
+                replacement_thumb_path = f"{thumb_path}.replace-{replacement_id}"
 
-                make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
+                move_into_place(tmp_path, replacement_path)
+                staged_paths.remove(tmp_path)
+                make_thumbnail(replacement_path, replacement_thumb_path, Config.THUMB_MAX_SIDE)
 
                 # update file meta in DB
                 cur.execute(
                     update_drawing_file_sql(),
-                    (mime, os.path.getsize(final_path), checksum, id_drawing),
+                    (mime, os.path.getsize(replacement_path), checksum, id_drawing),
                 )
 
             # update meta
@@ -656,7 +664,30 @@ def edit_drawing(id_drawing: str):
                 if s_i is not None:
                     cur.execute(link_drawing_section_sql(), (s_i, id_drawing))
 
+            if do_replace:
+                backup_id = uuid.uuid4().hex
+                backup_path = f"{final_path}.backup-{backup_id}"
+                backup_thumb_path = f"{thumb_path}.backup-{backup_id}"
+
+                if os.path.exists(final_path):
+                    os.replace(final_path, backup_path)
+                if os.path.exists(thumb_path):
+                    os.replace(thumb_path, backup_thumb_path)
+
+                os.replace(replacement_path, final_path)
+                replacement_path = None
+                replacement_installed = True
+                if replacement_thumb_path and os.path.exists(replacement_thumb_path):
+                    os.replace(replacement_thumb_path, thumb_path)
+                    replacement_thumb_path = None
+                    replacement_thumb_installed = True
+
             conn.commit()
+
+            cleanup_upload(backup_path)
+            cleanup_upload(backup_thumb_path)
+            backup_path = None
+            backup_thumb_path = None
             flash("Drawing updated.", "success")
 
     except Exception as e:
@@ -665,12 +696,23 @@ def edit_drawing(id_drawing: str):
         except Exception:
             pass
 
-        # staged cleanup
+        if replacement_installed:
+            cleanup_upload(final_path)
+        if replacement_thumb_installed:
+            cleanup_upload(thumb_path)
+        if backup_path and os.path.exists(backup_path):
+            os.replace(backup_path, final_path)
+            backup_path = None
+        if backup_thumb_path and os.path.exists(backup_thumb_path):
+            os.replace(backup_thumb_path, thumb_path)
+            backup_thumb_path = None
+
         for sp in staged_paths:
-            try:
-                cleanup_upload(sp)
-            except Exception:
-                pass
+            cleanup_upload(sp)
+        cleanup_upload(replacement_path)
+        cleanup_upload(replacement_thumb_path)
+        cleanup_upload(backup_path)
+        cleanup_upload(backup_thumb_path)
 
         logger.warning(f"[{selected_db}] drawing edit failed {id_drawing}: {e}")
         flash(f"Edit failed: {e}", "danger")
@@ -689,7 +731,7 @@ def edit_drawing(id_drawing: str):
 # delete (DB + FS)
 # ---------------------------
 
-@drawings_bp.post("/drawings/delete/<path:id_drawing>")
+@drawings_bp.post("/drawings/delete/<string:id_drawing>")
 @require_selected_db
 def delete_drawing(id_drawing: str):
     selected_db = session["selected_db"]

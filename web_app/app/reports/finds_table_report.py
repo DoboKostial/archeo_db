@@ -18,10 +18,7 @@ from app.logger import logger
 from app.reports.context import ReportContext
 from app.database import get_terrain_connection
 
-from app.queries import (
-    report_finds_list_all_sql,
-    report_finds_media_ids_sql,
-)
+from app.queries import report_finds_list_all_sql
 
 from config import Config
 
@@ -97,11 +94,6 @@ def _safe_image(path: str, max_w: float, max_h: float) -> Optional[Image]:
         return img
     except Exception:
         return None
-
-def _fetch_media_ids(conn, id_find: int, kind: str) -> List[str]:
-    with conn.cursor() as cur:
-        cur.execute(report_finds_media_ids_sql(kind), (id_find,))
-        return [str(r[0]).strip() for r in cur.fetchall() if r and r[0] is not None and str(r[0]).strip()]
 
 def _thumb_cell(ctx: ReportContext, kind: str, ids: List[str], max_thumbs: int = 2) -> Any:
     """
@@ -184,24 +176,22 @@ def generate_finds_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
 
     data: List[List[Any]] = [header_row]
 
-    with get_terrain_connection(ctx.selected_db) as conn:
-        for f in finds:
-            fid = int(f["id_find"])
-            photo_ids = _fetch_media_ids(conn, fid, "photos")
-            sketch_ids = _fetch_media_ids(conn, fid, "sketches")
+    for f in finds:
+        photo_ids = [str(value) for value in (f.get("photo_ids") or [])]
+        sketch_ids = [str(value) for value in (f.get("sketch_ids") or [])]
 
-            data.append([
-                Paragraph(_v(f.get("id_find")), CELL),
-                Paragraph(_v(f.get("ref_find_type")), CELL),
-                Paragraph(_v(f.get("ref_sj")), CELL),
-                Paragraph(_v(f.get("count")), CELL),
-                Paragraph(_v(f.get("box")), CELL),
-                Paragraph(_v(f.get("ref_polygon")), CELL),
-                Paragraph(_v(f.get("ref_geopt")), CELL),
-                Paragraph(_truncate(_v(f.get("description")), 180), CELL),
-                _thumb_cell(ctx, "photos", photo_ids, max_thumbs=2), # max_thumbs=defines the maximum number of graph. doku in report. Change according needs.
-                _thumb_cell(ctx, "sketches", sketch_ids, max_thumbs=2),
-            ])
+        data.append([
+            Paragraph(_v(f.get("id_find")), CELL),
+            Paragraph(_v(f.get("ref_find_type")), CELL),
+            Paragraph(_v(f.get("ref_sj")), CELL),
+            Paragraph(_v(f.get("count")), CELL),
+            Paragraph(_v(f.get("box")), CELL),
+            Paragraph(_v(f.get("ref_polygon")), CELL),
+            Paragraph(_v(f.get("ref_geopt")), CELL),
+            Paragraph(_truncate(_v(f.get("description")), 180), CELL),
+            _thumb_cell(ctx, "photos", photo_ids, max_thumbs=2),
+            _thumb_cell(ctx, "sketches", sketch_ids, max_thumbs=2),
+        ])
 
     col_widths = [
         10*mm, 28*mm, 10*mm, 12*mm, 8*mm, 18*mm, 16*mm, 40*mm, 28*mm, 28*mm # change this to fit columns width according your needs

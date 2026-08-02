@@ -3,22 +3,26 @@
 
 import smtplib
 from email.message import EmailMessage
-from functools import wraps
-from psycopg2 import sql
-import secrets, string, jwt
-from flask import session, redirect, url_for, request
+import secrets, string
 from config import Config
 from app.logger import logger
-from app.database import get_auth_connection
-from app.queries import get_user_role
 from app.utils.admin import _get_base_url
 
 
 def generate_random_password(length: int = 12) -> str:
-    # we wont log password only its length
+    if length < 12:
+        raise ValueError("Generated passwords must be at least 12 characters long.")
     logger.info(f"Generating random password (length={length})")
-    chars = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(chars) for _ in range(length))
+    chars = string.ascii_letters + string.digits + "!@#$%"
+    password = [
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.digits),
+        secrets.choice("!@#$%"),
+    ]
+    password.extend(secrets.choice(chars) for _ in range(length - len(password)))
+    secrets.SystemRandom().shuffle(password)
+    return ''.join(password)
 
 
 def send_new_account_email(user_email: str, user_name: str, password: str) -> None:
@@ -69,15 +73,6 @@ def send_password_reset_email(user_email: str, user_name: str, reset_url: str) -
     except Exception as e:
         logger.error(f"Error while sending password-reset email to {user_email}: {e}")
 
-
-def generate_random_password(length: int = 12) -> str:
-    # we wont log password only its length
-    logger.info(f"Generating random password (length={length})")
-    chars = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(chars) for _ in range(length))
-
-
-
 def send_password_change_email(user_email: str, user_name: str) -> None:
     logger.info(f"Preparing password-change email for {user_email}")
     msg = EmailMessage()
@@ -96,44 +91,3 @@ def send_password_change_email(user_email: str, user_name: str) -> None:
         logger.info(f"Password-change email was sent to {user_email}")
     except Exception as e:
         logger.error(f"Error while sending password-change email to {user_email}: {e}")
-
-
-
-def archeolog_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        token = request.cookies.get('token')
-        if not token:
-            logger.warning("Admin access without token -> /login")
-            return redirect('/login')
-
-        try:
-            payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-            email = payload.get('email')
-        except jwt.ExpiredSignatureError:
-            logger.warning("Expired token on admin access -> /login")
-            return redirect('/login')
-        except jwt.InvalidTokenError:
-            logger.warning("Invalid token on admin access -> /login")
-            return redirect('/login')
-
-        # check role directly from DB
-        role = None
-        try:
-            with get_auth_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(get_user_role(), (email,))
-                    role = cur.fetchone()[0] if cur.rowcount else None
-        except Exception as e:
-            logger.error(f"Role check failed for {email}: {e}")
-            return redirect(url_for('main.index'))
-
-        if role != 'archeolog':
-            logger.warning(f"User {email} (role={role}) blocked from admin")
-            return redirect(url_for('main.index'))
-
-        # renewing session for further use (eg. flashy/UI)
-        session['user_email'] = email
-        session['user_role'] = role
-        return f(*args, **kwargs)
-    return decorated_function

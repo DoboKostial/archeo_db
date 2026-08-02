@@ -39,14 +39,6 @@ def _sniff_mime_by_header(file_path: str) -> str | None:
     if head.startswith(b"II*\x00") or head.startswith(b"MM\x00*"):
         return "image/tiff"
 
-    # SVG (XML text)
-    try:
-        txt = head.decode("utf-8", errors="ignore").lower()
-        if "<svg" in txt:
-            return "image/svg+xml"
-    except Exception:
-        pass
-
     return None
 
 

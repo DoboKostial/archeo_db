@@ -27,6 +27,16 @@ def is_user_enabled(conn, email):
         return result[0] if result else None
 
 
+def get_user_access_state(conn, email):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT name, group_role, enabled
+            FROM app_users
+            WHERE mail = %s
+        """, (email,))
+        return cur.fetchone()
+
+
 def get_user_name_and_last_login(conn, email):
     with conn.cursor() as cur:
         cur.execute("""
@@ -209,6 +219,17 @@ def get_enabled_user_name_by_email(conn, email):
         """, (email,))
         result = cur.fetchone()
         return result[0] if result else None
+
+
+def get_password_reset_state_for_update(conn, email):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT name, password_hash
+            FROM app_users
+            WHERE mail = %s AND enabled = true
+            FOR UPDATE
+        """, (email,))
+        return cur.fetchone()
 
 
 # -------------------------------------------------------------------
@@ -823,55 +844,6 @@ def insert_photo_sql():
             %s, %s, %s,
             %s, %s, %s, %s, %s
         );
-    """
-
-
-def insert_sketch_sql():
-    """
-    Insert one sketch metadata row.
-    Params:
-      (id_sketch, sketch_typ, author, datum, notes,
-       mime_type, file_size, checksum_sha256)
-    """
-    return """
-        INSERT INTO tab_sketches (
-            id_sketch, sketch_typ, author, datum, notes,
-            mime_type, file_size, checksum_sha256
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-    """
-
-
-def insert_photogram_sql():
-    """
-    Insert one photogram metadata row.
-    Params:
-      (id_photogram, photogram_typ, notes,
-       mime_type, file_size, checksum_sha256)
-    Note: ref_sketch is optional and managed elsewhere if needed.
-    """
-    return """
-        INSERT INTO tab_photograms (
-            id_photogram, photogram_typ, notes,
-            mime_type, file_size, checksum_sha256
-        )
-        VALUES (%s, %s, %s, %s, %s, %s);
-    """
-
-def insert_drawing_sql():
-    """
-    Insert one drawing metadata row.
-
-    Params:
-      (id_drawing, author, datum, notes,
-       mime_type, file_size, checksum_sha256)
-    """
-    return """
-        INSERT INTO tab_drawings (
-            id_drawing, author, datum, notes,
-            mime_type, file_size, checksum_sha256
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s);
     """
 
 
@@ -1660,7 +1632,12 @@ def list_photos_sql(where_sql: str = "", order_sql: str = "", limit_sql: str = "
         SELECT
             p.id_photo, p.photo_typ, p.datum, p.author, p.notes,
             p.mime_type, p.file_size, p.checksum_sha256,
-            p.shoot_datetime, p.gps_lat, p.gps_lon, p.gps_alt
+            p.shoot_datetime, p.gps_lat, p.gps_lon, p.gps_alt,
+            (SELECT COUNT(*) FROM tabaid_photo_sj l WHERE l.ref_photo = p.id_photo) AS sj_count,
+            (SELECT COUNT(*) FROM tabaid_polygon_photos l WHERE l.ref_photo = p.id_photo) AS polygon_count,
+            (SELECT COUNT(*) FROM tabaid_section_photos l WHERE l.ref_photo = p.id_photo) AS section_count,
+            (SELECT COUNT(*) FROM tabaid_finds_photos l WHERE l.ref_photo = p.id_photo) AS find_count,
+            (SELECT COUNT(*) FROM tabaid_samples_photos l WHERE l.ref_photo = p.id_photo) AS sample_count
         FROM tab_photos p
     """
     return base + "\n" + (where_sql or "") + "\n" + (order_sql or "") + "\n" + (limit_sql or "") + ";"
@@ -1686,56 +1663,6 @@ def stats_by_type_sql():
 # -------------------------
 # Search endpoints (AJAX for select2 in media handling)
 # -------------------------
-
-
-def search_sj_sql():
-    return """
-        SELECT id_sj
-        FROM tab_sj
-        WHERE CAST(id_sj AS text) ILIKE %s
-        ORDER BY id_sj
-        LIMIT %s OFFSET %s;
-    """
-
-
-def search_polygons_sql():
-    return """
-        SELECT polygon_name
-        FROM tab_polygons
-        WHERE polygon_name ILIKE %s
-        ORDER BY polygon_name
-        LIMIT %s OFFSET %s;
-    """
-
-
-def search_sections_sql():
-    return """
-        SELECT id_section
-        FROM tab_section
-        WHERE CAST(id_section AS text) ILIKE %s
-        ORDER BY id_section
-        LIMIT %s OFFSET %s;
-    """
-
-
-def search_finds_sql():
-    return """
-        SELECT id_find
-        FROM tab_finds
-        WHERE CAST(id_find AS text) ILIKE %s
-        ORDER BY id_find
-        LIMIT %s OFFSET %s;
-    """
-
-
-def search_samples_sql():
-    return """
-        SELECT id_sample
-        FROM tab_samples
-        WHERE CAST(id_sample AS text) ILIKE %s
-        ORDER BY id_sample
-        LIMIT %s OFFSET %s;
-    """
 
 
 # -------------------------
@@ -2597,14 +2524,6 @@ def stats_sj_by_type_sql():
         ORDER BY COUNT(*) DESC, label;
     """
 
-def stats_objects_by_type_sql():
-    return """
-        SELECT COALESCE(NULLIF(object_typ,''), '(empty)') AS label, COUNT(*)::bigint AS value
-        FROM tab_object
-        GROUP BY COALESCE(NULLIF(object_typ,''), '(empty)')
-        ORDER BY COUNT(*) DESC, label;
-    """
-
 def stats_objects_by_su_count_buckets_sql():
     """
     Donut: objects grouped by how many SUs they contain (0,1,2,3-4,5+).
@@ -2642,14 +2561,6 @@ def stats_objects_by_su_count_buckets_sql():
     """
 
 
-def stats_sections_by_type_sql():
-    return """
-        SELECT section_type::text AS label, COUNT(*)::bigint AS value
-        FROM tab_section
-        GROUP BY section_type
-        ORDER BY COUNT(*) DESC, label;
-    """
-
 def stats_sections_by_su_count_buckets_sql():
     """
     Donut: sections grouped by number of linked SUs (0,1,2,3-4,5+).
@@ -2686,34 +2597,6 @@ def stats_sections_by_su_count_buckets_sql():
           END;
     """
 
-def stats_photos_by_type_sql():
-    return """
-        SELECT photo_typ AS label, COUNT(*)::bigint AS value
-        FROM tab_photos
-        GROUP BY photo_typ
-        ORDER BY COUNT(*) DESC, label;
-    """
-
-def stats_sketches_by_type_sql():
-    return """
-        SELECT sketch_typ AS label, COUNT(*)::bigint AS value
-        FROM tab_sketches
-        GROUP BY sketch_typ
-        ORDER BY COUNT(*) DESC, label;
-    """
-
-def stats_photograms_vs_drawings_sql():
-    """
-    Donut: photograms vs drawings (counts).
-    """
-    return """
-        SELECT 'photograms' AS label, COUNT(*)::bigint AS value
-        FROM tab_photograms
-        UNION ALL
-        SELECT 'drawings' AS label, COUNT(*)::bigint AS value
-        FROM tab_drawings;
-    """
-
 def stats_photograms_by_type_sql():
     return """
         SELECT photogram_typ AS label, COUNT(*)::bigint AS value
@@ -2721,23 +2604,6 @@ def stats_photograms_by_type_sql():
         GROUP BY photogram_typ
         ORDER BY COUNT(*) DESC, label;
     """
-
-def stats_finds_by_type_sql():
-    return """
-        SELECT ref_find_type AS label, COUNT(*)::bigint AS value
-        FROM tab_finds
-        GROUP BY ref_find_type
-        ORDER BY COUNT(*) DESC, label;
-    """
-
-def stats_samples_by_type_sql():
-    return """
-        SELECT ref_sample_type AS label, COUNT(*)::bigint AS value
-        FROM tab_samples
-        GROUP BY ref_sample_type
-        ORDER BY COUNT(*) DESC, label;
-    """
-
 
 # ----------------------------
 # ANALYZE: DOMAIN RULES (lists)
@@ -3553,32 +3419,19 @@ def report_finds_list_all_sql():
         SELECT
           id_find, ref_find_type, ref_sj, count, box,
           ref_polygon, ref_geopt,
-          COALESCE(description,'') AS description
-        FROM tab_finds
+          COALESCE(description,'') AS description,
+          ARRAY(
+            SELECT ref_photo FROM tabaid_finds_photos
+            WHERE ref_find = f.id_find ORDER BY ref_photo
+          ) AS photo_ids,
+          ARRAY(
+            SELECT ref_sketch FROM tabaid_finds_sketches
+            WHERE ref_find = f.id_find ORDER BY ref_sketch
+          ) AS sketch_ids
+        FROM tab_finds f
         ORDER BY id_find DESC;
     """
 
-
-def report_finds_media_ids_sql(kind: str):
-    """
-    Params: (id_find,)
-    """
-    kind = (kind or "").strip().lower()
-    if kind == "photos":
-        return """
-            SELECT ref_photo
-            FROM tabaid_finds_photos
-            WHERE ref_find = %s
-            ORDER BY ref_photo;
-        """
-    if kind == "sketches":
-        return """
-            SELECT ref_sketch
-            FROM tabaid_finds_sketches
-            WHERE ref_find = %s
-            ORDER BY ref_sketch;
-        """
-    return "SELECT NULL WHERE FALSE;"
 
 ###
 # --- samples_table report SQLs --- for reporting of samples
@@ -3591,32 +3444,18 @@ def report_samples_list_all_sql():
         SELECT
           id_sample, ref_sample_type, ref_sj,
           ref_polygon, ref_geopt,
-          COALESCE(description,'') AS description
-        FROM tab_samples
+          COALESCE(description,'') AS description,
+          ARRAY(
+            SELECT ref_photo FROM tabaid_samples_photos
+            WHERE ref_sample = s.id_sample ORDER BY ref_photo
+          ) AS photo_ids,
+          ARRAY(
+            SELECT ref_sketch FROM tabaid_samples_sketches
+            WHERE ref_sample = s.id_sample ORDER BY ref_sketch
+          ) AS sketch_ids
+        FROM tab_samples s
         ORDER BY id_sample DESC;
     """
-
-
-def report_samples_media_ids_sql(kind: str):
-    """
-    Params: (id_sample,)
-    """
-    kind = (kind or "").strip().lower()
-    if kind == "photos":
-        return """
-            SELECT ref_photo
-            FROM tabaid_samples_photos
-            WHERE ref_sample = %s
-            ORDER BY ref_photo;
-        """
-    if kind == "sketches":
-        return """
-            SELECT ref_sketch
-            FROM tabaid_samples_sketches
-            WHERE ref_sample = %s
-            ORDER BY ref_sketch;
-        """
-    return "SELECT NULL WHERE FALSE;"
 
 
 ###
