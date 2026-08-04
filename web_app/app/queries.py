@@ -312,6 +312,108 @@ def list_last_su_sql(limit=10):
     """
 
 
+def list_su_table_sql():
+    """
+    Detailed SU list for the add/edit page.
+    Relation arrays are expressed from the current SU perspective.
+    """
+    return """
+        SELECT
+            s.id_sj,
+            COALESCE(s.sj_typ, '') AS sj_typ,
+            COALESCE(s.description, '') AS description,
+            COALESCE(s.interpretation, '') AS interpretation,
+            s.recorded,
+            COALESCE(s.author, '') AS author,
+            COALESCE(s.docu_plan, false) AS docu_plan,
+            COALESCE(s.docu_vertical, false) AS docu_vertical,
+
+            COALESCE(d.deposit_typ, '') AS deposit_typ,
+            COALESCE(d.color, '') AS color,
+            COALESCE(d.boundary_visibility, '') AS boundary_visibility,
+            COALESCE(d."structure", '') AS deposit_structure,
+            COALESCE(d.compactness, '') AS compactness,
+            COALESCE(d.deposit_removed, '') AS deposit_removed,
+
+            COALESCE(n.negativ_typ, '') AS negativ_typ,
+            COALESCE(n.excav_extent, '') AS excav_extent,
+            COALESCE(n.ident_niveau_cut, false) AS ident_niveau_cut,
+            COALESCE(n.shape_plan, '') AS shape_plan,
+            COALESCE(n.shape_sides, '') AS shape_sides,
+            COALESCE(n.shape_bottom, '') AS shape_bottom,
+
+            COALESCE(st.structure_typ, '') AS structure_typ,
+            COALESCE(st.construction_typ, '') AS construction_typ,
+            COALESCE(st.binder, '') AS binder,
+            COALESCE(st.basic_material, '') AS basic_material,
+            st.length_m,
+            st.width_m,
+            st.height_m,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(x.ref_polygon ORDER BY x.ref_polygon)
+                FROM tabaid_sj_polygon x
+                WHERE x.ref_sj = s.id_sj
+              ),
+              ARRAY[]::text[]
+            ) AS polygon_names,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '>'
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '<'
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS above_ids,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '<'
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '>'
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS below_ids,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '='
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '='
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS equal_ids
+        FROM tab_sj s
+        LEFT JOIN tab_sj_deposit d ON d.id_deposit = s.id_sj
+        LEFT JOIN tab_sj_negativ n ON n.id_negativ = s.id_sj
+        LEFT JOIN tab_sj_structure st ON st.id_structure = s.id_sj
+        ORDER BY s.id_sj DESC;
+    """
+
+
 def insert_sj_polygon_link_sql():
     """
     Idempotent insert (M:N).
@@ -325,6 +427,79 @@ def insert_sj_polygon_link_sql():
 
 def delete_su_sql():
     return "DELETE FROM tab_sj WHERE id_sj=%s;"
+
+
+def su_exists_sql():
+    return "SELECT 1 FROM tab_sj WHERE id_sj = %s;"
+
+
+def update_su_base_sql():
+    return """
+        UPDATE tab_sj
+        SET
+            sj_typ = %s,
+            description = NULLIF(%s, ''),
+            interpretation = NULLIF(%s, ''),
+            author = NULLIF(%s, ''),
+            recorded = %s,
+            docu_plan = %s,
+            docu_vertical = %s
+        WHERE id_sj = %s;
+    """
+
+
+def delete_su_deposit_sql():
+    return "DELETE FROM tab_sj_deposit WHERE id_deposit = %s;"
+
+
+def delete_su_negativ_sql():
+    return "DELETE FROM tab_sj_negativ WHERE id_negativ = %s;"
+
+
+def delete_su_structure_sql():
+    return "DELETE FROM tab_sj_structure WHERE id_structure = %s;"
+
+
+def insert_su_deposit_sql():
+    return """
+        INSERT INTO tab_sj_deposit
+          (id_deposit, deposit_typ, color, boundary_visibility, "structure", compactness, deposit_removed)
+        VALUES
+          (%s, NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''));
+    """
+
+
+def insert_su_negativ_sql():
+    return """
+        INSERT INTO tab_sj_negativ
+          (id_negativ, negativ_typ, excav_extent, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
+        VALUES
+          (%s, NULLIF(%s, ''), NULLIF(%s, ''), %s, NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''));
+    """
+
+
+def insert_su_structure_sql():
+    return """
+        INSERT INTO tab_sj_structure
+          (id_structure, structure_typ, construction_typ, binder, basic_material, length_m, width_m, height_m)
+        VALUES
+          (%s, NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''), %s, %s, %s);
+    """
+
+
+def delete_sj_polygon_links_sql():
+    return "DELETE FROM tabaid_sj_polygon WHERE ref_sj = %s;"
+
+
+def delete_sj_stratigraphy_links_sql():
+    return "DELETE FROM tab_sj_stratigraphy WHERE ref_sj1 = %s OR ref_sj2 = %s;"
+
+
+def insert_sj_stratigraphy_sql():
+    return """
+        INSERT INTO tab_sj_stratigraphy (ref_sj1, relation, ref_sj2)
+        VALUES (%s, %s, %s);
+    """
 
 
 

@@ -38,6 +38,112 @@
     if (str) str.style.display = (typ === "structure") ? "block" : "none";
   }
 
+  function initSuTypeShortcuts() {
+    const select = qs("sj_typ");
+    const buttons = Array.from(document.querySelectorAll(".su-type-btn[data-sj-type]"));
+    if (!select || !buttons.length) return;
+
+    function syncActiveButton() {
+      const typ = normalize(select.value);
+      buttons.forEach((button) => {
+        button.classList.toggle("active", normalize(button.dataset.sjType) === typ);
+      });
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        select.value = button.dataset.sjType || "";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        syncActiveButton();
+      });
+    });
+
+    select.addEventListener("change", syncActiveButton);
+    syncActiveButton();
+  }
+
+  function initChoiceGroups() {
+    document.querySelectorAll("[data-choice-group]").forEach((group) => {
+      const targetId = group.getAttribute("data-choice-target");
+      const input = targetId ? qs(targetId) : null;
+      const buttons = Array.from(group.querySelectorAll("[data-choice-value]"));
+      if (!input || !buttons.length) return;
+
+      function syncActiveButton() {
+        const selectedValue = normalize(input.value);
+        buttons.forEach((button) => {
+          const isActive = normalize(button.getAttribute("data-choice-value")) === selectedValue;
+          button.classList.toggle("active", isActive);
+          button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        });
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          input.value = button.getAttribute("data-choice-value") || "";
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          syncActiveButton();
+        });
+      });
+
+      input.addEventListener("change", syncActiveButton);
+      syncActiveButton();
+    });
+  }
+
+  function initColorPickers() {
+    document.querySelectorAll(".deposit-color-picker").forEach((picker) => {
+      const inputId = picker.getAttribute("data-choice-target");
+      const input = inputId ? qs(inputId) : null;
+      const toggle = picker.querySelector("[data-color-toggle]");
+      const menu = picker.querySelector("[data-color-menu]");
+      const current = picker.querySelector(".deposit-color-current");
+      const buttons = Array.from(picker.querySelectorAll(".deposit-color-btn[data-choice-value]"));
+      if (!input || !toggle || !menu || !current || !buttons.length) return;
+
+      function selectedButton() {
+        const value = normalize(input.value);
+        return buttons.find((button) => normalize(button.getAttribute("data-choice-value")) === value);
+      }
+
+      function setOpen(open) {
+        menu.classList.toggle("open", open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+
+      function syncCurrentSwatch() {
+        const active = selectedButton();
+        const swatch = active?.style.getPropertyValue("--swatch") || "#efe9dc";
+        current.style.setProperty("--selected-swatch", swatch);
+        toggle.title = active ? `Color: ${active.getAttribute("data-choice-value")}` : "Choose color";
+      }
+
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setOpen(!menu.classList.contains("open"));
+      });
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          setOpen(false);
+          syncCurrentSwatch();
+        });
+      });
+
+      input.addEventListener("change", syncCurrentSwatch);
+
+      document.addEventListener("click", (event) => {
+        if (!picker.contains(event.target)) setOpen(false);
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") setOpen(false);
+      });
+
+      syncCurrentSwatch();
+    });
+  }
+
   // ------------------------------------------------------------
   // Generic suggestions dropdown (Bootstrap list-group)
   // ------------------------------------------------------------
@@ -316,6 +422,172 @@
     });
   }
 
+  // ------------------------------------------------------------
+  // 5) SUs table pagination
+  // ------------------------------------------------------------
+  function initSuPagination() {
+    const table = qs("suTable");
+    const tbody = qs("suTableBody");
+    const pager = qs("suPagination");
+    const pagerWrap = qs("suPaginationWrap");
+    const summary = qs("suPaginationSummary");
+
+    if (!table || !tbody || !pager || !pagerWrap || !summary) return;
+
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const pageSize = Number.parseInt(table.dataset.pageSize || "10", 10);
+    const pageCount = Math.ceil(rows.length / pageSize);
+    let currentPage = 1;
+
+    function addPageItem(label, page, options = {}) {
+      const li = document.createElement("li");
+      li.className = "page-item";
+      if (options.active) li.classList.add("active");
+      if (options.disabled) li.classList.add("disabled");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "page-link";
+      btn.textContent = label;
+      btn.disabled = Boolean(options.disabled);
+      btn.addEventListener("click", () => {
+        if (options.disabled) return;
+        currentPage = page;
+        renderPage();
+      });
+
+      li.appendChild(btn);
+      pager.appendChild(li);
+    }
+
+    function renderPage() {
+      pager.innerHTML = "";
+
+      if (pageCount <= 1) {
+        pagerWrap.style.display = "none";
+        rows.forEach((row) => { row.hidden = false; });
+        return;
+      }
+
+      pagerWrap.style.display = "";
+
+      addPageItem("‹", Math.max(1, currentPage - 1), { disabled: currentPage === 1 });
+      for (let page = 1; page <= pageCount; page += 1) {
+        addPageItem(String(page), page, { active: page === currentPage });
+      }
+      addPageItem("›", Math.min(pageCount, currentPage + 1), { disabled: currentPage === pageCount });
+
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(start + pageSize, rows.length);
+
+      rows.forEach((row, index) => {
+        row.hidden = index < start || index >= end;
+      });
+
+      summary.textContent = `Showing ${start + 1}-${end} of ${rows.length}`;
+    }
+
+    renderPage();
+  }
+
+  // ------------------------------------------------------------
+  // 6) Edit SU modal wiring
+  // ------------------------------------------------------------
+  function toggleEditTypeFields() {
+    const typ = normalize(qs("edit_sj_typ")?.value);
+    const dep = qs("edit_deposit_fields");
+    const neg = qs("edit_negativ_fields");
+    const str = qs("edit_structure_fields");
+
+    if (dep) dep.style.display = (typ === "deposit") ? "block" : "none";
+    if (neg) neg.style.display = (typ === "negativ") ? "block" : "none";
+    if (str) str.style.display = (typ === "structure") ? "block" : "none";
+  }
+
+  function initEditModal() {
+    const modal = qs("editSuModal");
+    const typ = qs("edit_sj_typ");
+    if (!modal || !typ) return;
+
+    function setValue(id, value) {
+      const el = qs(id);
+      if (el) el.value = value ?? "";
+    }
+
+    function setChecked(id, value) {
+      const el = qs(id);
+      if (el) el.checked = Boolean(value);
+    }
+
+    function setMultiSelect(id, values) {
+      const el = qs(id);
+      if (!el) return;
+      const selected = new Set((values || []).map((value) => String(value)));
+      Array.from(el.options).forEach((option) => {
+        option.selected = selected.has(option.value);
+      });
+    }
+
+    function joinIds(values) {
+      return (values || []).join(", ");
+    }
+
+    modal.addEventListener("show.bs.modal", function (event) {
+      const btn = event.relatedTarget;
+      const raw = btn?.getAttribute("data-su") || "{}";
+      let su = {};
+      try {
+        su = JSON.parse(raw);
+      } catch (_error) {
+        su = {};
+      }
+
+      setValue("edit_id_sj", su.id);
+      const title = qs("editSuTitle");
+      if (title) title.textContent = su.id ? `#${su.id}` : "—";
+
+      setValue("edit_sj_typ", su.typ || "deposit");
+      setValue("edit_recorded", su.recorded || "");
+      setValue("edit_author", su.author || "");
+      setValue("edit_description", su.desc || "");
+      setValue("edit_interpretation", su.interpretation || "");
+      setChecked("edit_docu_plan", su.docu_plan);
+      setChecked("edit_docu_vertical", su.docu_vertical);
+
+      setValue("edit_deposit_typ", su.deposit_typ);
+      setValue("edit_color", su.color);
+      setValue("edit_boundary_visibility", su.boundary_visibility);
+      setValue("edit_structure", su.structure);
+      setValue("edit_compactness", su.compactness);
+      setValue("edit_deposit_removed", su.deposit_removed);
+
+      setValue("edit_negativ_typ", su.negativ_typ);
+      setValue("edit_excav_extent", su.excav_extent);
+      setChecked("edit_ident_niveau_cut", su.ident_niveau_cut);
+      setValue("edit_shape_plan", su.shape_plan);
+      setValue("edit_shape_sides", su.shape_sides);
+      setValue("edit_shape_bottom", su.shape_bottom);
+
+      setValue("edit_structure_typ", su.structure_typ);
+      setValue("edit_construction_typ", su.construction_typ);
+      setValue("edit_binder", su.binder);
+      setValue("edit_basic_material", su.basic_material);
+      setValue("edit_length_m", su.length_m);
+      setValue("edit_width_m", su.width_m);
+      setValue("edit_height_m", su.height_m);
+
+      setMultiSelect("edit_polygon_names", su.polygon_names);
+      setValue("edit_below_ids", joinIds(su.below_ids));
+      setValue("edit_equal_ids", joinIds(su.equal_ids));
+      setValue("edit_above_ids", joinIds(su.above_ids));
+
+      toggleEditTypeFields();
+    });
+
+    typ.addEventListener("change", toggleEditTypeFields);
+    toggleEditTypeFields();
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     const sjTyp = qs("sj_typ");
     if (sjTyp) {
@@ -324,7 +596,12 @@
     }
 
     initPolygonsPicker();
+    initSuTypeShortcuts();
+    initChoiceGroups();
+    initColorPickers();
     initAttachMedia();
     initDeleteModal();
+    initSuPagination();
+    initEditModal();
   });
 })();

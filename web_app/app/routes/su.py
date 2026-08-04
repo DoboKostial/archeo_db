@@ -1,5 +1,6 @@
 # web_app/app/routes/su.py
 import os
+import re
 from datetime import datetime
 from psycopg2.extras import Json
 
@@ -38,10 +39,21 @@ from app.queries import (
     get_all_objects,
     get_sj_with_object_refs,
     list_polygon_names_sql,
-    list_last_su_sql,
+    list_su_table_sql,
     list_su_for_media_select_sql,
     insert_sj_polygon_link_sql,
     delete_su_sql,
+    su_exists_sql,
+    update_su_base_sql,
+    delete_su_deposit_sql,
+    delete_su_negativ_sql,
+    delete_su_structure_sql,
+    insert_su_deposit_sql,
+    insert_su_negativ_sql,
+    insert_su_structure_sql,
+    delete_sj_polygon_links_sql,
+    delete_sj_stratigraphy_links_sql,
+    insert_sj_stratigraphy_sql,
 )
 
 from app.utils import (
@@ -65,6 +77,117 @@ from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_SJ
 su_bp = Blueprint("su", __name__)
 
 
+def _date_or_none(value):
+    value = (value or "").strip()
+    if not value:
+        return None
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _su_id_list(value, current_id):
+    ids = []
+    seen = set()
+    for token in re.split(r"[\s,;]+", value or ""):
+        if not token:
+            continue
+        try:
+            sj_id = int(token)
+        except ValueError:
+            raise ValueError(f"Invalid related SU ID: {token}")
+        if sj_id == current_id:
+            raise ValueError("An SU cannot have a stratigraphic relation to itself.")
+        if sj_id not in seen:
+            ids.append(sj_id)
+            seen.add(sj_id)
+    return ids
+
+
+def _su_row_to_dict(row):
+    recorded = row[4].isoformat() if row[4] else ""
+    return {
+        "id": int(row[0]),
+        "typ": row[1] or "",
+        "desc": row[2] or "",
+        "interpretation": row[3] or "",
+        "recorded": recorded,
+        "author": row[5] or "",
+        "docu_plan": bool(row[6]),
+        "docu_vertical": bool(row[7]),
+        "deposit_typ": row[8] or "",
+        "color": row[9] or "",
+        "boundary_visibility": row[10] or "",
+        "structure": row[11] or "",
+        "compactness": row[12] or "",
+        "deposit_removed": row[13] or "",
+        "negativ_typ": row[14] or "",
+        "excav_extent": row[15] or "",
+        "ident_niveau_cut": bool(row[16]),
+        "shape_plan": row[17] or "",
+        "shape_sides": row[18] or "",
+        "shape_bottom": row[19] or "",
+        "structure_typ": row[20] or "",
+        "construction_typ": row[21] or "",
+        "binder": row[22] or "",
+        "basic_material": row[23] or "",
+        "length_m": "" if row[24] is None else row[24],
+        "width_m": "" if row[25] is None else row[25],
+        "height_m": "" if row[26] is None else row[26],
+        "polygon_names": list(row[27] or []),
+        "above_ids": [int(v) for v in (row[28] or [])],
+        "below_ids": [int(v) for v in (row[29] or [])],
+        "equal_ids": [int(v) for v in (row[30] or [])],
+    }
+
+
+def _save_su_subtype(cur, sj_id, sj_typ, form):
+    cur.execute(delete_su_deposit_sql(), (sj_id,))
+    cur.execute(delete_su_negativ_sql(), (sj_id,))
+    cur.execute(delete_su_structure_sql(), (sj_id,))
+
+    if sj_typ == "deposit":
+        cur.execute(
+            insert_su_deposit_sql(),
+            (
+                sj_id,
+                form.get("deposit_typ"),
+                form.get("color"),
+                form.get("boundary_visibility"),
+                form.get("structure"),
+                form.get("compactness"),
+                form.get("deposit_removed"),
+            ),
+        )
+    elif sj_typ == "negativ":
+        cur.execute(
+            insert_su_negativ_sql(),
+            (
+                sj_id,
+                form.get("negativ_typ"),
+                form.get("excav_extent"),
+                "ident_niveau_cut" in form,
+                form.get("shape_plan"),
+                form.get("shape_sides"),
+                form.get("shape_bottom"),
+            ),
+        )
+    elif sj_typ == "structure":
+        cur.execute(
+            insert_su_structure_sql(),
+            (
+                sj_id,
+                form.get("structure_typ"),
+                form.get("construction_typ"),
+                form.get("binder"),
+                form.get("basic_material"),
+                float_or_none(form.get("length_m")),
+                float_or_none(form.get("width_m")),
+                float_or_none(form.get("height_m")),
+            ),
+        )
+    else:
+        raise ValueError("Invalid type of stratigraphic unit.")
+
+
 # -------------------------------------------------------------------
 # SU: main page (new SU + SU list + attach media)
 # -------------------------------------------------------------------
@@ -81,7 +204,7 @@ def add_su():
     authors = []
     polygons = []
     su_for_media = []
-    last_sus = []
+    sus = []
     form_data = {}
 
     try:
@@ -103,18 +226,9 @@ def add_su():
             {"id": int(r[0]), "typ": (r[1] or ""), "desc": (r[2] or "")} for r in cur.fetchall()
         ]
 
-        # Last 10 SUs
-        cur.execute(list_last_su_sql(10))
-        last_sus = [
-            {
-                "id": int(r[0]),
-                "typ": (r[1] or ""),
-                "desc": (r[2] or ""),
-                "recorded": r[3],
-                "author": (r[4] or ""),
-            }
-            for r in cur.fetchall()
-        ]
+        # Full SU list; the template paginates it client-side.
+        cur.execute(list_su_table_sql())
+        sus = [_su_row_to_dict(r) for r in cur.fetchall()]
 
         # Overview counts
         cur.execute(count_total_sj())
@@ -150,7 +264,7 @@ def add_su():
                         authors=authors,
                         polygons=polygons,
                         su_for_media=su_for_media,
-                        last_sus=last_sus,
+                        sus=sus,
                         sj_count_total=sj_count_total,
                         sj_count_deposit=sj_count_deposit,
                         sj_count_negativ=sj_count_negativ,
@@ -299,7 +413,7 @@ def add_su():
             authors=authors,
             polygons=polygons,
             su_for_media=su_for_media,
-            last_sus=last_sus,
+            sus=sus,
             sj_count_total=sj_count_total,
             sj_count_deposit=sj_count_deposit,
             sj_count_negativ=sj_count_negativ,
@@ -370,6 +484,107 @@ def delete_su():
         conn.rollback()
         flash(f"Error while deleting SU: {e}", "danger")
         logger.error(f"[{selected_db}] SU delete error: {e}")
+
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    return redirect(url_for("su.add_su"))
+
+
+# -------------------------------------------------------------------
+# SU: edit attributes
+# -------------------------------------------------------------------
+@su_bp.post("/su/edit")
+@require_selected_db
+def edit_su():
+    selected_db = session["selected_db"]
+
+    try:
+        sj_id = int(request.form.get("id_sj") or "0")
+        if sj_id <= 0:
+            raise ValueError("Invalid SU ID.")
+
+        sj_typ = (request.form.get("sj_typ") or "").strip().lower()
+        if sj_typ not in {"deposit", "negativ", "structure"}:
+            raise ValueError("Invalid type of stratigraphic unit.")
+
+        recorded = _date_or_none(request.form.get("recorded"))
+        description = request.form.get("description")
+        interpretation = request.form.get("interpretation")
+        author = request.form.get("author")
+        docu_plan = "docu_plan" in request.form
+        docu_vertical = "docu_vertical" in request.form
+
+        polygon_names = [
+            (p or "").strip()
+            for p in request.form.getlist("polygon_names")
+            if (p or "").strip()
+        ]
+        above_ids = _su_id_list(request.form.get("above_ids"), sj_id)
+        below_ids = _su_id_list(request.form.get("below_ids"), sj_id)
+        equal_ids = _su_id_list(request.form.get("equal_ids"), sj_id)
+
+    except Exception as e:
+        flash(f"Invalid SU edit data: {e}", "warning")
+        return redirect(url_for("su.add_su"))
+
+    conn = get_terrain_connection(selected_db)
+    conn.autocommit = False
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(su_exists_sql(), (sj_id,))
+            if not cur.fetchone():
+                raise ValueError(f"SU #{sj_id} not found.")
+
+            cur.execute(
+                update_su_base_sql(),
+                (
+                    sj_typ,
+                    description,
+                    interpretation,
+                    author,
+                    recorded,
+                    docu_plan,
+                    docu_vertical,
+                    sj_id,
+                ),
+            )
+
+            _save_su_subtype(cur, sj_id, sj_typ, request.form)
+
+            cur.execute(delete_sj_polygon_links_sql(), (sj_id,))
+            if polygon_names:
+                cur.execute(list_polygon_names_sql())
+                available_polygons = {r[0] for r in cur.fetchall()}
+                missing = [p for p in polygon_names if p not in available_polygons]
+                if missing:
+                    raise ValueError("Unknown polygon(s): " + ", ".join(missing))
+
+                insert_link_sql = insert_sj_polygon_link_sql()
+                for polygon_name in polygon_names:
+                    cur.execute(insert_link_sql, (sj_id, polygon_name))
+
+            cur.execute(delete_sj_stratigraphy_links_sql(), (sj_id, sj_id))
+            insert_relation_sql = insert_sj_stratigraphy_sql()
+            for related_id in above_ids:
+                cur.execute(insert_relation_sql, (sj_id, ">", related_id))
+            for related_id in below_ids:
+                cur.execute(insert_relation_sql, (sj_id, "<", related_id))
+            for related_id in equal_ids:
+                cur.execute(insert_relation_sql, (sj_id, "=", related_id))
+
+        conn.commit()
+        flash(f"SU #{sj_id} updated.", "success")
+        logger.info(f"[{selected_db}] SU updated id={sj_id} type={sj_typ}")
+
+    except Exception as e:
+        conn.rollback()
+        flash(f"Error while updating SU: {e}", "danger")
+        logger.error(f"[{selected_db}] SU edit error: {e}")
 
     finally:
         try:
