@@ -84,6 +84,18 @@ def _date_or_none(value):
     return datetime.strptime(value, "%Y-%m-%d").date()
 
 
+def _percent_or_none(value):
+    value = (value or "").strip().rstrip("%").strip()
+    if not value:
+        return None
+    if not re.fullmatch(r"\d{1,3}", value):
+        raise ValueError("Excavation extent must be a whole number from 0 to 100.")
+    percent = int(value)
+    if percent < 0 or percent > 100:
+        raise ValueError("Excavation extent must be between 0 and 100.")
+    return percent
+
+
 def _su_id_list(value, current_id):
     ids = []
     seen = set()
@@ -113,14 +125,14 @@ def _su_row_to_dict(row):
         "author": row[5] or "",
         "docu_plan": bool(row[6]),
         "docu_vertical": bool(row[7]),
-        "deposit_typ": row[8] or "",
-        "color": row[9] or "",
-        "boundary_visibility": row[10] or "",
-        "structure": row[11] or "",
-        "compactness": row[12] or "",
-        "deposit_removed": row[13] or "",
-        "negativ_typ": row[14] or "",
-        "excav_extent": row[15] or "",
+        "excav_extent": row[8] or "",
+        "deposit_typ": row[9] or "",
+        "color": row[10] or "",
+        "boundary_visibility": row[11] or "",
+        "structure": row[12] or "",
+        "compactness": row[13] or "",
+        "deposit_removed": row[14] or "",
+        "negativ_typ": row[15] or "",
         "ident_niveau_cut": bool(row[16]),
         "shape_plan": row[17] or "",
         "shape_sides": row[18] or "",
@@ -163,7 +175,6 @@ def _save_su_subtype(cur, sj_id, sj_typ, form):
             (
                 sj_id,
                 form.get("negativ_typ"),
-                form.get("excav_extent"),
                 "ident_niveau_cut" in form,
                 form.get("shape_plan"),
                 form.get("shape_sides"),
@@ -279,16 +290,17 @@ def add_su():
                 recorded = datetime.now().date()  # DDL uses date
                 docu_plan = "docu_plan" in request.form
                 docu_vertical = "docu_vertical" in request.form
+                excav_extent = _percent_or_none(request.form.get("excav_extent"))
 
                 # Insert into tab_sj (base)
                 cur.execute(
                     """
                     INSERT INTO tab_sj
-                      (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical)
+                      (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical, excav_extent)
                     VALUES
-                      (%s, %s, %s, %s, %s, %s, %s, %s)
+                      (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical),
+                    (id_sj, sj_typ, description, interpretation, author, recorded, docu_plan, docu_vertical, excav_extent),
                 )
 
                 # Insert into type-specific tables
@@ -314,14 +326,13 @@ def add_su():
                     cur.execute(
                         """
                         INSERT INTO tab_sj_negativ
-                          (id_negativ, negativ_typ, excav_extent, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
+                          (id_negativ, negativ_typ, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
                         VALUES
-                          (%s, %s, %s, %s, %s, %s, %s)
+                          (%s, %s, %s, %s, %s, %s)
                         """,
                         (
                             id_sj,
                             request.form.get("negativ_typ"),
-                            request.form.get("excav_extent"),
                             "ident_niveau_cut" in request.form,
                             request.form.get("shape_plan"),
                             request.form.get("shape_sides"),
@@ -517,6 +528,7 @@ def edit_su():
         author = request.form.get("author")
         docu_plan = "docu_plan" in request.form
         docu_vertical = "docu_vertical" in request.form
+        excav_extent = _percent_or_none(request.form.get("excav_extent"))
 
         polygon_names = [
             (p or "").strip()
@@ -550,6 +562,7 @@ def edit_su():
                     recorded,
                     docu_plan,
                     docu_vertical,
+                    excav_extent,
                     sj_id,
                 ),
             )

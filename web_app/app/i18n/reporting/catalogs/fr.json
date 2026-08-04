@@ -20,6 +20,7 @@
   "field.sj.subtype": "sous-type",
   "field.sj.author": "Auteur :",
   "field.sj.recorded": "Enregistré :",
+  "field.sj.excav_extent": "Étendue de la fouille :",
   "field.sj.docu_plan": "Doc. en plan :",
   "field.sj.docu_vertical": "Doc. en coupe/profil",
   "field.sj.ref_object": "Appartient à l’objet :",

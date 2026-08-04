@@ -20,6 +20,7 @@
   "field.sj.subtype": "sottotipo",
   "field.sj.author": "Autore:",
   "field.sj.recorded": "Registrato:",
+  "field.sj.excav_extent": "Estensione dello scavo:",
   "field.sj.docu_plan": "Doc. in pianta:",
   "field.sj.docu_vertical": "Doc. in sezione/profilo",
   "field.sj.ref_object": "Appartiene all'oggetto:",

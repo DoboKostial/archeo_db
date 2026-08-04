@@ -78,6 +78,51 @@
             </div>
 
             <div class="mb-3">
+              <label for="excav_extent" class="form-label">Excavation extent (%)</label>
+              <div class="excav-extent-picker">
+                <input type="number"
+                       class="form-control excav-extent-input"
+                       id="excav_extent"
+                       name="excav_extent"
+                       min="0"
+                       max="100"
+                       step="1"
+                       placeholder="%"
+                       value="{{ form_data.excav_extent if form_data else '' }}">
+                <div class="excav-extent-actions"
+                     data-choice-group
+                     data-choice-target="excav_extent"
+                     aria-label="Quick excavation extent selection">
+                  <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="0" title="0%" aria-label="Excavation extent 0%">
+                    <span class="negative-mini-icon extent-choice-icon extent-empty" aria-hidden="true">
+                      <span class="extent-percent-label">0%</span>
+                    </span>
+                  </button>
+                  <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="25" title="25%" aria-label="Excavation extent 25%">
+                    <span class="negative-mini-icon extent-choice-icon extent-quarter" aria-hidden="true">
+                      <span class="extent-percent-label">25%</span>
+                    </span>
+                  </button>
+                  <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="50" title="50%" aria-label="Excavation extent 50%">
+                    <span class="negative-mini-icon extent-choice-icon extent-half" aria-hidden="true">
+                      <span class="extent-percent-label">50%</span>
+                    </span>
+                  </button>
+                  <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="75" title="75%" aria-label="Excavation extent 75%">
+                    <span class="negative-mini-icon extent-choice-icon extent-three-quarter" aria-hidden="true">
+                      <span class="extent-percent-label">75%</span>
+                    </span>
+                  </button>
+                  <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="100" title="100%" aria-label="Excavation extent 100%">
+                    <span class="negative-mini-icon extent-choice-icon extent-full" aria-hidden="true">
+                      <span class="extent-percent-label">100%</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-3">
               <label for="description" class="form-label">Description</label>
               <textarea class="form-control" id="description" name="description" rows="3">{{ form_data.description if form_data else "" }}</textarea>
             </div>
@@ -245,27 +290,6 @@
                          src="{{ url_for('static', filename='images/icons/negative-imprint.svg') }}"
                          alt=""
                          aria-hidden="true">
-                  </button>
-                </div>
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Excavation extent</label>
-                <input type="hidden" id="excav_extent" name="excav_extent" value="{{ form_data.excav_extent if form_data else '' }}">
-                <div class="negative-choice-grid negative-five-grid" data-choice-group data-choice-target="excav_extent">
-                  <button type="button" class="negative-choice-btn negative-choice-btn-small" data-choice-value="100%" title="100%" aria-label="Excavation extent 100%">
-                    <span class="negative-mini-icon extent-full" aria-hidden="true"></span>
-                  </button>
-                  <button type="button" class="negative-choice-btn negative-choice-btn-small" data-choice-value="75%" title="75%" aria-label="Excavation extent 75%">
-                    <span class="negative-mini-icon extent-three-quarter" aria-hidden="true"></span>
-                  </button>
-                  <button type="button" class="negative-choice-btn negative-choice-btn-small" data-choice-value="50%" title="50%" aria-label="Excavation extent 50%">
-                    <span class="negative-mini-icon extent-half" aria-hidden="true"></span>
-                  </button>
-                  <button type="button" class="negative-choice-btn negative-choice-btn-small" data-choice-value="25%" title="25%" aria-label="Excavation extent 25%">
-                    <span class="negative-mini-icon extent-quarter" aria-hidden="true"></span>
-                  </button>
-                  <button type="button" class="negative-choice-btn negative-choice-btn-small" data-choice-value="unknown" title="unknown" aria-label="Excavation extent unknown">
-                    <span class="negative-mini-icon extent-unknown" aria-hidden="true"></span>
                   </button>
                 </div>
               </div>
@@ -680,6 +704,50 @@
               </div>
 
               <div class="mb-3">
+                <label for="edit_excav_extent" class="form-label">Excavation extent (%)</label>
+                <div class="excav-extent-picker">
+                  <input type="number"
+                         class="form-control excav-extent-input"
+                         id="edit_excav_extent"
+                         name="excav_extent"
+                         min="0"
+                         max="100"
+                         step="1"
+                         placeholder="%">
+                  <div class="excav-extent-actions"
+                       data-choice-group
+                       data-choice-target="edit_excav_extent"
+                       aria-label="Quick excavation extent selection">
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="0" title="0%" aria-label="Excavation extent 0%">
+                      <span class="negative-mini-icon extent-choice-icon extent-empty" aria-hidden="true">
+                        <span class="extent-percent-label">0%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="25" title="25%" aria-label="Excavation extent 25%">
+                      <span class="negative-mini-icon extent-choice-icon extent-quarter" aria-hidden="true">
+                        <span class="extent-percent-label">25%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="50" title="50%" aria-label="Excavation extent 50%">
+                      <span class="negative-mini-icon extent-choice-icon extent-half" aria-hidden="true">
+                        <span class="extent-percent-label">50%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="75" title="75%" aria-label="Excavation extent 75%">
+                      <span class="negative-mini-icon extent-choice-icon extent-three-quarter" aria-hidden="true">
+                        <span class="extent-percent-label">75%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="100" title="100%" aria-label="Excavation extent 100%">
+                      <span class="negative-mini-icon extent-choice-icon extent-full" aria-hidden="true">
+                        <span class="extent-percent-label">100%</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mb-3">
                 <label for="edit_author" class="form-label">Author (email)</label>
                 <select class="form-select" id="edit_author" name="author" required>
                   <option value="">-- choose --</option>
@@ -746,10 +814,6 @@
                 <div class="mb-2">
                   <label class="form-label">Negativ type</label>
                   <input type="text" class="form-control" name="negativ_typ" id="edit_negativ_typ">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Excavation extent</label>
-                  <input type="text" class="form-control" name="excav_extent" id="edit_excav_extent">
                 </div>
                 <div class="form-check mb-2">
                   <input class="form-check-input" type="checkbox" id="edit_ident_niveau_cut" name="ident_niveau_cut">

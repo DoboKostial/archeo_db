@@ -20,6 +20,7 @@
   "field.sj.subtype": "podtyp",
   "field.sj.author": "Autor:",
   "field.sj.recorded": "Zapisano:",
+  "field.sj.excav_extent": "Zakres eksploracji:",
   "field.sj.docu_plan": "Dok. w rzucie:",
   "field.sj.docu_vertical": "Dok. w przekroju/profilu",
   "field.sj.ref_object": "Należy do obiektu:",

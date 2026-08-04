@@ -327,8 +327,10 @@ CREATE TABLE tab_sj (
 	recorded date NULL,
 	docu_plan bool NULL,
 	docu_vertical bool NULL,
+	excav_extent NUMERIC(3,0) NULL,
 	ref_object int4 NULL,
-	CONSTRAINT tab_sj_pk PRIMARY KEY (id_sj)
+	CONSTRAINT tab_sj_pk PRIMARY KEY (id_sj),
+	CONSTRAINT tab_sj_excav_extent_chk CHECK (excav_extent IS NULL OR (excav_extent >= 0 AND excav_extent <= 100))
 );
 CREATE UNIQUE INDEX tab_sj_id_sj_idx ON tab_sj USING btree (id_sj);
 -- tab_sj foreign keys
@@ -356,7 +358,6 @@ CREATE UNIQUE INDEX tab_sj_deposit_id_deposit_idx ON tab_sj_deposit USING btree 
 CREATE TABLE tab_sj_negativ (
 	id_negativ int4 NOT NULL,
 	negativ_typ VARCHAR(40) NULL,
-	excav_extent VARCHAR(40) NULL,
 	ident_niveau_cut bool NULL,
 	shape_plan VARCHAR(50) NULL,
 	shape_sides VARCHAR(50) NULL,

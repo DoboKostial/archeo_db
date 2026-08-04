@@ -20,6 +20,7 @@
   "field.sj.subtype": "altípus",
   "field.sj.author": "Szerző:",
   "field.sj.recorded": "Rögzítve:",
+  "field.sj.excav_extent": "Feltárás mértéke:",
   "field.sj.docu_plan": "Dok. alaprajzon:",
   "field.sj.docu_vertical": "Dok. metszeten/profilon",
   "field.sj.ref_object": "Objekthez tartozik:",

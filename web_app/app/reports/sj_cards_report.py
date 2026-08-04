@@ -291,7 +291,9 @@ def _section1_orange(ctx: ReportContext, sj: Dict[str, Any]) -> Table:
         Paragraph(_v(sj.get("author")), VALUE),
         Paragraph(ctx.t("field.sj.recorded"), LABEL),
         Paragraph(_v(sj.get("recorded")), VALUE),
-    ]], colWidths=[18*mm, 70*mm, 18*mm, 84*mm])
+        Paragraph(ctx.t("field.sj.excav_extent"), LABEL),
+        Paragraph(_v(sj.get("excav_extent")), VALUE),
+    ]], colWidths=[18*mm, 58*mm, 18*mm, 36*mm, 32*mm, 28*mm])
 
     outer = Table([[line1], [line2]], colWidths=[A4[0] - 24*mm])
     outer.setStyle(TableStyle([
@@ -364,7 +366,6 @@ def _subtype_left_block(ctx: ReportContext, sj: Dict[str, Any]) -> Table:
     elif subtype == "negativ":
         rows = [
             [Paragraph(ctx.t("field.negativ.negativ_typ"), LABEL), Paragraph(_v(sj.get("negativ_typ")), VALUE)],
-            [Paragraph(ctx.t("field.negativ.excav_extent"), LABEL), Paragraph(_v(sj.get("negativ_excav_extent")), VALUE)],
             [Paragraph(ctx.t("field.negativ.shape_plan"), LABEL), Paragraph(_v(sj.get("negativ_shape_plan")), VALUE)],
             [Paragraph(ctx.t("field.negativ.shape_sides"), LABEL), Paragraph(_v(sj.get("negativ_shape_sides")), VALUE)],
             [Paragraph(ctx.t("field.negativ.shape_bottom"), LABEL), Paragraph(_v(sj.get("negativ_shape_bottom")), VALUE)],

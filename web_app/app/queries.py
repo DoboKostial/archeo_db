@@ -327,6 +327,7 @@ def list_su_table_sql():
             COALESCE(s.author, '') AS author,
             COALESCE(s.docu_plan, false) AS docu_plan,
             COALESCE(s.docu_vertical, false) AS docu_vertical,
+            COALESCE(s.excav_extent::text, '') AS excav_extent,
 
             COALESCE(d.deposit_typ, '') AS deposit_typ,
             COALESCE(d.color, '') AS color,
@@ -336,7 +337,6 @@ def list_su_table_sql():
             COALESCE(d.deposit_removed, '') AS deposit_removed,
 
             COALESCE(n.negativ_typ, '') AS negativ_typ,
-            COALESCE(n.excav_extent, '') AS excav_extent,
             COALESCE(n.ident_niveau_cut, false) AS ident_niveau_cut,
             COALESCE(n.shape_plan, '') AS shape_plan,
             COALESCE(n.shape_sides, '') AS shape_sides,
@@ -443,7 +443,8 @@ def update_su_base_sql():
             author = NULLIF(%s, ''),
             recorded = %s,
             docu_plan = %s,
-            docu_vertical = %s
+            docu_vertical = %s,
+            excav_extent = %s
         WHERE id_sj = %s;
     """
 
@@ -472,9 +473,9 @@ def insert_su_deposit_sql():
 def insert_su_negativ_sql():
     return """
         INSERT INTO tab_sj_negativ
-          (id_negativ, negativ_typ, excav_extent, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
+          (id_negativ, negativ_typ, ident_niveau_cut, shape_plan, shape_sides, shape_bottom)
         VALUES
-          (%s, NULLIF(%s, ''), NULLIF(%s, ''), %s, NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''));
+          (%s, NULLIF(%s, ''), %s, NULLIF(%s, ''), NULLIF(%s, ''), NULLIF(%s, ''));
     """
 
 
@@ -3344,6 +3345,7 @@ def report_sj_cards_detail_sql():
             COALESCE(s.interpretation, '')    AS interpretation,
             COALESCE(s.author, '')            AS author,
             s.recorded                         AS recorded,
+            s.excav_extent                     AS excav_extent,
             COALESCE(s.docu_plan, false)      AS docu_plan,
             COALESCE(s.docu_vertical, false)  AS docu_vertical,
             s.ref_object                       AS ref_object,
@@ -3366,7 +3368,6 @@ def report_sj_cards_detail_sql():
 
             -- negativ 1:1
             COALESCE(n.negativ_typ, '')           AS negativ_typ,
-            COALESCE(n.excav_extent, '')          AS negativ_excav_extent,
             COALESCE(n.ident_niveau_cut, false)   AS negativ_ident_niveau_cut,
             COALESCE(n.shape_plan, '')            AS negativ_shape_plan,
             COALESCE(n.shape_sides, '')           AS negativ_shape_sides,

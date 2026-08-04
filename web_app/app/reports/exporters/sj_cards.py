@@ -58,7 +58,7 @@ class SjCardsExporter:
 
         headers = [
             "id_sj", "sj_typ", "sj_subtype",
-            "author", "recorded",
+            "author", "recorded", "excav_extent",
             "docu_plan", "docu_vertical", "ref_object",
             "description", "interpretation",
             "strat_above", "strat_below", "strat_equal",
@@ -66,7 +66,7 @@ class SjCardsExporter:
             "deposit_typ", "deposit_color", "deposit_boundary_visibility", "deposit_structure",
             "deposit_compactness", "deposit_removed",
             # negativ
-            "negativ_typ", "negativ_excav_extent", "negativ_ident_niveau_cut", "negativ_shape_plan",
+            "negativ_typ", "negativ_ident_niveau_cut", "negativ_shape_plan",
             "negativ_shape_sides", "negativ_shape_bottom",
             # structure
             "structure_typ", "structure_construction_typ", "structure_binder", "structure_basic_material",
@@ -96,6 +96,7 @@ class SjCardsExporter:
                     sj.get("sj_subtype"),
                     sj.get("author"),
                     sj.get("recorded"),
+                    sj.get("excav_extent"),
                     sj.get("docu_plan"),
                     sj.get("docu_vertical"),
                     sj.get("ref_object"),
@@ -113,7 +114,6 @@ class SjCardsExporter:
                     sj.get("deposit_removed"),
 
                     sj.get("negativ_typ"),
-                    sj.get("negativ_excav_extent"),
                     sj.get("negativ_ident_niveau_cut"),
                     sj.get("negativ_shape_plan"),
                     sj.get("negativ_shape_sides"),

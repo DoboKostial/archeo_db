@@ -81,6 +81,14 @@ class CreateDbTemplateTests(unittest.TestCase):
                     f"{child_table}.{child_column} should match {parent_table}.{parent_column}",
                 )
 
+    def test_excavation_extent_is_common_su_attribute(self) -> None:
+        sj_block = _table_block(self.template_sql, "tab_sj")
+        negativ_block = _table_block(self.template_sql, "tab_sj_negativ")
+
+        self.assertRegex(sj_block, re.compile(r"\bexcav_extent\s+NUMERIC\(3,0\)", re.IGNORECASE))
+        self.assertIn("tab_sj_excav_extent_chk", sj_block)
+        self.assertNotRegex(negativ_block, re.compile(r"\bexcav_extent\b", re.IGNORECASE))
+
     def test_auth_template_creates_expected_database_and_users_table(self) -> None:
         self.assertIn("CREATE DATABASE auth_db OWNER app_terrain_db ENCODING 'UTF8';", self.auth_sql)
         self.assertRegex(

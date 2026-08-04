@@ -511,7 +511,9 @@
 
     function setValue(id, value) {
       const el = qs(id);
-      if (el) el.value = value ?? "";
+      if (!el) return;
+      el.value = value ?? "";
+      el.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
     function setChecked(id, value) {

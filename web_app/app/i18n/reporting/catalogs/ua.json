@@ -20,6 +20,7 @@
   "field.sj.subtype": "підтип",
   "field.sj.author": "Автор:",
   "field.sj.recorded": "Записано:",
+  "field.sj.excav_extent": "Обсяг дослідження:",
   "field.sj.docu_plan": "Док. у плані:",
   "field.sj.docu_vertical": "Док. у розрізі/профілі",
   "field.sj.ref_object": "Належить до об’єкта:",

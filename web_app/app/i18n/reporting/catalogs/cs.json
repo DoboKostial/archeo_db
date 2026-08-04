@@ -20,6 +20,7 @@
   "field.sj.subtype": "podtyp",
   "field.sj.author": "Autor:",
   "field.sj.recorded": "Zapsáno:",
+  "field.sj.excav_extent": "Rozsah prozkoumanosti:",
   "field.sj.docu_plan": "Dok. v půdorysu:",
   "field.sj.docu_vertical": "Dok. v řezu/profilu",
   "field.sj.ref_object": "Patří k objektu:",

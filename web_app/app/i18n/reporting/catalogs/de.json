@@ -20,6 +20,7 @@
   "field.sj.subtype": "Untertyp",
   "field.sj.author": "Autor:",
   "field.sj.recorded": "Erfasst:",
+  "field.sj.excav_extent": "Untersuchungsumfang:",
   "field.sj.docu_plan": "Dok. im Grundriss:",
   "field.sj.docu_vertical": "Dok. im Schnitt/Profil",
   "field.sj.ref_object": "Gehört zum Objekt:",
