@@ -199,7 +199,7 @@ def upload_geopts():
         pts = _parse_points(text)
 
         if not pts:
-            flash('Soubor neobsahuje žádné validní body.', 'warning')
+            flash('No valid points in text file.', 'warning')
             return redirect(url_for('geodesy.geodesy'))
 
         sql = upsert_geopt_sql()
@@ -222,7 +222,7 @@ def upload_geopts():
 
         conn.commit()
         logger.info(f"[{selected_db}] geodesy upload: upserted={upserted}, source_epsg={src_epsg}, target_srid={target_srid}")
-        flash(f'Import hotov: zpracováno {upserted} bodů.', 'success')
+        flash(f'Import finished: {upserted} points processed.', 'success')
         return redirect(url_for('geodesy.geodesy'))
 
     except Exception as e:
