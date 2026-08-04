@@ -75,3 +75,20 @@
   max-width: 100%;
   height: auto;
 }
+
+.polygons-list-panel {
+  background: #fff9df;
+}
+
+.polygons-list-panel .table {
+  background: #fff;
+}
+
+.polygons-list-panel .pagination {
+  --bs-pagination-color: #6c5411;
+  --bs-pagination-hover-color: #4c3a08;
+  --bs-pagination-hover-bg: #fff3bf;
+  --bs-pagination-active-bg: #d69e2e;
+  --bs-pagination-active-border-color: #d69e2e;
+  --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(214, 158, 46, .2);
+}
