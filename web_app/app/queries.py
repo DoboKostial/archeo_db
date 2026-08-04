@@ -723,9 +723,200 @@ def select_polygons_with_bindings_sql():
 def rebuild_geom_sql():
     """
     Rebuilds both geom_top and geom_bottom from geodetic points for given polygon.
+    It keeps the measured id order when it forms a valid polygon; otherwise it
+    falls back to the outer hull of the collected points. This supports field
+    measurements where polygon edge points were captured in a zig-zag order.
     Params: (polygon_name,)
     """
-    return "SELECT rebuild_polygon_geoms_from_geopts(%s);"
+    return """
+        WITH params AS (
+            SELECT %s::text AS polygon_name
+        ),
+        top_points AS (
+            SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
+            FROM params p
+            JOIN tab_polygon_geopts_binding_top b
+              ON b.ref_polygon = p.polygon_name
+            JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+            WHERE g.pts_geom IS NOT NULL
+            ORDER BY g.id_pts
+        ),
+        top_agg AS (
+            SELECT
+                COUNT(*) AS point_count,
+                CASE
+                  WHEN COUNT(*) >= 3 THEN ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
+                  ELSE NULL
+                END AS ordered_line,
+                CASE
+                  WHEN COUNT(*) >= 3 THEN ST_Collect(pts_geom)
+                  ELSE NULL
+                END AS point_collection
+            FROM top_points
+        ),
+        top_ring AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN ordered_line IS NULL THEN NULL
+                  WHEN ST_Equals(ST_StartPoint(ordered_line), ST_EndPoint(ordered_line))
+                    THEN ST_RemoveRepeatedPoints(ordered_line, 1e-7)
+                  ELSE ST_RemoveRepeatedPoints(
+                    ST_AddPoint(ordered_line, ST_StartPoint(ordered_line)),
+                    1e-7
+                  )
+                END AS ring
+            FROM top_agg
+        ),
+        top_ordered_try AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN ring IS NOT NULL
+                   AND ST_NPoints(ring) >= 4
+                   AND ST_IsSimple(ring)
+                    THEN ST_MakePolygon(ring)
+                  ELSE NULL
+                END AS geom
+            FROM top_ring
+        ),
+        top_ordered AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN geom IS NOT NULL
+                   AND ST_IsValid(geom)
+                   AND NOT ST_IsEmpty(geom)
+                   AND ST_GeometryType(geom) = 'ST_Polygon'
+                    THEN ST_Force3D(geom)
+                  ELSE NULL
+                END AS geom
+            FROM top_ordered_try
+        ),
+        top_hull_try AS (
+            SELECT
+                CASE
+                  WHEN point_count >= 3 THEN ST_ConvexHull(point_collection)
+                  ELSE NULL
+                END AS geom
+            FROM top_ordered
+        ),
+        top_result AS (
+            SELECT
+                COALESCE(
+                    top_ordered.geom,
+                    CASE
+                      WHEN top_hull_try.geom IS NOT NULL
+                       AND ST_IsValid(top_hull_try.geom)
+                       AND NOT ST_IsEmpty(top_hull_try.geom)
+                       AND ST_GeometryType(top_hull_try.geom) = 'ST_Polygon'
+                        THEN ST_Force3D(top_hull_try.geom)
+                      ELSE NULL
+                    END
+                ) AS geom
+            FROM top_ordered
+            CROSS JOIN top_hull_try
+        ),
+        bottom_points AS (
+            SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
+            FROM params p
+            JOIN tab_polygon_geopts_binding_bottom b
+              ON b.ref_polygon = p.polygon_name
+            JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+            WHERE g.pts_geom IS NOT NULL
+            ORDER BY g.id_pts
+        ),
+        bottom_agg AS (
+            SELECT
+                COUNT(*) AS point_count,
+                CASE
+                  WHEN COUNT(*) >= 3 THEN ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
+                  ELSE NULL
+                END AS ordered_line,
+                CASE
+                  WHEN COUNT(*) >= 3 THEN ST_Collect(pts_geom)
+                  ELSE NULL
+                END AS point_collection
+            FROM bottom_points
+        ),
+        bottom_ring AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN ordered_line IS NULL THEN NULL
+                  WHEN ST_Equals(ST_StartPoint(ordered_line), ST_EndPoint(ordered_line))
+                    THEN ST_RemoveRepeatedPoints(ordered_line, 1e-7)
+                  ELSE ST_RemoveRepeatedPoints(
+                    ST_AddPoint(ordered_line, ST_StartPoint(ordered_line)),
+                    1e-7
+                  )
+                END AS ring
+            FROM bottom_agg
+        ),
+        bottom_ordered_try AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN ring IS NOT NULL
+                   AND ST_NPoints(ring) >= 4
+                   AND ST_IsSimple(ring)
+                    THEN ST_MakePolygon(ring)
+                  ELSE NULL
+                END AS geom
+            FROM bottom_ring
+        ),
+        bottom_ordered AS (
+            SELECT
+                point_count,
+                point_collection,
+                CASE
+                  WHEN geom IS NOT NULL
+                   AND ST_IsValid(geom)
+                   AND NOT ST_IsEmpty(geom)
+                   AND ST_GeometryType(geom) = 'ST_Polygon'
+                    THEN ST_Force3D(geom)
+                  ELSE NULL
+                END AS geom
+            FROM bottom_ordered_try
+        ),
+        bottom_hull_try AS (
+            SELECT
+                CASE
+                  WHEN point_count >= 3 THEN ST_ConvexHull(point_collection)
+                  ELSE NULL
+                END AS geom
+            FROM bottom_ordered
+        ),
+        bottom_result AS (
+            SELECT
+                COALESCE(
+                    bottom_ordered.geom,
+                    CASE
+                      WHEN bottom_hull_try.geom IS NOT NULL
+                       AND ST_IsValid(bottom_hull_try.geom)
+                       AND NOT ST_IsEmpty(bottom_hull_try.geom)
+                       AND ST_GeometryType(bottom_hull_try.geom) = 'ST_Polygon'
+                        THEN ST_Force3D(bottom_hull_try.geom)
+                      ELSE NULL
+                    END
+                ) AS geom
+            FROM bottom_ordered
+            CROSS JOIN bottom_hull_try
+        )
+        UPDATE tab_polygons p
+        SET
+            geom_top = top_result.geom,
+            geom_bottom = bottom_result.geom
+        FROM params, top_result, bottom_result
+        WHERE p.polygon_name = params.polygon_name;
+    """
 
 def find_geopts_srid_sql():
     """

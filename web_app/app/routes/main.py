@@ -3,7 +3,7 @@ import os
 import threading
 import time
 from urllib.parse import quote
-from flask import Blueprint, render_template, redirect, request, session, flash, get_flashed_messages, Response
+from flask import Blueprint, render_template, redirect, request, session, flash, Response
 from flask import g
 from reportlab.graphics import renderSVG
 from reportlab.graphics.barcode import qr
@@ -133,11 +133,6 @@ def index():
         except Exception:
             pass
 
-    db_selected_message = None
-    flashed = get_flashed_messages(category_filter=["success"])
-    if flashed:
-        db_selected_message = flashed[0]
-
     return render_template(
         "index.html",
         user_name=user_name,
@@ -145,7 +140,6 @@ def index():
         pg_version=pg_version,
         db_sizes=db_sizes,
         user_role=user_role,
-        db_selected_message=db_selected_message,
         app_version=getattr(Config, "APP_VERSION", ""),
         mobile_api_base_url=(getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip(),
     )
