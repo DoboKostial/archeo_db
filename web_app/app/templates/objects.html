@@ -124,7 +124,7 @@
         <div class="card-body">
           {% if objects %}
             <div class="table-responsive">
-              <table class="table table-striped align-middle">
+              <table id="objectsTable" class="table table-striped align-middle" data-page-size="10">
                 <thead>
                   <tr>
                     <th>ID</th>
@@ -134,7 +134,7 @@
                     <th class="text-end">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="objectsTableBody">
                   {% for obj in objects %}
                     <tr>
                       <td><strong>{{ obj[0] }}</strong></td>
@@ -163,6 +163,13 @@
                   {% endfor %}
                 </tbody>
               </table>
+            </div>
+            <div id="objectsPaginationWrap"
+                 class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+              <div id="objectsPaginationSummary" class="text-muted small"></div>
+              <nav aria-label="Existing objects pagination">
+                <ul id="objectsPagination" class="pagination pagination-sm mb-0"></ul>
+              </nav>
             </div>
           {% else %}
             <p class="text-muted mb-0">No objects were found.</p>

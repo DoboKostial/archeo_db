@@ -170,17 +170,25 @@ def sections():
     try:
         with conn.cursor() as cur:
             cur.execute(get_sections_list_sql())
-            sections_rows = [
-                {
-                    "id": r[0],
-                    "type": r[1],
-                    "description": r[2],
-                    "srid": r[3],
-                    "ranges": r[4],
-                    "sj_nr": r[5],
-                }
-                for r in cur.fetchall()
-            ]
+            sections_rows = []
+            for r in cur.fetchall():
+                ranges_from = r[6] if len(r) > 6 and r[6] else []
+                ranges_to = r[7] if len(r) > 7 and r[7] else []
+                sections_rows.append(
+                    {
+                        "id": r[0],
+                        "type": r[1],
+                        "description": r[2],
+                        "srid": r[3],
+                        "ranges": r[4],
+                        "sj_nr": r[5],
+                        "ranges_edit": [
+                            {"from": pts_from, "to": pts_to}
+                            for pts_from, pts_to in zip(ranges_from, ranges_to)
+                        ],
+                        "sj_ids": r[8] if len(r) > 8 and r[8] else [],
+                    }
+                )
 
             cur.execute(list_authors_sql())
             authors = [r[0] for r in cur.fetchall()]

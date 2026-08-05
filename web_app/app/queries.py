@@ -1277,19 +1277,23 @@ def get_sections_list_sql():
       - srid_txt: SRID inferred from geopts used by section (— / <srid> / mixed)
       - ranges_txt: e.g. "1-4, 7-9, 12-13"
       - sj_nr: count of linked SUs
+      - ranges_from/ranges_to and sj_ids are used to pre-fill the edit modal
     """
     return """
         WITH r AS (
             SELECT
                 b.ref_section::int4 AS id_section,
-                STRING_AGG((b.pts_from::text || '-' || b.pts_to::text), ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt
+                STRING_AGG((b.pts_from::text || '-' || b.pts_to::text), ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt,
+                ARRAY_AGG(b.pts_from::int4 ORDER BY b.pts_from, b.pts_to) AS ranges_from,
+                ARRAY_AGG(b.pts_to::int4 ORDER BY b.pts_from, b.pts_to) AS ranges_to
             FROM tab_section_geopts_binding b
             GROUP BY b.ref_section::int4
         ),
         sj AS (
             SELECT
                 x.ref_section::int4 AS id_section,
-                COUNT(*)::int AS sj_nr
+                COUNT(*)::int AS sj_nr,
+                ARRAY_AGG(x.ref_sj::int4 ORDER BY x.ref_sj::int4) AS sj_ids
             FROM tabaid_sj_section x
             GROUP BY x.ref_section::int4
         ),
@@ -1312,7 +1316,10 @@ def get_sections_list_sql():
             s.description,
             COALESCE(sr.srid_txt, '—') AS srid_txt,
             COALESCE(r.ranges_txt, '—') AS ranges_txt,
-            COALESCE(sj.sj_nr, 0) AS sj_nr
+            COALESCE(sj.sj_nr, 0) AS sj_nr,
+            COALESCE(r.ranges_from, ARRAY[]::int4[]) AS ranges_from,
+            COALESCE(r.ranges_to, ARRAY[]::int4[]) AS ranges_to,
+            COALESCE(sj.sj_ids, ARRAY[]::int4[]) AS sj_ids
         FROM tab_section s
         LEFT JOIN r  ON r.id_section  = s.id_section
         LEFT JOIN sj ON sj.id_section = s.id_section
