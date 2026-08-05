@@ -42,12 +42,14 @@ from app.queries import (
     update_find_sql,
     delete_find_sql,
     list_finds_sql,
+    count_finds_sql,
     get_find_sql,
     # samples CRUD
     insert_sample_sql,
     update_sample_sql,
     delete_sample_sql,
     list_samples_sql,
+    count_samples_sql,
     get_sample_sql,
     # media inserts + linking
     insert_photo_sql,
@@ -91,6 +93,19 @@ def _optional_int(form_value: str):
     return int(v) if v else None
 
 
+def _pagination_args(default_limit: int = 10, max_limit: int = 100):
+    try:
+        limit = int(request.args.get("limit") or default_limit)
+        offset = int(request.args.get("offset") or 0)
+    except ValueError:
+        limit = default_limit
+        offset = 0
+
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, offset)
+    return limit, offset
+
+
 # -------------------------
 # Page
 # -------------------------
@@ -112,10 +127,10 @@ def finds_samples():
             cur.execute(list_polygons_names_sql())
             polygons = [r[0] for r in cur.fetchall()]
 
-            cur.execute(list_finds_sql(), (30,))
+            cur.execute(list_finds_sql(), (30, 0))
             last_finds = cur.fetchall()
 
-            cur.execute(list_samples_sql(), (30,))
+            cur.execute(list_samples_sql(), (30, 0))
             last_samples = cur.fetchall()
 
     finally:
@@ -256,12 +271,15 @@ def add_find():
 @require_selected_db
 def list_finds():
     selected_db = session["selected_db"]
-    limit = int(request.args.get("limit") or 30)
+    limit, offset = _pagination_args()
 
     conn = get_terrain_connection(selected_db)
     try:
         with conn.cursor() as cur:
-            cur.execute(list_finds_sql(), (limit,))
+            cur.execute(count_finds_sql())
+            total = (cur.fetchone() or [0])[0]
+
+            cur.execute(list_finds_sql(), (limit, offset))
             rows = cur.fetchall()
 
         data = []
@@ -278,7 +296,7 @@ def list_finds():
                     description=r[7],
                 )
             )
-        return jsonify({"ok": True, "rows": data})
+        return jsonify({"ok": True, "rows": data, "total": total, "limit": limit, "offset": offset})
 
     except Exception as e:
         logger.exception(f"[{selected_db}] list finds failed: {e}")
@@ -408,12 +426,15 @@ def add_sample():
 @require_selected_db
 def list_samples():
     selected_db = session["selected_db"]
-    limit = int(request.args.get("limit") or 30)
+    limit, offset = _pagination_args()
 
     conn = get_terrain_connection(selected_db)
     try:
         with conn.cursor() as cur:
-            cur.execute(list_samples_sql(), (limit,))
+            cur.execute(count_samples_sql())
+            total = (cur.fetchone() or [0])[0]
+
+            cur.execute(list_samples_sql(), (limit, offset))
             rows = cur.fetchall()
 
         data = []
@@ -428,7 +449,7 @@ def list_samples():
                     description=r[5],
                 )
             )
-        return jsonify({"ok": True, "rows": data})
+        return jsonify({"ok": True, "rows": data, "total": total, "limit": limit, "offset": offset})
 
     except Exception as e:
         logger.exception(f"[{selected_db}] list samples failed: {e}")

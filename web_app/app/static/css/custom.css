@@ -270,6 +270,69 @@
   --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(214, 158, 46, .2);
 }
 
+.finds-samples-page {
+  --fs-find-accent: #8a6f3e;
+  --fs-sample-accent: #64706f;
+}
+
+.finds-samples-pane {
+  min-height: 100%;
+  background: #f8f9fa;
+}
+
+.finds-samples-pane.finds-pane {
+  border-top: 4px solid var(--fs-find-accent) !important;
+}
+
+.finds-samples-pane.samples-pane {
+  border-top: 4px solid var(--fs-sample-accent) !important;
+}
+
+.finds-samples-page .fs-panel {
+  border-color: var(--bs-border-color);
+  box-shadow: none;
+}
+
+.finds-samples-page .fs-panel-header {
+  min-height: 2.55rem;
+  background: #fff;
+  border-bottom-color: var(--bs-border-color);
+}
+
+.finds-samples-page .fs-panel-header strong {
+  font-size: .96rem;
+}
+
+.finds-samples-page .card-body {
+  background: #fff;
+}
+
+.finds-samples-page .table {
+  background: #fff;
+}
+
+.finds-samples-page .table th {
+  white-space: nowrap;
+}
+
+.finds-samples-page .table td {
+  vertical-align: middle;
+}
+
+.finds-samples-page .input-group .btn {
+  border-color: var(--bs-border-color);
+}
+
+.finds-samples-page .fs-list-panel,
+.finds-samples-page .fs-list-panel .fs-panel-header,
+.finds-samples-page .fs-list-panel .card-body {
+  background: #fff9df;
+}
+
+.finds-samples-page .fs-list-panel .table {
+  background: #fff;
+}
+
 .su-type-picker {
   display: flex;
   align-items: center;

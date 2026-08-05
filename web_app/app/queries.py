@@ -1856,7 +1856,7 @@ def delete_find_sql():
 
 
 def list_finds_sql():
-    """Params: (limit,)"""
+    """Params: (limit, offset)"""
     return """
         SELECT
           id_find, ref_find_type, ref_sj, count, box,
@@ -1864,8 +1864,13 @@ def list_finds_sql():
           COALESCE(description,'') AS description
         FROM tab_finds
         ORDER BY id_find DESC
-        LIMIT %s;
+        LIMIT %s OFFSET %s;
     """
+
+
+def count_finds_sql():
+    """Return total finds count."""
+    return "SELECT COUNT(*)::int FROM tab_finds;"
 
 
 def get_find_sql():
@@ -1915,7 +1920,7 @@ def delete_sample_sql():
 
 
 def list_samples_sql():
-    """Params: (limit,)"""
+    """Params: (limit, offset)"""
     return """
         SELECT
           id_sample, ref_sample_type, ref_sj,
@@ -1923,8 +1928,13 @@ def list_samples_sql():
           COALESCE(description,'') AS description
         FROM tab_samples
         ORDER BY id_sample DESC
-        LIMIT %s;
+        LIMIT %s OFFSET %s;
     """
+
+
+def count_samples_sql():
+    """Return total samples count."""
+    return "SELECT COUNT(*)::int FROM tab_samples;"
 
 
 def get_sample_sql():
