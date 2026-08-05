@@ -12,7 +12,7 @@ matplotlib.use("Agg")  # backend without GUI (no Tk)
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from collections import Counter
+from collections import Counter, defaultdict
 
 from flask import (
     Blueprint,
@@ -33,6 +33,9 @@ from app.utils.admin import get_hmatrix_dirs
 
 from app.queries import (
     count_sj_by_type,
+    count_sj_by_type_all,
+    count_objects,
+    count_sj_without_relation,
     count_total_sj,
     fetch_stratigraphy_relations,
     get_all_sj_with_types,
@@ -822,26 +825,16 @@ def harrismatrix():
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT sj_typ, COUNT(*) FROM tab_sj GROUP BY sj_typ;")
+        cur.execute(count_sj_by_type_all())
         sj_type_counts = cur.fetchall()
 
-        cur.execute("SELECT COUNT(*) FROM tab_sj;")
+        cur.execute(count_total_sj())
         total_sj_count = cur.fetchone()[0]
 
-        cur.execute("SELECT COUNT(DISTINCT ref_object) FROM tab_sj WHERE ref_object IS NOT NULL;")
+        cur.execute(count_objects())
         object_count = cur.fetchone()[0]
 
-        cur.execute(
-            """
-            SELECT COUNT(*) FROM tab_sj s
-            LEFT JOIN (
-                SELECT ref_sj1 AS sj FROM tab_sj_stratigraphy
-                UNION
-                SELECT ref_sj2 AS sj FROM tab_sj_stratigraphy
-            ) rel ON s.id_sj = rel.sj
-            WHERE rel.sj IS NULL;
-            """
-        )
+        cur.execute(count_sj_without_relation())
         sj_without_relation = cur.fetchone()[0]
 
     finally:
@@ -888,6 +881,384 @@ class DSU:
             self.parent[ra] = rb
 
 
+def _natural_node_key(node, label_map=None):
+    label = str(label_map.get(node, node) if label_map else node)
+    parts = []
+    for part in re.split(r"(\d+)", label):
+        if part.isdigit():
+            parts.append((0, int(part)))
+        elif part:
+            parts.append((1, part))
+    return parts
+
+
+def _format_harris_cycle(cycle, label_map):
+    if not cycle:
+        return ""
+
+    nodes = [edge[0] for edge in cycle]
+    nodes.append(cycle[-1][1])
+    return " -> ".join(label_map.get(node, str(node)) for node in nodes)
+
+
+def _build_harris_matrix_data(rels, all_sj_rows):
+    """Build a top-to-bottom Hasse graph from stored SU relations."""
+    normalized_rels = []
+    dsu = DSU()
+
+    for raw_a, raw_rel, raw_b in rels:
+        rel = (raw_rel or "").strip()
+        if rel not in {">", "<", "="}:
+            raise ValueError(f"Invalid stratigraphic relation: {raw_rel!r}")
+
+        a, b = int(raw_a), int(raw_b)
+        normalized_rels.append((a, rel, b))
+        if rel == "=":
+            dsu.union(a, b)
+
+    all_sj = set()
+    sj_type_map = {}
+    for row in all_sj_rows:
+        sj_id = int(row[0])
+        all_sj.add(sj_id)
+        sj_type_map[sj_id] = (row[1] or "").lower()
+
+    related_sj = {node for a, _, b in normalized_rels for node in (a, b)}
+    groups = {}
+    for node in sorted(all_sj | related_sj):
+        rep = dsu.find(node)
+        groups.setdefault(rep, set()).add(node)
+
+    label_map = {
+        rep: "=".join(str(member) for member in sorted(members))
+        for rep, members in sorted(groups.items())
+    }
+    node_type_map = {
+        rep: _majority_su_type(members, sj_type_map)
+        for rep, members in groups.items()
+    }
+
+    graph = nx.DiGraph()
+    graph.add_nodes_from(sorted(groups))
+
+    for a, rel, b in normalized_rels:
+        if rel == "=":
+            continue
+
+        u, v = dsu.find(a), dsu.find(b)
+        if u == v:
+            continue
+
+        if rel == ">":
+            graph.add_edge(u, v)
+        else:
+            graph.add_edge(v, u)
+
+    if not nx.is_directed_acyclic_graph(graph):
+        try:
+            cycle = nx.find_cycle(graph, orientation="original")
+        except nx.NetworkXNoCycle:
+            cycle = []
+        detail = _format_harris_cycle(cycle, label_map)
+        message = "A cycle was found in stratigraphic relations."
+        if detail:
+            message = f"{message} Cycle: {detail}"
+        raise ValueError(message)
+
+    hasse_graph = transitive_reduction(graph)
+    hasse_graph.add_nodes_from(graph.nodes)
+
+    return hasse_graph, label_map, node_type_map, dsu
+
+
+def _majority_su_type(members, sj_type_map):
+    counts = Counter(
+        sj_type_map.get(member, "")
+        for member in sorted(members)
+        if sj_type_map.get(member, "")
+    )
+    if not counts:
+        return ""
+    return sorted(counts.items(), key=lambda item: (-item[1], item[0]))[0][0]
+
+
+def _color_or_default(value, default):
+    color = (value or "").strip()
+    if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+        return color
+    return default
+
+
+def _harris_levels(graph):
+    levels = {}
+    for node in nx.topological_sort(graph):
+        predecessors = list(graph.predecessors(node))
+        levels[node] = max((levels[pred] + 1 for pred in predecessors), default=0)
+    return levels
+
+
+def _fallback_harris_layout(graph, label_map):
+    if graph.number_of_nodes() == 0:
+        return {}
+
+    levels = _harris_levels(graph)
+    nodes_by_level = defaultdict(list)
+    for node, level in levels.items():
+        nodes_by_level[level].append(node)
+    for nodes in nodes_by_level.values():
+        nodes.sort(key=lambda node: _natural_node_key(node, label_map))
+
+    positions = {}
+    x_spacing = 1.7
+    y_spacing = 1.05
+
+    for level in sorted(nodes_by_level):
+        nodes = nodes_by_level[level]
+        if level == min(nodes_by_level):
+            row_width = len(nodes) - 1
+            assigned = [
+                (node, (index - row_width / 2) * x_spacing)
+                for index, node in enumerate(nodes)
+            ]
+        else:
+            groups_by_parent = defaultdict(list)
+            for node in nodes:
+                parents = tuple(
+                    sorted(
+                        graph.predecessors(node),
+                        key=lambda pred: _natural_node_key(pred, label_map),
+                    )
+                )
+                groups_by_parent[parents].append(node)
+
+            assigned = []
+            for parents, children in sorted(
+                groups_by_parent.items(),
+                key=lambda item: (
+                    _parent_x(item[0], positions),
+                    [_natural_node_key(node, label_map) for node in item[1]],
+                ),
+            ):
+                base_x = _parent_x(parents, positions)
+                width = len(children) - 1
+                for index, node in enumerate(children):
+                    assigned.append((node, base_x + (index - width / 2) * x_spacing))
+
+            assigned = _separate_harris_level(assigned, x_spacing, label_map)
+
+        for node, x in assigned:
+            y = -level * y_spacing
+            positions[node] = (x, y)
+
+    return positions
+
+
+def _parent_x(parents, positions):
+    xs = [positions[parent][0] for parent in parents if parent in positions]
+    if not xs:
+        return 0.0
+    return sum(xs) / len(xs)
+
+
+def _separate_harris_level(assigned, min_spacing, label_map):
+    if len(assigned) < 2:
+        return assigned
+
+    ordered = sorted(
+        assigned,
+        key=lambda item: (item[1], _natural_node_key(item[0], label_map)),
+    )
+    original_center = sum(x for _, x in ordered) / len(ordered)
+    separated = []
+    previous_x = None
+    for node, x in ordered:
+        if previous_x is not None and x < previous_x + min_spacing:
+            x = previous_x + min_spacing
+        separated.append((node, x))
+        previous_x = x
+
+    new_center = sum(x for _, x in separated) / len(separated)
+    shift = original_center - new_center
+    return [(node, x + shift) for node, x in separated]
+
+
+def _graphviz_harris_layout(graph, label_map):
+    if graph.number_of_nodes() == 0:
+        return {}
+
+    dot_graph = nx.DiGraph()
+    dot_graph.graph["graph"] = {
+        "rankdir": "TB",
+        "nodesep": "0.7",
+        "ranksep": "0.55",
+        "splines": "line",
+    }
+    dot_graph.graph["node"] = {
+        "shape": "box",
+        "fixedsize": "true",
+        "width": "0.9",
+        "height": "0.45",
+    }
+
+    for node in graph.nodes:
+        dot_graph.add_node(node, label=label_map.get(node, str(node)))
+    dot_graph.add_edges_from(graph.edges)
+
+    try:
+        raw_positions = nx.drawing.nx_pydot.graphviz_layout(dot_graph, prog="dot")
+    except Exception as exc:
+        logger.info(f"Graphviz Harris layout unavailable, using fallback layout: {exc}")
+        return None
+
+    if len(raw_positions) != graph.number_of_nodes():
+        return None
+
+    xs = [float(point[0]) for point in raw_positions.values()]
+    center_x = (min(xs) + max(xs)) / 2
+    scale = 72.0
+
+    return {
+        node: ((float(point[0]) - center_x) / scale, float(point[1]) / scale)
+        for node, point in raw_positions.items()
+    }
+
+
+def _harris_matrix_layout(graph, label_map):
+    positions = _graphviz_harris_layout(graph, label_map)
+    if positions is not None:
+        return positions
+    return _fallback_harris_layout(graph, label_map)
+
+
+def _harris_figure_size(positions):
+    if not positions:
+        return (6, 4)
+
+    xs = [point[0] for point in positions.values()]
+    ys = [point[1] for point in positions.values()]
+    width = max(xs) - min(xs)
+    height = max(ys) - min(ys)
+    return (
+        min(max(width * 1.6 + 3, 7), 18),
+        min(max(height * 1.3 + 2.5, 5), 24),
+    )
+
+
+def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
+    obj_to_reps = {}
+    for sj_id, obj_id in sj_obj_rows:
+        if obj_id is None:
+            continue
+        rep = dsu.find(int(sj_id))
+        obj_to_reps.setdefault(obj_id, set()).add(rep)
+
+    for oid, typ, _ in sorted(obj_rows, key=lambda row: row[0]):
+        reps = [rep for rep in obj_to_reps.get(oid, set()) if rep in positions]
+        if not reps:
+            continue
+
+        xs = [positions[rep][0] for rep in reps]
+        ys = [positions[rep][1] for rep in reps]
+        pad_x = 0.65
+        pad_y = 0.45
+        x0, x1 = min(xs) - pad_x, max(xs) + pad_x
+        y0, y1 = min(ys) - pad_y, max(ys) + pad_y
+
+        rect = mpatches.FancyBboxPatch(
+            (x0, y0),
+            x1 - x0,
+            y1 - y0,
+            boxstyle="round,pad=0.02,rounding_size=0.04",
+            linewidth=1.0,
+            edgecolor="#767676",
+            facecolor="none",
+            alpha=0.55,
+            zorder=0,
+        )
+        ax.add_patch(rect)
+
+        label = f"Obj {oid}" + (f" ({typ})" if typ else "")
+        ax.text(
+            x1 - 0.05,
+            y1 - 0.05,
+            label,
+            ha="right",
+            va="top",
+            fontsize=9,
+            color="#333333",
+            zorder=3,
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
+        )
+
+
+def _draw_harris_nodes(ax, positions, label_map, node_type_map, color_map):
+    for node, (x, y) in positions.items():
+        label = label_map.get(node, str(node))
+        width = max(0.82, 0.18 * len(label) + 0.48)
+        height = 0.46
+        node_type = node_type_map.get(node, "")
+
+        rect = mpatches.Rectangle(
+            (x - width / 2, y - height / 2),
+            width,
+            height,
+            facecolor=color_map.get(node_type, "#E9E9E9"),
+            edgecolor="#555555",
+            linewidth=0.9,
+            zorder=5,
+        )
+        ax.add_patch(rect)
+        ax.text(
+            x,
+            y,
+            label,
+            ha="center",
+            va="center",
+            fontsize=10,
+            color="#1f1f1f",
+            zorder=6,
+        )
+
+
+def _save_harris_matrix_image(
+    graph,
+    positions,
+    label_map,
+    node_type_map,
+    color_map,
+    filepath,
+    *,
+    draw_objects=False,
+    obj_rows=None,
+    sj_obj_rows=None,
+    dsu=None,
+):
+    fig, ax = plt.subplots(figsize=_harris_figure_size(positions))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    ax.axis("off")
+
+    if draw_objects and obj_rows and sj_obj_rows and dsu:
+        _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu)
+
+    for source, target in graph.edges:
+        x0, y0 = positions[source]
+        x1, y1 = positions[target]
+        ax.plot([x0, x1], [y0, y1], color="#202020", linewidth=1.2, zorder=1)
+
+    _draw_harris_nodes(ax, positions, label_map, node_type_map, color_map)
+
+    if positions:
+        xs = [point[0] for point in positions.values()]
+        ys = [point[1] for point in positions.values()]
+        ax.set_xlim(min(xs) - 1.0, max(xs) + 1.0)
+        ax.set_ylim(min(ys) - 0.8, max(ys) + 0.8)
+        ax.set_aspect("equal", adjustable="box")
+
+    fig.savefig(filepath, format="png", bbox_inches="tight", dpi=180)
+    plt.close(fig)
+
+
 @su_bp.route("/generate-harrismatrix", methods=["POST"])
 @require_selected_db
 def generate_harrismatrix():
@@ -896,155 +1267,61 @@ def generate_harrismatrix():
         flash("No terrain DB selected.", "danger")
         return redirect(url_for("su.harrismatrix"))
 
-    deposit_color = (request.form.get("deposit_color") or "#ADD8E6").strip()
-    negative_color = (request.form.get("negative_color") or "#90EE90").strip()
-    structure_color = (request.form.get("structure_color") or "#FFD700").strip()
-
-    node_shape_req = (request.form.get("node_shape") or "circle").lower()
-    node_shape = "o" if node_shape_req == "circle" else "s"
+    color_map = {
+        "deposit": _color_or_default(request.form.get("deposit_color"), "#ADD8E6"),
+        "negativ": _color_or_default(request.form.get("negative_color"), "#90EE90"),
+        "negative": _color_or_default(request.form.get("negative_color"), "#90EE90"),
+        "structure": _color_or_default(request.form.get("structure_color"), "#FFD700"),
+    }
     draw_objects = bool(request.form.get("draw_objects"))
 
     conn = None
     try:
         conn = get_terrain_connection(selected_db)
 
-        with conn.cursor() as cur:
-            rels = fetch_stratigraphy_relations(conn)
-            all_sj_rows = get_all_sj_with_types(conn)
+        rels = fetch_stratigraphy_relations(conn)
+        all_sj_rows = get_all_sj_with_types(conn)
+        harris_graph, label_map, node_type_map, dsu = _build_harris_matrix_data(
+            rels,
+            all_sj_rows,
+        )
 
-        all_sj = {int(r[0]) for r in all_sj_rows}
-        sj_type_map = {int(r[0]): (r[1] or "").lower() for r in all_sj_rows}
+        if harris_graph.number_of_nodes() == 0:
+            flash("No stratigraphic units found.", "warning")
+            return redirect(url_for("su.harrismatrix"))
 
-        # equality -> union-find
-        dsu = DSU()
-        for a, rel, b in rels:
-            if rel == "=":
-                dsu.union(int(a), int(b))
-
-        # groups (supernodes) + labels
-        groups = {}
-        for node in all_sj.union({int(a) for a, _, _ in rels}).union({int(b) for _, _, b in rels}):
-            rep = dsu.find(int(node))
-            groups.setdefault(rep, set()).add(int(node))
-        label_map = {rep: "=".join(map(str, sorted(members))) for rep, members in groups.items()}
-
-        def group_type(rep):
-            types = [sj_type_map.get(m, "") for m in groups[rep] if sj_type_map.get(m, "")]
-            return Counter(types).most_common(1)[0][0] if types else ""
-
-        # build DAG
-        G = nx.DiGraph()
-        G.add_nodes_from(groups.keys())
-        for a, rel, b in rels:
-            a, b = int(a), int(b)
-            if rel == "=":
-                continue
-            u, v = dsu.find(a), dsu.find(b)
-            if u == v:
-                continue
-            if rel == ">":
-                G.add_edge(u, v)
-            elif rel == "<":
-                G.add_edge(v, u)
-
-        # transitive reduction
-        try:
-            H = transitive_reduction(G)
-        except Exception:
-            H = G
-
-        # colors by type
-        node_colors = []
-        for n in H.nodes():
-            t = group_type(n)
-            if t == "deposit":
-                node_colors.append(deposit_color)
-            elif t == "negativ":
-                node_colors.append(negative_color)
-            elif t == "structure":
-                node_colors.append(structure_color)
-            else:
-                node_colors.append("#DDDDDD")
-
-        pos = nx.spring_layout(H, seed=42, k=1.0)
-
-        fig, ax = plt.subplots(figsize=(14, 10))
-        ax.axis("off")
-
-        # objects overlay (optional)
+        positions = _harris_matrix_layout(harris_graph, label_map)
+        obj_rows = []
+        sj_obj_rows = []
         if draw_objects:
             obj_rows = get_all_objects(conn)
             sj_obj_rows = get_sj_with_object_refs(conn)
-            obj_to_reps = {}
-            for sj_id, obj_id in sj_obj_rows:
-                if obj_id is None:
-                    continue
-                rep = dsu.find(int(sj_id))
-                obj_to_reps.setdefault(obj_id, set()).add(rep)
-
-            for oid, typ, _ in obj_rows:
-                reps = list(obj_to_reps.get(oid, set()))
-                if not reps:
-                    continue
-                xs = [pos[r][0] for r in reps if r in pos]
-                ys = [pos[r][1] for r in reps if r in pos]
-                if not xs or not ys:
-                    continue
-
-                pad = 0.15
-                x0, x1 = min(xs) - pad, max(xs) + pad
-                y0, y1 = min(ys) - pad, max(ys) + pad
-
-                rect = mpatches.FancyBboxPatch(
-                    (x0, y0),
-                    x1 - x0,
-                    y1 - y0,
-                    boxstyle="round,pad=0.02,rounding_size=0.03",
-                    linewidth=1.2,
-                    edgecolor="#555",
-                    facecolor="none",
-                    alpha=0.5,
-                    zorder=0,
-                )
-                ax.add_patch(rect)
-
-                label = f"Obj {oid}" + (f" ({typ})" if typ else "")
-                ax.text(
-                    x1 - 0.02,
-                    y1 - 0.02,
-                    label,
-                    ha="right",
-                    va="top",
-                    fontsize=10,
-                    color="#222",
-                    zorder=3,
-                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="none", alpha=0.75),
-                )
-
-        nx.draw(
-            H,
-            pos,
-            with_labels=False,
-            node_color=node_colors,
-            node_size=1800,
-            arrows=False,
-            node_shape=node_shape,
-            ax=ax,
-        )
-        nx.draw_networkx_labels(H, pos, labels={n: label_map.get(n, str(n)) for n in H.nodes()}, font_size=10, ax=ax)
-        nx.draw_networkx_edges(H, pos, arrows=False, ax=ax)
 
         images_dir, _ = get_hmatrix_dirs(selected_db)
         os.makedirs(images_dir, exist_ok=True)
         filename = f"{selected_db}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(images_dir, filename)
-        plt.savefig(filepath, format="png", bbox_inches="tight")
-        plt.close()
+        _save_harris_matrix_image(
+            harris_graph,
+            positions,
+            label_map,
+            node_type_map,
+            color_map,
+            filepath,
+            draw_objects=draw_objects,
+            obj_rows=obj_rows,
+            sj_obj_rows=sj_obj_rows,
+            dsu=dsu,
+        )
 
         session["harrismatrix_image"] = filename
         flash("Harris Matrix was generated.", "success")
         return redirect(url_for("su.harrismatrix"))
 
+    except ValueError as e:
+        logger.warning(f"[{selected_db}] Invalid Harris Matrix data: {e}")
+        flash(str(e), "danger")
+        return redirect(url_for("su.harrismatrix"))
     except Exception as e:
         logger.error(f"[{selected_db}] Error while generating Harris Matrix: {e}")
         flash(f"Error while generating Harris Matrix: {str(e)}", "danger")

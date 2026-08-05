@@ -150,7 +150,7 @@
         const wrap = document.createElement("div");
         wrap.className = "input-group mb-2 sj-input";
         wrap.innerHTML = `
-          <input type="number" name="sj_ids[]" class="form-control" placeholder="Zadej ID SJ" required>
+          <input type="number" name="sj_ids[]" class="form-control" placeholder="Define Sus of object" required>
           <button type="button" class="btn btn-outline-danger remove-sj">×</button>
         `;
         sjContainer.appendChild(wrap);
