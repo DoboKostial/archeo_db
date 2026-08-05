@@ -49,6 +49,55 @@
     return text.replace(/[&<>"']/g, (ch) => chars[ch]);
   }
 
+  function csrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+  }
+
+  function showEditError(error, fallback) {
+    const el = byId("editErr");
+    if (!el) {
+      alert(error?.message || fallback);
+      return;
+    }
+    el.textContent = error?.message || fallback;
+    el.classList.remove("d-none");
+  }
+
+  async function requestJson(url, options = {}) {
+    const method = (options.method || "GET").toUpperCase();
+    const headers = new Headers(options.headers || {});
+    headers.set("Accept", "application/json");
+
+    if (method !== "GET" && method !== "HEAD") {
+      const token = csrfToken();
+      if (token) headers.set("X-CSRFToken", token);
+      headers.set("X-Requested-With", "XMLHttpRequest");
+    }
+
+    const res = await fetch(url, {
+      ...options,
+      method,
+      headers,
+      credentials: "same-origin"
+    });
+
+    const text = await res.text();
+    let data = null;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch (_e) {
+        data = null;
+      }
+    }
+
+    if (!res.ok) {
+      throw new Error(data?.error || data?.description || text || `Request failed (${res.status})`);
+    }
+
+    return data || {};
+  }
+
   function getFilters() {
     return {
       code: fieldValue("filterCode"),
@@ -67,9 +116,7 @@
 
   async function fetchGeoJSON(url, params) {
     const qs = new URLSearchParams(params);
-    const res = await fetch(`${url}?${qs.toString()}`);
-    if (!res.ok) throw new Error(await res.text());
-    return await res.json();
+    return requestJson(`${url}?${qs.toString()}`);
   }
 
   function removeLayer(layer) {
@@ -219,8 +266,7 @@
       id_to: fieldValue("modalTo"),
       limit: 1000
     });
-    const res = await fetch(`${EP.list}?${qs.toString()}`);
-    const data = await res.json();
+    const data = await requestJson(`${EP.list}?${qs.toString()}`);
     if (!data.ok) throw new Error(data.error || "list failed");
 
     const tb = byId("geoptsTbody");
@@ -245,8 +291,7 @@
 
   async function doDelete(id) {
     if (!confirm(`Delete point ID ${id}?`)) return;
-    const res = await fetch(`${EP.delBase}/${id}`, { method: "POST" });
-    const data = await res.json();
+    const data = await requestJson(`${EP.delBase}/${id}`, { method: "POST" });
     if (!data.ok) throw new Error(data.error || "delete failed");
     await modalReload();
     await reloadAll();
@@ -275,17 +320,14 @@
       notes: fieldValue("editNotes")
     };
 
-    const res = await fetch(`${EP.updBase}/${id}`, {
+    const data = await requestJson(`${EP.updBase}/${id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
     if (!data.ok) {
-      const el = byId("editErr");
-      el.textContent = data.error || "update failed";
-      el.classList.remove("d-none");
+      showEditError(new Error(data.error || "update failed"), "Update failed.");
       return;
     }
 
@@ -297,8 +339,7 @@
 
   async function setInitialView() {
     try {
-      const res = await fetch(EP.extent);
-      const data = await res.json();
+      const data = await requestJson(EP.extent);
 
       if (data.ok && data.bbox) {
         const [minx, miny, maxx, maxy] = data.bbox;
@@ -344,7 +385,10 @@
       if (!id) return;
 
       if (action === "del") {
-        await doDelete(id).catch(console.error);
+        await doDelete(id).catch((error) => {
+          console.error(error);
+          alert(error?.message || "Delete failed.");
+        });
         return;
       }
 
@@ -355,14 +399,16 @@
           id_to: fieldValue("modalTo"),
           limit: 1000
         });
-        const res = await fetch(`${EP.list}?${qs.toString()}`);
-        const data = await res.json();
+        const data = await requestJson(`${EP.list}?${qs.toString()}`);
         const row = (data.rows || []).find((r) => String(r.id_pts) === String(id));
         if (row) openEdit(row);
       }
     });
     byId("btnSaveEdit")?.addEventListener("click", () => {
-      saveEdit().catch(console.error);
+      saveEdit().catch((error) => {
+        console.error(error);
+        showEditError(error, "Update failed.");
+      });
     });
   }
 

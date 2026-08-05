@@ -320,6 +320,10 @@ def delete_geopt(id_pts: int):
     try:
         with conn.cursor() as cur:
             cur.execute(delete_geopt_sql(), (id_pts,))
+            deleted = cur.rowcount
+        if deleted == 0:
+            conn.rollback()
+            return jsonify({"ok": False, "error": "Point not found."}), 404
         conn.commit()
         logger.info(f"[{selected_db}] geodesy delete id_pts={id_pts}")
         return jsonify({"ok": True})
@@ -356,6 +360,10 @@ def update_geopt(id_pts: int):
         with conn.cursor() as cur:
             # update_geopt_sql uses code 3x
             cur.execute(update_geopt_sql(), (x, y, h, code, code, code, notes, id_pts))
+            updated = cur.rowcount
+        if updated == 0:
+            conn.rollback()
+            return jsonify({"ok": False, "error": "Point not found."}), 404
         conn.commit()
         logger.info(f"[{selected_db}] geodesy update id_pts={id_pts}")
         return jsonify({"ok": True})
