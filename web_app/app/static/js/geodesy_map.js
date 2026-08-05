@@ -2,7 +2,7 @@
 
 (() => {
   const EP = window.GEODESY?.endpoints;
-  if (!EP) return;
+  if (!EP || typeof L === "undefined") return;
 
   const codeColors = {
     SU: "#1f77b4",
@@ -12,24 +12,50 @@
     NI: "#9467bd",
     PF: "#8c564b",
     SP: "#7f7f7f",
-    "":  "#111111",
+    "": "#111111",
     null: "#111111",
     undefined: "#111111"
   };
 
   let map = null;
-  let layerPts = L.geoJSON(null);
-  let layerPolys = L.geoJSON(null);
-  let layerPhotos = L.geoJSON(null);
+  let layerPts = null;
+  let layerPolys = null;
+  let layerPhotos = null;
+  let reloadTimer = null;
+  let reloadGeneration = 0;
+  let initialized = false;
 
-  let _timer = null;
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function fieldValue(id) {
+    return byId(id)?.value || "";
+  }
+
+  function isChecked(id) {
+    return Boolean(byId(id)?.checked);
+  }
+
+  function escapeHtml(value) {
+    const text = String(value ?? "");
+    const chars = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return text.replace(/[&<>"']/g, (ch) => chars[ch]);
+  }
 
   function getFilters() {
-    const code = document.getElementById("filterCode").value || "";
-    const q = document.getElementById("filterQ").value || "";
-    const id_from = document.getElementById("filterIdFrom").value || "";
-    const id_to = document.getElementById("filterIdTo").value || "";
-    return { code, q, id_from, id_to };
+    return {
+      code: fieldValue("filterCode"),
+      q: fieldValue("filterQ"),
+      id_from: fieldValue("filterIdFrom"),
+      id_to: fieldValue("filterIdTo")
+    };
   }
 
   function buildBboxParam() {
@@ -46,28 +72,40 @@
     return await res.json();
   }
 
-  function scheduleReload() {
-    if (_timer) clearTimeout(_timer);
-    _timer = setTimeout(reloadAll, 200);
+  function removeLayer(layer) {
+    if (layer && map?.hasLayer(layer)) {
+      map.removeLayer(layer);
+    }
   }
 
-  async function reloadPoints() {
+  function replaceLayer(oldLayer, newLayer) {
+    removeLayer(oldLayer);
+    newLayer.addTo(map);
+    return newLayer;
+  }
+
+  function scheduleReload() {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => {
+      reloadTimer = null;
+      reloadAll();
+    }, 200);
+  }
+
+  async function reloadPoints(generation) {
     const bbox = buildBboxParam();
     const f = getFilters();
-
-    const params = {
+    const gj = await fetchGeoJSON(EP.geopts, {
       bbox,
-      code: f.code || "",
-      q: f.q || "",
-      id_from: f.id_from || "",
-      id_to: f.id_to || "",
+      code: f.code,
+      q: f.q,
+      id_from: f.id_from,
+      id_to: f.id_to,
       limit: 5000
-    };
+    });
+    if (generation !== reloadGeneration) return;
 
-    const gj = await fetchGeoJSON(EP.geopts, params);
-    layerPts.clearLayers();
-
-    layerPts = L.geoJSON(gj, {
+    layerPts = replaceLayer(layerPts, L.geoJSON(gj, {
       pointToLayer: (feature, latlng) => {
         const code = feature?.properties?.code || "";
         const color = codeColors[code] || "#111111";
@@ -75,60 +113,57 @@
           radius: 5,
           weight: 1,
           fillOpacity: 0.85,
-          color: color
+          color
         });
       },
       onEachFeature: (feature, layer) => {
         const p = feature.properties || {};
-        const html = `
+        layer.bindPopup(`
           <div>
-            <strong>ID:</strong> ${p.id_pts ?? ""}<br>
-            <strong>Code:</strong> ${p.code ?? ""}<br>
-            <strong>Notes:</strong> ${(p.notes ?? "")}
+            <strong>ID:</strong> ${escapeHtml(p.id_pts)}<br>
+            <strong>Code:</strong> ${escapeHtml(p.code)}<br>
+            <strong>Notes:</strong> ${escapeHtml(p.notes)}
           </div>
-        `;
-        layer.bindPopup(html);
+        `);
       }
-    });
-
-    layerPts.addTo(map);
+    }));
   }
 
-  async function reloadPolygons() {
-    const chk = document.getElementById("chkPolys").checked;
-    if (!chk) {
-      layerPolys.clearLayers();
+  async function reloadPolygons(generation) {
+    if (generation !== reloadGeneration) return;
+    if (!isChecked("chkPolys")) {
+      removeLayer(layerPolys);
+      layerPolys = null;
       return;
     }
 
     const bbox = buildBboxParam();
     const gj = await fetchGeoJSON(EP.polys, { bbox, limit: 2000 });
+    if (generation !== reloadGeneration) return;
 
-    layerPolys.clearLayers();
-    layerPolys = L.geoJSON(gj, {
+    layerPolys = replaceLayer(layerPolys, L.geoJSON(gj, {
       style: () => ({ weight: 2, fillOpacity: 0.05 }),
       onEachFeature: (feature, layer) => {
         const name = feature?.properties?.polygon_name || "";
-        layer.bindPopup(`<strong>Polygon:</strong> ${name}`);
+        layer.bindPopup(`<strong>Polygon:</strong> ${escapeHtml(name)}`);
       }
-    });
-
-    layerPolys.addTo(map);
+    }));
   }
 
-  async function reloadPhotos() {
-    const chk = document.getElementById("chkPhotos").checked;
-    if (!chk) {
-      layerPhotos.clearLayers();
+  async function reloadPhotos(generation) {
+    if (generation !== reloadGeneration) return;
+    if (!isChecked("chkPhotos")) {
+      removeLayer(layerPhotos);
+      layerPhotos = null;
       return;
     }
 
     const bbox = buildBboxParam();
     const gj = await fetchGeoJSON(EP.photos, { bbox, limit: 5000 });
+    if (generation !== reloadGeneration) return;
 
-    layerPhotos.clearLayers();
-    layerPhotos = L.geoJSON(gj, {
-      pointToLayer: (feature, latlng) => {
+    layerPhotos = replaceLayer(layerPhotos, L.geoJSON(gj, {
+      pointToLayer: (_feature, latlng) => {
         return L.circleMarker(latlng, {
           radius: 4,
           weight: 1,
@@ -137,58 +172,79 @@
       },
       onEachFeature: (feature, layer) => {
         const p = feature?.properties || {};
-        layer.bindPopup(`<strong>Photo:</strong> ${p.id_foto ?? ""}<br>${p.file_name ?? ""}<br>alt: ${p.gps_alt ?? ""}`);
+        layer.bindPopup(`
+          <strong>Photo:</strong> ${escapeHtml(p.id_foto)}<br>
+          ${escapeHtml(p.file_name)}<br>
+          alt: ${escapeHtml(p.gps_alt)}
+        `);
       }
-    });
-
-    layerPhotos.addTo(map);
+    }));
   }
 
   async function reloadAll() {
+    if (!map) return;
+    const generation = ++reloadGeneration;
     try {
-      await reloadPoints();
-      await reloadPolygons();
-      await reloadPhotos();
+      await Promise.all([
+        reloadPoints(generation),
+        reloadPolygons(generation),
+        reloadPhotos(generation)
+      ]);
     } catch (e) {
       console.error("reloadAll failed", e);
     }
   }
 
-  // ----- Modal listing (CRUD) -----
+  function appendTextCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value ?? "";
+    row.appendChild(cell);
+    return cell;
+  }
+
+  function actionButton(label, action, id, className) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.dataset.action = action;
+    button.dataset.id = id;
+    button.textContent = label;
+    return button;
+  }
 
   async function modalReload() {
-    const q = document.getElementById("modalQ").value || "";
-    const id_from = document.getElementById("modalFrom").value || "";
-    const id_to = document.getElementById("modalTo").value || "";
-
-    const qs = new URLSearchParams({ q, id_from, id_to, limit: 1000 });
+    const qs = new URLSearchParams({
+      q: fieldValue("modalQ"),
+      id_from: fieldValue("modalFrom"),
+      id_to: fieldValue("modalTo"),
+      limit: 1000
+    });
     const res = await fetch(`${EP.list}?${qs.toString()}`);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "list failed");
 
-    const tb = document.getElementById("geoptsTbody");
-    tb.innerHTML = "";
+    const tb = byId("geoptsTbody");
+    tb.textContent = "";
 
-    for (const r of data.rows) {
+    for (const r of data.rows || []) {
       const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${r.id_pts}</td>
-        <td>${r.x}</td>
-        <td>${r.y}</td>
-        <td>${r.h}</td>
-        <td>${r.code ?? ""}</td>
-        <td>${r.notes ?? ""}</td>
-        <td>
-          <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${r.id_pts}">Edit</button>
-          <button class="btn btn-sm btn-outline-danger" data-action="del" data-id="${r.id_pts}">Delete</button>
-        </td>
-      `;
+      appendTextCell(tr, r.id_pts);
+      appendTextCell(tr, r.x);
+      appendTextCell(tr, r.y);
+      appendTextCell(tr, r.h);
+      appendTextCell(tr, r.code);
+      appendTextCell(tr, r.notes);
+
+      const actions = document.createElement("td");
+      actions.appendChild(actionButton("Edit", "edit", r.id_pts, "btn btn-sm btn-outline-primary me-1"));
+      actions.appendChild(actionButton("Delete", "del", r.id_pts, "btn btn-sm btn-outline-danger"));
+      tr.appendChild(actions);
       tb.appendChild(tr);
     }
   }
 
   async function doDelete(id) {
-    if (!confirm(`Smazat bod ID ${id}?`)) return;
+    if (!confirm(`Delete point ID ${id}?`)) return;
     const res = await fetch(`${EP.delBase}/${id}`, { method: "POST" });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "delete failed");
@@ -197,26 +253,26 @@
   }
 
   function openEdit(row) {
-    document.getElementById("editErr").classList.add("d-none");
-    document.getElementById("editId").value = row.id_pts;
-    document.getElementById("editX").value = row.x;
-    document.getElementById("editY").value = row.y;
-    document.getElementById("editH").value = row.h;
-    document.getElementById("editCode").value = row.code || "";
-    document.getElementById("editNotes").value = row.notes || "";
+    byId("editErr").classList.add("d-none");
+    byId("editId").value = row.id_pts;
+    byId("editX").value = row.x;
+    byId("editY").value = row.y;
+    byId("editH").value = row.h;
+    byId("editCode").value = row.code || "";
+    byId("editNotes").value = row.notes || "";
 
-    const m = new bootstrap.Modal(document.getElementById("editPointModal"));
-    m.show();
+    const modal = new bootstrap.Modal(byId("editPointModal"));
+    modal.show();
   }
 
   async function saveEdit() {
-    const id = document.getElementById("editId").value;
+    const id = fieldValue("editId");
     const payload = {
-      x: document.getElementById("editX").value,
-      y: document.getElementById("editY").value,
-      h: document.getElementById("editH").value,
-      code: document.getElementById("editCode").value,
-      notes: document.getElementById("editNotes").value
+      x: fieldValue("editX"),
+      y: fieldValue("editY"),
+      h: fieldValue("editH"),
+      code: fieldValue("editCode"),
+      notes: fieldValue("editNotes")
     };
 
     const res = await fetch(`${EP.updBase}/${id}`, {
@@ -227,107 +283,109 @@
 
     const data = await res.json();
     if (!data.ok) {
-      const el = document.getElementById("editErr");
+      const el = byId("editErr");
       el.textContent = data.error || "update failed";
       el.classList.remove("d-none");
       return;
     }
 
-    bootstrap.Modal.getInstance(document.getElementById("editPointModal")).hide();
+    const modal = bootstrap.Modal.getInstance(byId("editPointModal"));
+    if (modal) modal.hide();
     await modalReload();
     await reloadAll();
   }
 
+  async function setInitialView() {
+    try {
+      const res = await fetch(EP.extent);
+      const data = await res.json();
 
-// This has to be ABOVE initMap (same level as other functions)
-async function setInitialView() {
-  try {
-    const res = await fetch(EP.extent);
-    const data = await res.json();
-
-    if (data.ok && data.bbox) {
-      const [minx, miny, maxx, maxy] = data.bbox;
-
-      const bounds = L.latLngBounds(
-        [miny, minx],   // SW (lat, lon)
-        [maxy, maxx]    // NE (lat, lon)
-      );
-
-      map.fitBounds(bounds, { padding: [20, 20] });
-      return;
+      if (data.ok && data.bbox) {
+        const [minx, miny, maxx, maxy] = data.bbox;
+        const bounds = L.latLngBounds(
+          [miny, minx],
+          [maxy, maxx]
+        );
+        map.fitBounds(bounds, { padding: [20, 20] });
+        return;
+      }
+    } catch (e) {
+      console.error("extent fetch failed", e);
     }
-  } catch (e) {
-    console.error("extent fetch failed", e);
+
+    map.setView([49.0, 15.0], 6);
   }
 
-  // fallback when no points exist or request fails
-  map.setView([49.0, 15.0], 6);
-}
+  function bindMapEvents() {
+    map.on("moveend", scheduleReload);
 
+    byId("chkPolys")?.addEventListener("change", reloadAll);
+    byId("chkPhotos")?.addEventListener("change", reloadAll);
+    byId("btnReload")?.addEventListener("click", reloadAll);
+    byId("filterCode")?.addEventListener("change", reloadAll);
+    byId("filterQ")?.addEventListener("input", scheduleReload);
+    byId("filterIdFrom")?.addEventListener("input", scheduleReload);
+    byId("filterIdTo")?.addEventListener("input", scheduleReload);
+  }
 
-// ----- init -----
-async function initMap() {
-  map = L.map("geodesyMap");
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 20,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
+  function bindModalEvents() {
+    byId("geoptsModal")?.addEventListener("shown.bs.modal", () => {
+      modalReload().catch(console.error);
+    });
+    byId("btnModalReload")?.addEventListener("click", () => {
+      modalReload().catch(console.error);
+    });
+    byId("geoptsTbody")?.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
 
-  // center map to points extent (or fallback)
-  await setInitialView();
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
+      if (!id) return;
 
-  map.on("moveend", scheduleReload);
+      if (action === "del") {
+        await doDelete(id).catch(console.error);
+        return;
+      }
 
-  document.getElementById("chkPolys").addEventListener("change", reloadAll);
-  document.getElementById("chkPhotos").addEventListener("change", reloadAll);
-  document.getElementById("btnReload").addEventListener("click", reloadAll);
+      if (action === "edit") {
+        const qs = new URLSearchParams({
+          q: fieldValue("modalQ"),
+          id_from: fieldValue("modalFrom"),
+          id_to: fieldValue("modalTo"),
+          limit: 1000
+        });
+        const res = await fetch(`${EP.list}?${qs.toString()}`);
+        const data = await res.json();
+        const row = (data.rows || []).find((r) => String(r.id_pts) === String(id));
+        if (row) openEdit(row);
+      }
+    });
+    byId("btnSaveEdit")?.addEventListener("click", () => {
+      saveEdit().catch(console.error);
+    });
+  }
 
-  document.getElementById("filterCode").addEventListener("change", reloadAll);
-  document.getElementById("filterQ").addEventListener("input", scheduleReload);
-  document.getElementById("filterIdFrom").addEventListener("input", scheduleReload);
-  document.getElementById("filterIdTo").addEventListener("input", scheduleReload);
+  async function initMap() {
+    if (initialized) return;
+    initialized = true;
 
-  reloadAll();
-}
+    const container = byId("geodesyMap");
+    if (!container) return;
 
-window.addEventListener("load", () => {
-  initMap().catch(console.error);
-});
+    map = L.map(container);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 20,
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
 
+    await setInitialView();
+    bindMapEvents();
+    bindModalEvents();
+    await reloadAll();
+  }
 
-  // Modal events
-  document.getElementById("geoptsModal").addEventListener("shown.bs.modal", () => {
-    modalReload().catch(console.error);
+  window.addEventListener("load", () => {
+    initMap().catch(console.error);
   });
-  document.getElementById("btnModalReload").addEventListener("click", () => {
-    modalReload().catch(console.error);
-  });
-
-  document.getElementById("geoptsTbody").addEventListener("click", async (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    const id = btn.getAttribute("data-id");
-    const action = btn.getAttribute("data-action");
-    if (!id) return;
-
-    if (action === "del") {
-      await doDelete(id).catch(console.error);
-    } else if (action === "edit") {
-      // load rows again quickly and pick one (simple approach)
-      const q = document.getElementById("modalQ").value || "";
-      const id_from = document.getElementById("modalFrom").value || "";
-      const id_to = document.getElementById("modalTo").value || "";
-      const qs = new URLSearchParams({ q, id_from, id_to, limit: 1000 });
-      const res = await fetch(`${EP.list}?${qs.toString()}`);
-      const data = await res.json();
-      const row = (data.rows || []).find(r => String(r.id_pts) === String(id));
-      if (row) openEdit(row);
-    }
-  });
-
-  document.getElementById("btnSaveEdit").addEventListener("click", () => {
-    saveEdit().catch(console.error);
-  });
-
-  window.addEventListener("load", initMap);
 })();

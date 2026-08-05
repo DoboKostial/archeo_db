@@ -250,7 +250,7 @@ def upload_polygons():
                 for (id_pts, x, y, h, code) in points:
                     cur.execute(
                         upsert_geopt_sql(),
-                        (x, y, h, epsg_code, int(target_srid), id_pts, h, code, code, code)
+                        (x, y, h, epsg_code, int(target_srid), id_pts, h, code, code, code, None)
                     )
                     points_done += 1
 

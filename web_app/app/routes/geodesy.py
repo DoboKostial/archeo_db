@@ -7,7 +7,6 @@ import io
 
 from flask import Blueprint, jsonify, render_template, request, flash, redirect, url_for, session
 
-from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db, float_or_none
@@ -142,6 +141,29 @@ def _parse_bbox(bbox_str: str):
     return minx, miny, maxx, maxy
 
 
+def _optional_int_arg(name: str) -> int | None:
+    raw = (request.args.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _limit_arg(default: int, maximum: int) -> int:
+    raw = (request.args.get("limit") or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if value < 1:
+        return default
+    return min(value, maximum)
+
+
 def _get_target_srid(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(find_geopts_srid_sql())
@@ -193,7 +215,11 @@ def upload_geopts():
             flash('Projektový SRID není nastaven (Find_SRID pro tab_geopts.pts_geom).', 'danger')
             return redirect(url_for('geodesy.geodesy'))
 
-        src_epsg = int(source_epsg) if source_epsg else int(target_srid)
+        try:
+            src_epsg = int(source_epsg) if source_epsg else int(target_srid)
+        except (TypeError, ValueError):
+            flash('Source EPSG must be an integer.', 'danger')
+            return redirect(url_for('geodesy.geodesy'))
 
         text = _read_text_file(file)
         pts = _parse_points(text)
@@ -208,14 +234,14 @@ def upload_geopts():
         with conn.cursor() as cur:
             for p in pts:
                 # upsert_geopt_sql expects code 3x (CASE uses it 3 times)
+                notes = (p.get('notes') or '').strip()
                 cur.execute(
                     sql,
                     (
                         p['x'], p['y'], p['h'], src_epsg, target_srid,
                         p['id_pts'], p['h'],
                         p.get('code'), p.get('code'), p.get('code'),
-                        # notes are not in current upsert_geopt_sql (your queries.py version)
-                        # If you extend SQL to include notes, append p.get('notes') here.
+                        notes,
                     ),
                 )
                 upserted += 1
@@ -244,12 +270,9 @@ def list_geopts():
     selected_db = session.get('selected_db')
 
     q = (request.args.get('q') or '').strip() or None
-    id_from = (request.args.get('id_from') or '').strip()
-    id_to = (request.args.get('id_to') or '').strip()
-    limit = int(request.args.get('limit') or 500)
-
-    id_from_v = int(id_from) if id_from else None
-    id_to_v = int(id_to) if id_to else None
+    id_from_v = _optional_int_arg('id_from')
+    id_to_v = _optional_int_arg('id_to')
+    limit = _limit_arg(default=500, maximum=5000)
     q_like = f"%{q}%" if q else None
 
     conn = get_terrain_connection(selected_db)
@@ -363,12 +386,9 @@ def geopts_geojson():
 
     code = (request.args.get('code') or '').strip().upper() or None
     q = (request.args.get('q') or '').strip() or None
-    id_from = (request.args.get('id_from') or '').strip()
-    id_to = (request.args.get('id_to') or '').strip()
-    limit = int(request.args.get('limit') or 5000)
-
-    id_from_v = int(id_from) if id_from else None
-    id_to_v = int(id_to) if id_to else None
+    id_from_v = _optional_int_arg('id_from')
+    id_to_v = _optional_int_arg('id_to')
+    limit = _limit_arg(default=5000, maximum=20000)
     q_like = f"%{q}%" if q else None
 
     conn = get_terrain_connection(selected_db)
@@ -415,7 +435,7 @@ def polygons_geojson():
     if not bbox:
         return jsonify({"type": "FeatureCollection", "features": []})
 
-    limit = int(request.args.get('limit') or 2000)
+    limit = _limit_arg(default=2000, maximum=10000)
 
     conn = get_terrain_connection(selected_db)
     try:
@@ -453,7 +473,7 @@ def photos_geojson():
     if not bbox:
         return jsonify({"type": "FeatureCollection", "features": []})
 
-    limit = int(request.args.get('limit') or 5000)
+    limit = _limit_arg(default=5000, maximum=20000)
 
     conn = get_terrain_connection(selected_db)
     try:

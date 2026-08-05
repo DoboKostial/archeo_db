@@ -1527,7 +1527,7 @@ def sections_lines_geojson_4326_sql():
 def upsert_geopt_sql():
     """
     Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.
-    Params: (x_src, y_src, h_src, source_epsg, target_srid, id_pts, h_src, code)
+    Params: (x_src, y_src, h_src, source_epsg, target_srid, id_pts, h_src, code, code, code, notes)
     Note: Z (h) is stored as provided (no vertical transform).
     """
     return """
@@ -1537,7 +1537,7 @@ def upsert_geopt_sql():
                        %s
                    ) AS g
         )
-        INSERT INTO tab_geopts (id_pts, x, y, h, code)
+        INSERT INTO tab_geopts (id_pts, x, y, h, code, notes)
         SELECT
             %s,
             ST_X(p.g),
@@ -1548,13 +1548,15 @@ def upsert_geopt_sql():
               WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
                 THEN UPPER(BTRIM(%s))::geopt_code
               ELSE NULL
-            END
+            END,
+            NULLIF(BTRIM(%s), '')
         FROM p
         ON CONFLICT (id_pts) DO UPDATE SET
             x    = EXCLUDED.x,
             y    = EXCLUDED.y,
             h    = EXCLUDED.h,
-            code = EXCLUDED.code;
+            code = EXCLUDED.code,
+            notes = COALESCE(EXCLUDED.notes, tab_geopts.notes);
     """
 
 
