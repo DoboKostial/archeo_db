@@ -1491,6 +1491,39 @@ def sections_lines_geojson_sql():
     """
 
 
+def sections_lines_geojson_4326_sql():
+    """
+    Returns (id_section, line_geojson) for ALL sections transformed to EPSG:4326 for Leaflet.
+    Line is built ascending by id_pts, duplicates removed.
+    """
+    return """
+        WITH pts AS (
+            SELECT
+                b.ref_section::int4 AS id_section,
+                g.id_pts,
+                g.pts_geom
+            FROM tab_section_geopts_binding b
+            JOIN tab_geopts g
+              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
+        ),
+        dpts AS (
+            SELECT DISTINCT ON (id_section, id_pts)
+                id_section, id_pts, pts_geom
+            FROM pts
+            ORDER BY id_section, id_pts
+        )
+        SELECT
+            id_section,
+            CASE
+              WHEN COUNT(*) < 2 THEN NULL
+              ELSE ST_AsGeoJSON(ST_Transform(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)), 4326))
+            END AS line_gj
+        FROM dpts
+        GROUP BY id_section
+        ORDER BY id_section;
+    """
+
+
 def upsert_geopt_sql():
     """
     Upsert into tab_geopts with XY transformed from source_epsg -> target_srid.

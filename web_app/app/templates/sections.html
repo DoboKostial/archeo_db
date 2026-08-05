@@ -144,6 +144,13 @@
               </button>
             </form>
 
+            <button type="button"
+                    class="btn btn-sm btn-outline-success"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalSectionsMapView">
+              Map view
+            </button>
+
             <a class="btn btn-sm btn-outline-success"
                href="{{ url_for('sections.download_sections') }}">
               Export SHP
@@ -161,7 +168,7 @@
                   <th>Description</th>
                   <th class="text-end" style="width:90px;">SRID</th>
                   <th class="text-end" style="width:150px;">POINT RANGES</th>
-                  <th class="text-end" style="width:200px;">NUMBER OF SUs SECTIONED</th>
+                  <th class="text-end" style="width:200px;">NUMBER OF SUs CUT</th>
                   <th class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
@@ -364,6 +371,235 @@
         });
       });
     })();
+  </script>
+
+  <!-- Map view modal -->
+  <div class="modal fade" id="modalSectionsMapView" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Sections map view</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="chkSectionsPolygons">
+              <label class="form-check-label" for="chkSectionsPolygons">polygons</label>
+            </div>
+            <div class="d-flex align-items-center flex-wrap gap-3 small">
+              <span><span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#0f766e;"></span>sections</span>
+              <span><span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#1f77b4;"></span>polygon TOP</span>
+              <span><span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background:#d62728;"></span>polygon BOTTOM</span>
+            </div>
+          </div>
+
+          <div id="sectionsMapView" style="height: 70vh; width: 100%; border: 1px solid #ddd; border-radius: 8px;"></div>
+        </div>
+
+        <div class="modal-footer">
+          <span class="text-muted me-auto" id="sectionsMapStatus">—</span>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let _sectionsMapView = null;
+    let _sectionsMapLayers = { sections: null, polygonTop: null, polygonBottom: null };
+    let _sectionsMapLayerCtrl = null;
+
+    function initSectionsMapView() {
+      if (_sectionsMapView) return _sectionsMapView;
+
+      _sectionsMapView = L.map('sectionsMapView', { preferCanvas: true });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 22,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(_sectionsMapView);
+
+      return _sectionsMapView;
+    }
+
+    function escapeMapHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
+    }
+
+    function clearSectionsMapView(map) {
+      Object.keys(_sectionsMapLayers).forEach(key => {
+        if (_sectionsMapLayers[key]) {
+          map.removeLayer(_sectionsMapLayers[key]);
+          _sectionsMapLayers[key] = null;
+        }
+      });
+
+      if (_sectionsMapLayerCtrl) {
+        map.removeControl(_sectionsMapLayerCtrl);
+        _sectionsMapLayerCtrl = null;
+      }
+    }
+
+    function addLayerBounds(bounds, layer) {
+      if (layer && layer.getLayers().length) {
+        bounds.push(layer.getBounds());
+      }
+    }
+
+    function fitSectionsMap(map, bounds) {
+      if (!bounds.length) {
+        map.setView([0, 0], 2);
+        return;
+      }
+
+      let merged = bounds[0];
+      for (let i = 1; i < bounds.length; i += 1) {
+        merged = merged.extend(bounds[i]);
+      }
+      map.fitBounds(merged.pad(0.05));
+    }
+
+    function sectionFeatureCollection(rows) {
+      const features = [];
+      (rows || []).forEach(item => {
+        if (!item.geojson) return;
+        features.push({
+          type: 'Feature',
+          properties: { id: item.id },
+          geometry: item.geojson
+        });
+      });
+      return { type: 'FeatureCollection', features };
+    }
+
+    function polygonFeatureCollection(rows, side) {
+      const features = [];
+      (rows || []).forEach(item => {
+        if (!item.geojson) return;
+        features.push({
+          type: 'Feature',
+          properties: { name: item.name, side },
+          geometry: item.geojson
+        });
+      });
+      return { type: 'FeatureCollection', features };
+    }
+
+    async function addPolygonLayersToSectionsMap(map, overlays, bounds) {
+      const resp = await fetch('{{ url_for("polygons.polygons_geojson") }}?mode=all', { cache: 'no-store' });
+      if (!resp.ok) throw new Error('Failed to fetch polygons geojson');
+
+      const data = await resp.json();
+      const topCollection = polygonFeatureCollection(data.top || [], 'top');
+      const bottomCollection = polygonFeatureCollection(data.bottom || [], 'bottom');
+
+      _sectionsMapLayers.polygonTop = L.geoJSON(topCollection, {
+        style: { color: '#1f77b4', weight: 3, fillOpacity: 0.05 },
+        onEachFeature: (feature, layer) => {
+          const name = escapeMapHtml(feature.properties.name || '');
+          layer.bindPopup(`<strong>${name}</strong><br><small>TOP</small>`);
+        }
+      }).addTo(map);
+
+      _sectionsMapLayers.polygonBottom = L.geoJSON(bottomCollection, {
+        style: { color: '#d62728', weight: 3, fillOpacity: 0.05 },
+        onEachFeature: (feature, layer) => {
+          const name = escapeMapHtml(feature.properties.name || '');
+          layer.bindPopup(`<strong>${name}</strong><br><small>BOTTOM</small>`);
+        }
+      }).addTo(map);
+
+      overlays['Polygons TOP'] = _sectionsMapLayers.polygonTop;
+      overlays['Polygons BOTTOM'] = _sectionsMapLayers.polygonBottom;
+      addLayerBounds(bounds, _sectionsMapLayers.polygonTop);
+      addLayerBounds(bounds, _sectionsMapLayers.polygonBottom);
+
+      return {
+        top: topCollection.features.length,
+        bottom: bottomCollection.features.length
+      };
+    }
+
+    async function loadSectionsMapView() {
+      const statusEl = document.getElementById('sectionsMapStatus');
+      const showPolygons = document.getElementById('chkSectionsPolygons')?.checked;
+      statusEl.textContent = 'Loading...';
+
+      const map = initSectionsMapView();
+      clearSectionsMapView(map);
+
+      const sectionsResp = await fetch('{{ url_for("sections.sections_geojson") }}', { cache: 'no-store' });
+      if (!sectionsResp.ok) {
+        statusEl.textContent = 'Failed to load sections.';
+        throw new Error('Failed to fetch sections geojson');
+      }
+
+      const sectionsData = await sectionsResp.json();
+      const sectionsCollection = sectionFeatureCollection(sectionsData.sections || []);
+      const overlays = {};
+      const bounds = [];
+
+      _sectionsMapLayers.sections = L.geoJSON(sectionsCollection, {
+        style: { color: '#0f766e', weight: 4, opacity: 0.95 },
+        onEachFeature: (feature, layer) => {
+          const id = escapeMapHtml(feature.properties.id || '');
+          layer.bindPopup(`<strong>Section ${id}</strong>`);
+        }
+      }).addTo(map);
+
+      overlays.Sections = _sectionsMapLayers.sections;
+      addLayerBounds(bounds, _sectionsMapLayers.sections);
+
+      let polygonCounts = { top: 0, bottom: 0 };
+      let polygonLoadFailed = false;
+      if (showPolygons) {
+        try {
+          polygonCounts = await addPolygonLayersToSectionsMap(map, overlays, bounds);
+        } catch (err) {
+          polygonLoadFailed = true;
+          console.error(err);
+        }
+      }
+
+      _sectionsMapLayerCtrl = L.control.layers(null, overlays, { collapsed: false }).addTo(map);
+      fitSectionsMap(map, bounds);
+      setTimeout(() => map.invalidateSize(), 150);
+
+      const sectionsCount = sectionsCollection.features.length;
+      if (polygonLoadFailed) {
+        statusEl.textContent = `Sections: ${sectionsCount}; polygons failed to load.`;
+      } else if (showPolygons) {
+        statusEl.textContent = `Sections: ${sectionsCount}; polygons TOP: ${polygonCounts.top}, BOTTOM: ${polygonCounts.bottom}.`;
+      } else {
+        statusEl.textContent = sectionsCount ? `Sections: ${sectionsCount}.` : 'No sections to display.';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const modalEl = document.getElementById('modalSectionsMapView');
+      const polygonsToggle = document.getElementById('chkSectionsPolygons');
+
+      if (modalEl) {
+        modalEl.addEventListener('shown.bs.modal', () => {
+          loadSectionsMapView().catch(err => console.error(err));
+        });
+      }
+
+      if (polygonsToggle) {
+        polygonsToggle.addEventListener('change', () => {
+          if (_sectionsMapView) {
+            loadSectionsMapView().catch(err => console.error(err));
+          }
+        });
+      }
+    });
   </script>
 
 

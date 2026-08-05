@@ -8,7 +8,7 @@ import json
 import zipfile
 import shapefile
 
-from flask import Blueprint, request, render_template, redirect, url_for, flash, session, send_file
+from flask import Blueprint, request, render_template, redirect, url_for, flash, session, send_file, jsonify
 
 from config import Config
 from app.logger import logger
@@ -37,6 +37,7 @@ from app.queries import (
     find_geopts_srid_sql,
     srtext_by_srid_sql,
     sections_lines_geojson_sql,
+    sections_lines_geojson_4326_sql,
 
     # existence
     section_exists_sql,
@@ -322,6 +323,41 @@ def delete_section():
             pass
 
     return redirect(url_for("sections.sections"))
+
+
+# -------------------------
+# GEOJSON FOR MAP PREVIEW
+# -------------------------
+@sections_bp.route("/sections/geojson", methods=["GET"])
+@require_selected_db
+def sections_geojson():
+    selected_db = session.get("selected_db")
+    conn = get_terrain_connection(selected_db)
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sections_lines_geojson_4326_sql())
+            sections_rows = []
+            for id_section, line_gj in cur.fetchall():
+                if not line_gj:
+                    continue
+                sections_rows.append(
+                    {
+                        "id": id_section,
+                        "geojson": json.loads(line_gj),
+                    }
+                )
+
+        return jsonify({"sections": sections_rows})
+
+    except Exception as e:
+        logger.error(f"[{selected_db}] /sections/geojson error: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 # -------------------------
