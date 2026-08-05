@@ -523,6 +523,109 @@ def get_all_objects(conn):
     with conn.cursor() as cur:
         cur.execute("SELECT id_object, object_typ, superior_object FROM tab_object;")
         return cur.fetchall()
+
+
+def harris_su_detail_sql():
+    """
+    Return one SU detail row for the Harris Matrix modal.
+    Params: (id_sj,)
+    """
+    return """
+        SELECT
+            s.id_sj,
+            COALESCE(s.sj_typ, '') AS sj_typ,
+            COALESCE(s.description, '') AS description,
+            COALESCE(s.interpretation, '') AS interpretation,
+            s.recorded,
+            COALESCE(s.author, '') AS author,
+            COALESCE(s.docu_plan, false) AS docu_plan,
+            COALESCE(s.docu_vertical, false) AS docu_vertical,
+            s.excav_extent,
+            s.ref_object,
+
+            COALESCE(d.deposit_typ, '') AS deposit_typ,
+            COALESCE(d.color, '') AS color,
+            COALESCE(d.boundary_visibility, '') AS boundary_visibility,
+            COALESCE(d."structure", '') AS deposit_structure,
+            COALESCE(d.compactness, '') AS compactness,
+            COALESCE(d.deposit_removed, '') AS deposit_removed,
+
+            COALESCE(n.negativ_typ, '') AS negativ_typ,
+            COALESCE(n.ident_niveau_cut, false) AS ident_niveau_cut,
+            COALESCE(n.shape_plan, '') AS shape_plan,
+            COALESCE(n.shape_sides, '') AS shape_sides,
+            COALESCE(n.shape_bottom, '') AS shape_bottom,
+
+            COALESCE(st.structure_typ, '') AS structure_typ,
+            COALESCE(st.construction_typ, '') AS construction_typ,
+            COALESCE(st.binder, '') AS binder,
+            COALESCE(st.basic_material, '') AS basic_material,
+            st.length_m,
+            st.width_m,
+            st.height_m,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(x.ref_polygon ORDER BY x.ref_polygon)
+                FROM tabaid_sj_polygon x
+                WHERE x.ref_sj = s.id_sj
+              ),
+              ARRAY[]::text[]
+            ) AS polygon_names,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '>'
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '<'
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS above_ids,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '<'
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '>'
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS below_ids,
+
+            COALESCE(
+              (
+                SELECT ARRAY_AGG(val ORDER BY val)
+                FROM (
+                  SELECT r.ref_sj2 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj1 = s.id_sj AND r.relation = '='
+                  UNION
+                  SELECT r.ref_sj1 AS val
+                  FROM tab_sj_stratigraphy r
+                  WHERE r.ref_sj2 = s.id_sj AND r.relation = '='
+                ) q
+              ),
+              ARRAY[]::int[]
+            ) AS equal_ids
+        FROM tab_sj s
+        LEFT JOIN tab_sj_deposit d ON d.id_deposit = s.id_sj
+        LEFT JOIN tab_sj_negativ n ON n.id_negativ = s.id_sj
+        LEFT JOIN tab_sj_structure st ON st.id_structure = s.id_sj
+        WHERE s.id_sj = %s;
+    """
     
 
 

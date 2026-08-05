@@ -216,12 +216,69 @@
   padding-top: .25rem;
 }
 
+.hmatrix-image-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
 .hmatrix-image {
   display: block;
   max-width: 100%;
   height: auto;
   border: 1px solid var(--bs-border-color);
   background: #fff;
+}
+
+.hmatrix-hotspot {
+  position: absolute;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: .22rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hmatrix-hotspot:hover,
+.hmatrix-hotspot:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, .82);
+  outline-offset: 1px;
+  background: rgba(13, 110, 253, .08);
+}
+
+.hmatrix-hotspot-object:hover,
+.hmatrix-hotspot-object:focus-visible {
+  outline-style: dashed;
+}
+
+.hmatrix-detail-section + .hmatrix-detail-section {
+  margin-top: 1rem;
+  padding-top: .75rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.hmatrix-detail-section h6 {
+  margin: 0 0 .5rem;
+  font-size: .95rem;
+}
+
+.hmatrix-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) minmax(0, 1fr);
+  gap: .25rem .75rem;
+  margin: 0;
+}
+
+.hmatrix-detail-grid dt {
+  color: var(--bs-secondary-color);
+  font-weight: 600;
+}
+
+.hmatrix-detail-grid dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 991.98px) {

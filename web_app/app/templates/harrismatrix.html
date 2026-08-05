@@ -69,10 +69,212 @@
 
   <section class="hmatrix-output" aria-label="Generated Harris Matrix">
     {% if harris_image %}
-      <img class="hmatrix-image"
-           src="{{ url_for('su.harrismatrix_image', filename=harris_image) }}"
-           alt="Harris Matrix">
+      <div class="hmatrix-image-wrap">
+        <img class="hmatrix-image"
+             src="{{ url_for('su.harrismatrix_image', filename=harris_image) }}"
+             alt="Harris Matrix">
+        {% for area in harris_links %}
+          <button type="button"
+                  class="hmatrix-hotspot hmatrix-hotspot-{{ area.kind }}"
+                  style="left: {{ area.left }}%; top: {{ area.top }}%; width: {{ area.width }}%; height: {{ area.height }}%;"
+                  data-hmatrix-kind="{{ area.kind }}"
+                  data-hmatrix-id="{{ area.id }}"
+                  data-hmatrix-ids="{{ area.ids | join(',') }}"
+                  data-hmatrix-label="{{ area.label }}"
+                  aria-label="Open {{ area.kind }} {{ area.label }} detail">
+          </button>
+        {% endfor %}
+      </div>
     {% endif %}
   </section>
 </div>
+
+<div class="modal fade" id="hmatrixEntityModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="hmatrixEntityTitle">Entity detail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="hmatrixEntityError" class="alert alert-danger d-none"></div>
+        <div id="hmatrixEntityBody"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cfg = {
+    suDetailBase: "{{ url_for('su.harrismatrix_su_detail', sj_id=0) }}".replace("/0", ""),
+    objectDetailBase: "{{ url_for('su.harrismatrix_object_detail', object_id=0) }}".replace("/0", "")
+  };
+
+  const modalEl = document.getElementById("hmatrixEntityModal");
+  const titleEl = document.getElementById("hmatrixEntityTitle");
+  const bodyEl = document.getElementById("hmatrixEntityBody");
+  const errorEl = document.getElementById("hmatrixEntityError");
+
+  function clearDetail() {
+    bodyEl.textContent = "";
+    errorEl.textContent = "";
+    errorEl.classList.add("d-none");
+  }
+
+  function textValue(value) {
+    if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
+    if (typeof value === "boolean") return value ? "yes" : "no";
+    return value === null || value === undefined || value === "" ? "—" : String(value);
+  }
+
+  function detailGrid(rows) {
+    const grid = document.createElement("dl");
+    grid.className = "hmatrix-detail-grid";
+    rows.forEach(([label, value]) => {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = textValue(value);
+      grid.appendChild(dt);
+      grid.appendChild(dd);
+    });
+    return grid;
+  }
+
+  function section(title, rows) {
+    const wrap = document.createElement("section");
+    wrap.className = "hmatrix-detail-section";
+    const h = document.createElement("h6");
+    h.textContent = title;
+    wrap.appendChild(h);
+    wrap.appendChild(detailGrid(rows));
+    return wrap;
+  }
+
+  function subtypeRows(su) {
+    if (su.sj_typ === "deposit") {
+      return [
+        ["Deposit type", su.deposit?.deposit_typ],
+        ["Color", su.deposit?.color],
+        ["Boundary visibility", su.deposit?.boundary_visibility],
+        ["Structure", su.deposit?.structure],
+        ["Compactness", su.deposit?.compactness],
+        ["Deposit removed", su.deposit?.deposit_removed]
+      ];
+    }
+    if (su.sj_typ === "negativ" || su.sj_typ === "negative") {
+      return [
+        ["Negative type", su.negative?.negativ_typ],
+        ["Ident. niveau cut", su.negative?.ident_niveau_cut],
+        ["Shape plan", su.negative?.shape_plan],
+        ["Shape sides", su.negative?.shape_sides],
+        ["Shape bottom", su.negative?.shape_bottom]
+      ];
+    }
+    if (su.sj_typ === "structure") {
+      return [
+        ["Structure type", su.structure?.structure_typ],
+        ["Construction type", su.structure?.construction_typ],
+        ["Binder", su.structure?.binder],
+        ["Basic material", su.structure?.basic_material],
+        ["Length", su.structure?.length_m],
+        ["Width", su.structure?.width_m],
+        ["Height", su.structure?.height_m]
+      ];
+    }
+    return [];
+  }
+
+  function renderSu(su) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(section(`SU ${su.id_sj}`, [
+      ["Type", su.sj_typ],
+      ["Object", su.ref_object],
+      ["Description", su.description],
+      ["Interpretation", su.interpretation],
+      ["Author", su.author],
+      ["Recorded", su.recorded],
+      ["Excavation extent", su.excav_extent],
+      ["Plan documented", su.docu_plan],
+      ["Vertical documented", su.docu_vertical],
+      ["Polygons", su.polygon_names]
+    ]));
+    const rows = subtypeRows(su);
+    if (rows.length) frag.appendChild(section("Type attributes", rows));
+    frag.appendChild(section("Stratigraphy", [
+      ["Above", su.above_ids],
+      ["Below", su.below_ids],
+      ["Equal", su.equal_ids]
+    ]));
+    return frag;
+  }
+
+  function renderObject(obj) {
+    const frag = document.createDocumentFragment();
+    frag.appendChild(section(`Object ${obj.id_object}`, [
+      ["Type", obj.object_typ],
+      ["Superior object", obj.superior_object],
+      ["SUs", obj.sj_ids],
+      ["Notes", obj.notes]
+    ]));
+    if (obj.inhum_grave?.present) {
+      frag.appendChild(section("Inhumation grave", [
+        ["Preservation", obj.inhum_grave.preservation],
+        ["Orientation", obj.inhum_grave.orientation_dir],
+        ["Anthropology", obj.inhum_grave.anthropo_present],
+        ["Burial box type", obj.inhum_grave.burial_box_type],
+        ["Notes", obj.inhum_grave.notes_grave]
+      ]));
+    }
+    return frag;
+  }
+
+  async function fetchJson(url) {
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      credentials: "same-origin"
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Detail could not be loaded.");
+    return data;
+  }
+
+  async function openDetail(button) {
+    const kind = button.dataset.hmatrixKind;
+    const label = button.dataset.hmatrixLabel || button.dataset.hmatrixId || "";
+    const ids = (button.dataset.hmatrixIds || button.dataset.hmatrixId || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    clearDetail();
+    titleEl.textContent = kind === "object" ? `Object ${label}` : `SU ${label}`;
+    bodyEl.textContent = "Loading...";
+    new bootstrap.Modal(modalEl).show();
+
+    try {
+      bodyEl.textContent = "";
+      if (kind === "object") {
+        const data = await fetchJson(`${cfg.objectDetailBase}/${button.dataset.hmatrixId}`);
+        bodyEl.appendChild(renderObject(data));
+      } else {
+        const details = await Promise.all(ids.map((id) => fetchJson(`${cfg.suDetailBase}/${id}`)));
+        details.forEach((su) => bodyEl.appendChild(renderSu(su)));
+      }
+    } catch (error) {
+      bodyEl.textContent = "";
+      errorEl.textContent = error.message || "Detail could not be loaded.";
+      errorEl.classList.remove("d-none");
+    }
+  }
+
+  document.querySelectorAll(".hmatrix-hotspot").forEach((button) => {
+    button.addEventListener("click", () => openDetail(button));
+  });
+})();
+</script>
 {% endblock %}

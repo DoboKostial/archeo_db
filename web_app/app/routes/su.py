@@ -1,6 +1,7 @@
 # web_app/app/routes/su.py
 import os
 import re
+import json
 from datetime import datetime
 from psycopg2.extras import Json
 
@@ -23,6 +24,7 @@ from flask import (
     flash,
     session,
     send_from_directory,
+    jsonify,
 )
 
 from config import Config
@@ -41,6 +43,9 @@ from app.queries import (
     get_all_sj_with_types,
     get_all_objects,
     get_sj_with_object_refs,
+    harris_su_detail_sql,
+    q_get_object_with_sjs,
+    q_get_object_inhum_grave,
     list_polygon_names_sql,
     list_su_table_sql,
     list_su_for_media_select_sql,
@@ -78,6 +83,29 @@ from app.utils import (
 from app.utils.media_map import MEDIA_TABLES, LINK_TABLES_SJ
 
 su_bp = Blueprint("su", __name__)
+
+
+def _harris_links_filename(image_filename):
+    return f"{image_filename}.links.json"
+
+
+def _load_harris_links(selected_db, image_filename):
+    if not image_filename:
+        return []
+    images_dir, _ = get_hmatrix_dirs(selected_db)
+    path = os.path.join(images_dir, _harris_links_filename(os.path.basename(image_filename)))
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return data.get("areas") or []
+
+
+def _save_harris_links(images_dir, image_filename, areas):
+    path = os.path.join(images_dir, _harris_links_filename(image_filename))
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump({"image": image_filename, "areas": areas}, handle, ensure_ascii=False)
 
 
 def _date_or_none(value):
@@ -848,6 +876,7 @@ def harrismatrix():
             pass
 
     harris_image = session.get("harrismatrix_image")
+    harris_links = _load_harris_links(selected_db, harris_image)
 
     return render_template(
         "harrismatrix.html",
@@ -857,7 +886,123 @@ def harrismatrix():
         sj_without_relation=sj_without_relation,
         sj_type_counts=sj_type_counts,
         harris_image=harris_image,
+        harris_links=harris_links,
     )
+
+
+def _date_to_iso(value):
+    return value.isoformat() if value else None
+
+
+def _number_or_none(value):
+    if value is None:
+        return None
+    return float(value) if hasattr(value, "__float__") else value
+
+
+def _harris_su_payload(row):
+    return {
+        "id_sj": int(row[0]),
+        "sj_typ": row[1],
+        "description": row[2],
+        "interpretation": row[3],
+        "recorded": _date_to_iso(row[4]),
+        "author": row[5],
+        "docu_plan": bool(row[6]),
+        "docu_vertical": bool(row[7]),
+        "excav_extent": row[8],
+        "ref_object": row[9],
+        "deposit": {
+            "deposit_typ": row[10],
+            "color": row[11],
+            "boundary_visibility": row[12],
+            "structure": row[13],
+            "compactness": row[14],
+            "deposit_removed": row[15],
+        },
+        "negative": {
+            "negativ_typ": row[16],
+            "ident_niveau_cut": bool(row[17]),
+            "shape_plan": row[18],
+            "shape_sides": row[19],
+            "shape_bottom": row[20],
+        },
+        "structure": {
+            "structure_typ": row[21],
+            "construction_typ": row[22],
+            "binder": row[23],
+            "basic_material": row[24],
+            "length_m": _number_or_none(row[25]),
+            "width_m": _number_or_none(row[26]),
+            "height_m": _number_or_none(row[27]),
+        },
+        "polygon_names": list(row[28] or []),
+        "above_ids": [int(v) for v in (row[29] or [])],
+        "below_ids": [int(v) for v in (row[30] or [])],
+        "equal_ids": [int(v) for v in (row[31] or [])],
+    }
+
+
+def _harris_object_payload(obj, inhum_grave):
+    payload = {
+        "id_object": int(obj[0]),
+        "object_typ": obj[1],
+        "superior_object": obj[2],
+        "notes": obj[3],
+        "sj_ids": [int(v) for v in (obj[4] or [])],
+    }
+
+    if inhum_grave:
+        payload["inhum_grave"] = {
+            "present": True,
+            "preservation": inhum_grave[0],
+            "orientation_dir": inhum_grave[1],
+            "bone_map": inhum_grave[2],
+            "notes_grave": inhum_grave[3],
+            "anthropo_present": bool(inhum_grave[4]) if inhum_grave[4] is not None else False,
+            "burial_box_type": inhum_grave[5],
+        }
+    else:
+        payload["inhum_grave"] = {"present": False}
+
+    return payload
+
+
+@su_bp.get("/harrismatrix/api/su/<int:sj_id>")
+@require_selected_db
+def harrismatrix_su_detail(sj_id):
+    selected_db = session["selected_db"]
+    conn = get_terrain_connection(selected_db)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(harris_su_detail_sql(), (sj_id,))
+            row = cur.fetchone()
+        if not row:
+            return jsonify({"error": f"SU #{sj_id} not found."}), 404
+        return jsonify(_harris_su_payload(row))
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@su_bp.get("/harrismatrix/api/object/<int:object_id>")
+@require_selected_db
+def harrismatrix_object_detail(object_id):
+    selected_db = session["selected_db"]
+    conn = get_terrain_connection(selected_db)
+    try:
+        obj = q_get_object_with_sjs(conn, object_id)
+        if not obj:
+            return jsonify({"error": f"Object #{object_id} not found."}), 404
+        inhum_grave = q_get_object_inhum_grave(conn, object_id)
+        return jsonify(_harris_object_payload(obj, inhum_grave))
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 class DSU:
@@ -1144,7 +1289,7 @@ def _harris_figure_size(positions):
     )
 
 
-def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
+def _harris_object_boxes(positions, obj_rows, sj_obj_rows, dsu):
     obj_to_reps = {}
     for sj_id, obj_id in sj_obj_rows:
         if obj_id is None:
@@ -1152,6 +1297,7 @@ def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
         rep = dsu.find(int(sj_id))
         obj_to_reps.setdefault(obj_id, set()).add(rep)
 
+    boxes = []
     for oid, typ, _ in sorted(obj_rows, key=lambda row: row[0]):
         reps = [rep for rep in obj_to_reps.get(oid, set()) if rep in positions]
         if not reps:
@@ -1163,11 +1309,27 @@ def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
         pad_y = 0.45
         x0, x1 = min(xs) - pad_x, max(xs) + pad_x
         y0, y1 = min(ys) - pad_y, max(ys) + pad_y
+        boxes.append(
+            {
+                "id": int(oid),
+                "typ": typ or "",
+                "x0": x0,
+                "x1": x1,
+                "y0": y0,
+                "y1": y1,
+                "label": f"Obj {oid}" + (f" ({typ})" if typ else ""),
+            }
+        )
 
+    return boxes
+
+
+def _draw_harris_object_boxes(ax, object_boxes):
+    for box in object_boxes:
         rect = mpatches.FancyBboxPatch(
-            (x0, y0),
-            x1 - x0,
-            y1 - y0,
+            (box["x0"], box["y0"]),
+            box["x1"] - box["x0"],
+            box["y1"] - box["y0"],
             boxstyle="round,pad=0.02,rounding_size=0.04",
             linewidth=1.0,
             edgecolor="#767676",
@@ -1177,11 +1339,10 @@ def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
         )
         ax.add_patch(rect)
 
-        label = f"Obj {oid}" + (f" ({typ})" if typ else "")
         ax.text(
-            x1 - 0.05,
-            y1 - 0.05,
-            label,
+            box["x1"] - 0.05,
+            box["y1"] - 0.05,
+            box["label"],
             ha="right",
             va="top",
             fontsize=9,
@@ -1191,17 +1352,22 @@ def _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu):
         )
 
 
+def _harris_node_box(label, x, y):
+    width = max(0.82, 0.18 * len(label) + 0.48)
+    height = 0.46
+    return x - width / 2, y - height / 2, x + width / 2, y + height / 2
+
+
 def _draw_harris_nodes(ax, positions, label_map, node_type_map, color_map):
     for node, (x, y) in positions.items():
         label = label_map.get(node, str(node))
-        width = max(0.82, 0.18 * len(label) + 0.48)
-        height = 0.46
+        x0, y0, x1, y1 = _harris_node_box(label, x, y)
         node_type = node_type_map.get(node, "")
 
         rect = mpatches.Rectangle(
-            (x - width / 2, y - height / 2),
-            width,
-            height,
+            (x0, y0),
+            x1 - x0,
+            y1 - y0,
             facecolor=color_map.get(node_type, "#E9E9E9"),
             edgecolor="#555555",
             linewidth=0.9,
@@ -1218,6 +1384,76 @@ def _draw_harris_nodes(ax, positions, label_map, node_type_map, color_map):
             color="#1f1f1f",
             zorder=6,
         )
+
+
+def _harris_label_ids(label):
+    ids = []
+    seen = set()
+    for token in re.findall(r"\d+", str(label)):
+        value = int(token)
+        if value not in seen:
+            ids.append(value)
+            seen.add(value)
+    return ids
+
+
+def _pct_bbox(ax, fig, x0, y0, x1, y1):
+    fig_width, fig_height = fig.canvas.get_width_height()
+    p0 = ax.transData.transform((x0, y0))
+    p1 = ax.transData.transform((x1, y1))
+
+    left_px = max(0.0, min(p0[0], p1[0]))
+    right_px = min(float(fig_width), max(p0[0], p1[0]))
+    bottom_px = max(0.0, min(p0[1], p1[1]))
+    top_px = min(float(fig_height), max(p0[1], p1[1]))
+
+    if right_px <= left_px or top_px <= bottom_px:
+        return None
+
+    return {
+        "left": round((left_px / fig_width) * 100, 4),
+        "top": round(((fig_height - top_px) / fig_height) * 100, 4),
+        "width": round(((right_px - left_px) / fig_width) * 100, 4),
+        "height": round(((top_px - bottom_px) / fig_height) * 100, 4),
+    }
+
+
+def _harris_click_areas(ax, fig, positions, label_map, object_boxes):
+    areas = []
+    fig.canvas.draw()
+
+    for node, (x, y) in positions.items():
+        label = label_map.get(node, str(node))
+        bbox = _harris_node_box(label, x, y)
+        pct = _pct_bbox(ax, fig, *bbox)
+        ids = _harris_label_ids(label)
+        if not pct or not ids:
+            continue
+        areas.append(
+            {
+                **pct,
+                "kind": "su",
+                "id": ids[0],
+                "ids": ids,
+                "label": label,
+            }
+        )
+
+    for box in object_boxes:
+        pct = _pct_bbox(ax, fig, box["x0"], box["y0"], box["x1"], box["y1"])
+        if not pct:
+            continue
+        areas.append(
+            {
+                **pct,
+                "kind": "object",
+                "id": box["id"],
+                "ids": [box["id"]],
+                "label": box["label"],
+            }
+        )
+
+    return areas
 
 
 def _save_harris_matrix_image(
@@ -1238,8 +1474,10 @@ def _save_harris_matrix_image(
     ax.set_facecolor("white")
     ax.axis("off")
 
+    object_boxes = []
     if draw_objects and obj_rows and sj_obj_rows and dsu:
-        _draw_harris_object_boxes(ax, positions, obj_rows, sj_obj_rows, dsu)
+        object_boxes = _harris_object_boxes(positions, obj_rows, sj_obj_rows, dsu)
+        _draw_harris_object_boxes(ax, object_boxes)
 
     for source, target in graph.edges:
         x0, y0 = positions[source]
@@ -1255,8 +1493,12 @@ def _save_harris_matrix_image(
         ax.set_ylim(min(ys) - 0.8, max(ys) + 0.8)
         ax.set_aspect("equal", adjustable="box")
 
-    fig.savefig(filepath, format="png", bbox_inches="tight", dpi=180)
+    fig.subplots_adjust(left=0.03, right=0.97, top=0.97, bottom=0.03)
+    click_areas = _harris_click_areas(ax, fig, positions, label_map, object_boxes)
+
+    fig.savefig(filepath, format="png", dpi=180)
     plt.close(fig)
+    return click_areas
 
 
 @su_bp.route("/generate-harrismatrix", methods=["POST"])
@@ -1301,7 +1543,7 @@ def generate_harrismatrix():
         os.makedirs(images_dir, exist_ok=True)
         filename = f"{selected_db}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         filepath = os.path.join(images_dir, filename)
-        _save_harris_matrix_image(
+        click_areas = _save_harris_matrix_image(
             harris_graph,
             positions,
             label_map,
@@ -1315,6 +1557,8 @@ def generate_harrismatrix():
         )
 
         session["harrismatrix_image"] = filename
+        session.pop("harrismatrix_links", None)
+        _save_harris_links(images_dir, filename, click_areas)
         flash("Harris Matrix was generated.", "success")
         return redirect(url_for("su.harrismatrix"))
 
