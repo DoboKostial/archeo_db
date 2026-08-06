@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from typing import Any
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Blueprint, abort, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 
 from config import Config
 from app.logger import logger
@@ -13,11 +14,12 @@ from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db
 
 from app.utils import (
-    save_to_uploads, cleanup_upload, move_into_place, delete_media_files,
+    save_to_uploads, cleanup_upload, move_into_place, delete_media_files_checked,
     make_pk, validate_pk, final_paths,
     detect_mime, make_thumbnail,
     sha256_file, validate_extension, validate_mime
 )
+from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 from app.queries import (
     # base CRUD
@@ -59,6 +61,10 @@ sketches_bp = Blueprint("sketches", __name__)
 
 # app-level choices, not Db enums
 SKETCH_TYP_CHOICES = ["sketch", "photosketch", "general", "other"]
+
+
+def _final_paths(selected_db: str, pk_name: str) -> tuple[str, str]:
+    return final_paths(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS["sketches"], pk_name)
 
 
 def _as_int(val: str | None) -> int | None:
@@ -121,9 +127,7 @@ def sketches():
     f_find = _parse_int_list(request.args.getlist("ref_find"))
     f_sample = _parse_int_list(request.args.getlist("ref_sample"))
 
-    page = _as_int(request.args.get("page")) or 1
-    per_page = _as_int(request.args.get("per_page")) or 24
-    offset = (page - 1) * per_page
+    page, per_page, offset = gallery_page_args(request.args.get("page"))
 
     with get_terrain_connection(selected_db) as conn:
         with conn.cursor() as cur:
@@ -158,11 +162,13 @@ def sketches():
                     "section_list": f_section,
                     "find_list": f_find,
                     "sample_list": f_sample,
-                    "limit": per_page,
+                    "limit": per_page + 1,
                     "offset": offset,
                 },
             )
             rows = cur.fetchall()
+            has_next = len(rows) > per_page
+            rows = rows[:per_page]
 
     # tuple -> dict for Jinja
     sketches_rows = []
@@ -227,6 +233,9 @@ def sketches():
         sketches=sketches_rows,
         page=page,
         per_page=per_page,
+        prev_url=page_url("sketches.sketches", page - 1) if page > 1 else None,
+        next_url=page_url("sketches.sketches", page + 1) if has_next else None,
+        has_next=has_next,
         stats=stats,
         filters=filters,
         sketch_typ_choices=SKETCH_TYP_CHOICES,
@@ -331,8 +340,7 @@ def upload_sketches():
                 ext = pk_name.rsplit(".", 1)[-1].lower()
                 validate_extension(ext, Config.ALLOWED_EXTENSIONS)
 
-                media_dir = Config.MEDIA_DIRS["sketches"]
-                final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, pk_name)
+                final_path, thumb_path = _final_paths(selected_db, pk_name)
 
                 if os.path.exists(final_path):
                     raise ValueError(f"File already exists on FS: {pk_name}")
@@ -415,7 +423,7 @@ def upload_sketches():
 
         for fp, tp in final_pairs:
             try:
-                delete_media_files(fp, tp)
+                delete_media_files_checked(fp, tp)
             except Exception:
                 pass
 
@@ -586,12 +594,15 @@ def edit_sketch(id_sketch: str):
     repl = request.files.get("replace_file")
     replace = bool(repl and repl.filename)
 
-    media_dir = Config.MEDIA_DIRS["sketches"]
-    final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, sid)
+    final_path, thumb_path = _final_paths(selected_db, sid)
 
     tmp_path = None
     tmp_final_path = None
     tmp_thumb_path = None
+    backup_path = None
+    backup_thumb_path = None
+    replacement_installed = False
+    replacement_thumb_installed = False
 
     try:
         with get_terrain_connection(selected_db) as conn:
@@ -609,8 +620,9 @@ def edit_sketch(id_sketch: str):
                     ext = repl.filename.rsplit(".", 1)[-1].lower() if "." in repl.filename else ""
                     validate_extension(ext, Config.ALLOWED_EXTENSIONS)
 
-                    tmp_final_path = final_path + ".tmp_replace"
-                    tmp_thumb_path = thumb_path + ".tmp_replace"
+                    replacement_id = uuid.uuid4().hex
+                    tmp_final_path = f"{final_path}.replace-{replacement_id}"
+                    tmp_thumb_path = f"{thumb_path}.replace-{replacement_id}"
 
                     try:
                         if os.path.exists(tmp_final_path):
@@ -633,7 +645,9 @@ def edit_sketch(id_sketch: str):
                         raise ValueError("Duplicate content (checksum already exists).")
 
                     try:
-                        make_thumbnail(tmp_final_path, tmp_thumb_path, Config.THUMB_MAX_SIDE)
+                        thumb_created = make_thumbnail(tmp_final_path, tmp_thumb_path, Config.THUMB_MAX_SIDE)
+                        if not thumb_created or not os.path.exists(tmp_thumb_path):
+                            tmp_thumb_path = None
                     except Exception:
                         tmp_thumb_path = None
 
@@ -682,34 +696,50 @@ def edit_sketch(id_sketch: str):
                     if sp_i is not None:
                         cur.execute(link_sketch_sample_sql(), (sp_i, sid))
 
+                if replace and tmp_final_path:
+                    backup_id = uuid.uuid4().hex
+                    backup_path = f"{final_path}.backup-{backup_id}"
+                    backup_thumb_path = f"{thumb_path}.backup-{backup_id}"
+
+                    if os.path.exists(final_path):
+                        os.replace(final_path, backup_path)
+                    if os.path.exists(thumb_path):
+                        os.replace(thumb_path, backup_thumb_path)
+
+                    os.replace(tmp_final_path, final_path)
+                    tmp_final_path = None
+                    replacement_installed = True
+
+                    if tmp_thumb_path and os.path.exists(tmp_thumb_path):
+                        os.replace(tmp_thumb_path, thumb_path)
+                        tmp_thumb_path = None
+                        replacement_thumb_installed = True
+
             conn.commit()
-
-        # swap files after commit
-        if replace and tmp_final_path:
-            os.replace(tmp_final_path, final_path)
-            tmp_final_path = None
-
-            if tmp_thumb_path and os.path.exists(tmp_thumb_path):
-                os.replace(tmp_thumb_path, thumb_path)
-                tmp_thumb_path = None
-            else:
-                try:
-                    make_thumbnail(final_path, thumb_path, Config.THUMB_MAX_SIDE)
-                except Exception:
-                    pass
+            cleanup_upload(backup_path)
+            cleanup_upload(backup_thumb_path)
+            backup_path = None
+            backup_thumb_path = None
 
         flash("Sketch updated.", "success")
 
     except Exception as e:
         logger.warning(f"[{selected_db}] sketch edit failed {sid}: {e}")
         flash(f"Edit failed: {e}", "danger")
-        try:
-            if tmp_final_path and os.path.exists(tmp_final_path):
-                os.remove(tmp_final_path)
-            if tmp_thumb_path and os.path.exists(tmp_thumb_path):
-                os.remove(tmp_thumb_path)
-        except Exception:
-            pass
+        if replacement_installed:
+            cleanup_upload(final_path)
+        if replacement_thumb_installed:
+            cleanup_upload(thumb_path)
+        if backup_path and os.path.exists(backup_path):
+            os.replace(backup_path, final_path)
+            backup_path = None
+        if backup_thumb_path and os.path.exists(backup_thumb_path):
+            os.replace(backup_thumb_path, thumb_path)
+            backup_thumb_path = None
+        cleanup_upload(tmp_final_path)
+        cleanup_upload(tmp_thumb_path)
+        cleanup_upload(backup_path)
+        cleanup_upload(backup_thumb_path)
     finally:
         if tmp_path:
             try:
@@ -729,8 +759,7 @@ def delete_sketch(id_sketch: str):
     selected_db = session["selected_db"]
     sid = (id_sketch or "").strip()
 
-    media_dir = Config.MEDIA_DIRS["sketches"]
-    final_path, thumb_path = final_paths(Config.DATA_DIR, selected_db, media_dir, sid)
+    final_path, thumb_path = _final_paths(selected_db, sid)
 
     try:
         with get_terrain_connection(selected_db) as conn:
@@ -738,12 +767,12 @@ def delete_sketch(id_sketch: str):
                 cur.execute(delete_sketch_sql(), (sid,))
             conn.commit()
 
-        try:
-            delete_media_files(final_path, thumb_path)
-        except Exception:
-            pass
-
-        flash("Sketch deleted.", "success")
+        failed_paths = delete_media_files_checked(final_path, thumb_path)
+        if failed_paths:
+            flash("Sketch deleted from DB, but FS delete failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] sketch deleted DB ok, FS delete failed {sid}: {failed_paths}")
+        else:
+            flash("Sketch deleted.", "success")
     except Exception as e:
         logger.warning(f"[{selected_db}] sketch delete failed {sid}: {e}")
         flash(f"Delete failed: {e}", "danger")
@@ -757,21 +786,31 @@ def delete_sketch(id_sketch: str):
 @sketches_bp.get("/sketches/file/<string:id_sketch>")
 @require_selected_db
 def serve_sketch_file(id_sketch: str):
-    from flask import send_from_directory
     selected_db = session["selected_db"]
     sid = (id_sketch or "").strip()
-    dir_path = os.path.join(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS["sketches"])
-    return send_from_directory(dir_path, sid, as_attachment=False)
+    try:
+        final_path, _thumb_path = _final_paths(selected_db, sid)
+    except Exception:
+        abort(404)
+
+    if not os.path.exists(final_path):
+        abort(404)
+    return send_file(final_path, as_attachment=False)
 
 
 @sketches_bp.get("/sketches/thumb/<string:id_sketch>")
 @require_selected_db
 def serve_sketch_thumb(id_sketch: str):
-    from flask import send_from_directory
     selected_db = session["selected_db"]
     sid = (id_sketch or "").strip()
-    dir_path = os.path.join(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS["sketches"], "thumbs")
-    return send_from_directory(dir_path, sid, as_attachment=False)
+    try:
+        _final_path, thumb_path = _final_paths(selected_db, sid)
+    except Exception:
+        abort(404)
+
+    if not os.path.exists(thumb_path):
+        abort(404)
+    return send_file(thumb_path, mimetype="image/jpeg", as_attachment=False)
 
 
 # ---------------------------------------
@@ -781,11 +820,20 @@ def _api_search(selected_db: str, sql: str, q: str):
     q = (q or "").strip()
     if not q:
         return jsonify({"results": []})
+    _page, limit, offset = search_page_args(
+        request.args.get("page"),
+        request.args.get("limit"),
+        default_limit=20,
+        max_limit=50,
+    )
     with get_terrain_connection(selected_db) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (f"%{q}%", 20, 0))
+            cur.execute(sql, (f"%{q}%", limit, offset))
             rows = cur.fetchall()
-    return jsonify({"results": [{"id": r[0], "text": r[1]} for r in rows]})
+    return jsonify({
+        "results": [{"id": r[0], "text": r[1]} for r in rows],
+        "pagination": {"more": len(rows) == limit},
+    })
 
 
 @sketches_bp.get("/sketches/api/search/sj")

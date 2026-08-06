@@ -160,7 +160,7 @@
 
 
   <!-- SECTION 2: GALLERY -->
-  <div class="p-3 rounded-3 border bg-white mb-3">
+  <div class="p-3 rounded-3 border gallery-panel mb-3">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h4 class="mb-0">Photograms gallery</h4>
     </div>
@@ -214,12 +214,14 @@
     </div>
 
     <div class="d-flex justify-content-between align-items-center mt-3">
-      <div class="text-muted small">Page {{ page }}</div>
+      <div class="text-muted small">Page {{ page }} · {{ per_page }} per page</div>
       <div class="d-flex gap-2">
         {% if prev_url %}
           <a class="btn btn-sm btn-outline-secondary" href="{{ prev_url }}">Prev</a>
         {% endif %}
-        <a class="btn btn-sm btn-outline-secondary" href="{{ next_url }}">Next</a>
+        {% if next_url %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ next_url }}">Next</a>
+        {% endif %}
       </div>
     </div>
   </div>

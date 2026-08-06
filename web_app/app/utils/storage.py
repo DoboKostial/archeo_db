@@ -127,6 +127,25 @@ def delete_media_files(file_path: str, thumb_path: str) -> Tuple[bool, bool]:
         pass
     return fd, td
 
+
+def delete_media_files_checked(file_path: str, thumb_path: str, *extra_paths: str) -> list[str]:
+    failed: list[str] = []
+    seen: set[str] = set()
+    for path in (file_path, thumb_path, *extra_paths):
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        try:
+            existed = os.path.exists(path)
+            if existed:
+                os.remove(path)
+        except Exception:
+            failed.append(path)
+            continue
+        if existed and os.path.exists(path):
+            failed.append(path)
+    return failed
+
 # Public helper: keep extension, return full sanitized name ---
 # Return safe filename preserving (lowercased) extension.
 # Example: 'My Bad File.JPG' -> 'My_Bad_File.jpg'

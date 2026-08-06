@@ -25,7 +25,7 @@ from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db
 from app.utils import (
     cleanup_upload,
-    delete_media_files,
+    delete_media_files_checked,
     detect_mime,
     final_paths,
     make_pk,
@@ -37,6 +37,7 @@ from app.utils import (
     validate_mime,
     validate_pk,
 )
+from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 # SQL imports (from app/queries)
 from app.queries import (
@@ -174,9 +175,12 @@ def serve_drawing_thumb(id_drawing: str):
 @require_selected_db
 def api_search_authors():
     q = (request.args.get("q") or "").strip()
-    limit = _as_int(request.args.get("limit")) or 20
-    page = _as_int(request.args.get("page")) or 1
-    offset = (page - 1) * limit
+    _page, limit, offset = search_page_args(
+        request.args.get("page"),
+        request.args.get("limit"),
+        default_limit=20,
+        max_limit=50,
+    )
 
     if not q:
         return jsonify({"results": []})
@@ -195,16 +199,22 @@ def api_search_authors():
                 (f"%{q}%", limit, offset),
             )
             rows = cur.fetchall()
-    return jsonify({"results": [{"id": r[0], "text": r[1]} for r in rows]})
+    return jsonify({
+        "results": [{"id": r[0], "text": r[1]} for r in rows],
+        "pagination": {"more": len(rows) == limit},
+    })
 
 
 @drawings_bp.get("/drawings/api/search/sj")
 @require_selected_db
 def api_search_sj():
     q = (request.args.get("q") or "").strip()
-    limit = _as_int(request.args.get("limit")) or 20
-    page = _as_int(request.args.get("page")) or 1
-    offset = (page - 1) * limit
+    _page, limit, offset = search_page_args(
+        request.args.get("page"),
+        request.args.get("limit"),
+        default_limit=20,
+        max_limit=50,
+    )
 
     if not q:
         return jsonify({"results": []})
@@ -223,16 +233,22 @@ def api_search_sj():
                 (f"%{q}%", limit, offset),
             )
             rows = cur.fetchall()
-    return jsonify({"results": [{"id": r[0], "text": r[1]} for r in rows]})
+    return jsonify({
+        "results": [{"id": r[0], "text": r[1]} for r in rows],
+        "pagination": {"more": len(rows) == limit},
+    })
 
 
 @drawings_bp.get("/drawings/api/search/sections")
 @require_selected_db
 def api_search_sections():
     q = (request.args.get("q") or "").strip()
-    limit = _as_int(request.args.get("limit")) or 20
-    page = _as_int(request.args.get("page")) or 1
-    offset = (page - 1) * limit
+    _page, limit, offset = search_page_args(
+        request.args.get("page"),
+        request.args.get("limit"),
+        default_limit=20,
+        max_limit=50,
+    )
 
     if not q:
         return jsonify({"results": []})
@@ -251,7 +267,10 @@ def api_search_sections():
                 (f"%{q}%", limit, offset),
             )
             rows = cur.fetchall()
-    return jsonify({"results": [{"id": r[0], "text": r[1]} for r in rows]})
+    return jsonify({
+        "results": [{"id": r[0], "text": r[1]} for r in rows],
+        "pagination": {"more": len(rows) == limit},
+    })
 
 
 # ---------------------------
@@ -272,9 +291,7 @@ def drawings():
     f_sj_ids = _parse_int_list(request.args.getlist("ref_sj"))
     f_section_ids = _parse_int_list(request.args.getlist("ref_section"))
 
-    page = _as_int(request.args.get("page")) or 1
-    per_page = _as_int(request.args.get("per_page")) or 24
-    offset = (page - 1) * per_page
+    page, per_page, offset = gallery_page_args(request.args.get("page"))
 
     with get_terrain_connection(selected_db) as conn:
         with conn.cursor() as cur:
@@ -298,11 +315,13 @@ def drawings():
                     "date_to": f_dt,
                     "sj_list": f_sj_ids,
                     "section_list": f_section_ids,
-                    "limit": per_page,
+                    "limit": per_page + 1,
                     "offset": offset,
                 },
             )
             rows = cur.fetchall()
+            has_next = len(rows) > per_page
+            rows = rows[:per_page]
 
     drawings_out = []
     for r in rows:
@@ -348,6 +367,9 @@ def drawings():
         drawings=drawings_out,
         page=page,
         per_page=per_page,
+        prev_url=page_url("drawings.drawings", page - 1) if page > 1 else None,
+        next_url=page_url("drawings.drawings", page + 1) if has_next else None,
+        has_next=has_next,
         stats=stats,
         filters=filters,
     )
@@ -498,7 +520,7 @@ def upload_drawings():
 
         for fp, tp in final_pairs:
             try:
-                delete_media_files(fp, tp)
+                delete_media_files_checked(fp, tp)
             except Exception:
                 pass
 
@@ -744,12 +766,12 @@ def delete_drawing(id_drawing: str):
             cur.execute(delete_drawing_sql(), (id_drawing,))
         conn.commit()
 
-    try:
-        delete_media_files(final_path, thumb_path)
-    except Exception:
-        pass
-
-    flash("Drawing deleted.", "success")
+    failed_paths = delete_media_files_checked(final_path, thumb_path)
+    if failed_paths:
+        flash("Drawing deleted from DB, but FS delete failed (see logs).", "warning")
+        logger.warning(f"[{selected_db}] drawing deleted DB ok, FS delete failed {id_drawing}: {failed_paths}")
+    else:
+        flash("Drawing deleted.", "success")
     return redirect(url_for("drawings.drawings"))
 
 
@@ -776,14 +798,16 @@ def bulk_drawings():
                 cur.execute(bulk_delete_drawings_sql(), (ids,))
             conn.commit()
 
+        failed_paths: List[str] = []
         for did in ids:
             fp, tp = _final_paths(selected_db, did)
-            try:
-                delete_media_files(fp, tp)
-            except Exception:
-                pass
+            failed_paths.extend(delete_media_files_checked(fp, tp))
 
-        flash(f"Deleted {len(ids)} drawing(s).", "success")
+        if failed_paths:
+            flash(f"Deleted {len(ids)} drawing(s) from DB, but some FS deletes failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] drawings bulk delete FS failed: {failed_paths}")
+        else:
+            flash(f"Deleted {len(ids)} drawing(s).", "success")
         return redirect(url_for("drawings.drawings"))
 
     if action == "update_meta":

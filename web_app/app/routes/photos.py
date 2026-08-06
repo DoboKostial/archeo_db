@@ -39,6 +39,7 @@ from app.utils.decorators import require_selected_db
 from app.utils import storage
 from app.utils import validate_mime, validate_extension, sha256_file
 from app.utils.images import make_thumbnail, extract_exif, detect_mime
+from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 # media_map (whitelisted mapping for link tables/columns)
 from app.utils.media_map import (
@@ -105,7 +106,7 @@ def _sql_link_delete_all(kind: str) -> str:
 
 def _sql_link_insert(kind: str) -> str:
     m = LINKS[kind]
-    return f"INSERT INTO {m['table']} ({m['fk_media']}, {m['fk_entity']}) VALUES (%s, %s);"
+    return f"INSERT INTO {m['table']} ({m['fk_media']}, {m['fk_entity']}) VALUES (%s, %s) ON CONFLICT DO NOTHING;"
 
 
 def _sql_link_delete_any(kind: str) -> str:
@@ -143,9 +144,12 @@ def _photo_thumb_dir(selected_db: str) -> str:
 
 def _final_paths(selected_db: str, id_photo: str) -> Tuple[str, str]:
     storage.validate_pk(id_photo)
-    final_path = storage.safe_join(_photo_dir(selected_db), id_photo)
-    thumb_path = storage.safe_join(_photo_thumb_dir(selected_db), id_photo)
-    return final_path, thumb_path
+    return storage.final_paths(Config.DATA_DIR, selected_db, Config.MEDIA_DIRS[PHOTO_MEDIA_TYPE], id_photo)
+
+
+def _legacy_photo_thumb_path(selected_db: str, id_photo: str) -> str:
+    storage.validate_pk(id_photo)
+    return storage.safe_join(_photo_thumb_dir(selected_db), id_photo)
 
 
 # -------------------------
@@ -193,15 +197,12 @@ def _select2_payload(items: List[Tuple[str, str]], more: bool = False):
 
 def _paginate(limit_default: int = 20) -> Tuple[str, int, int]:
     qtxt = (request.args.get("q") or "").strip()
-    page = int(request.args.get("page") or 1)
-    limit = int(request.args.get("limit") or limit_default)
-    if limit < 1:
-        limit = limit_default
-    if limit > 50:
-        limit = 50
-    if page < 1:
-        page = 1
-    offset = (page - 1) * limit
+    _page, limit, offset = search_page_args(
+        request.args.get("page"),
+        request.args.get("limit"),
+        default_limit=limit_default,
+        max_limit=50,
+    )
     return qtxt, limit, offset
 
 
@@ -228,15 +229,7 @@ def photos():
     has_gps = (request.args.get("has_gps") or "").strip() == "1"
     orphan_only = (request.args.get("orphan_only") or "").strip() == "1"
 
-    page = int(request.args.get("page") or 1)
-    per_page = int(request.args.get("per_page") or 20)
-    if per_page > 50:
-        per_page = 50
-    if per_page < 1:
-        per_page = 20
-    if page < 1:
-        page = 1
-    offset = (page - 1) * per_page
+    page, per_page, offset = gallery_page_args(request.args.get("page"))
 
     where_parts: List[str] = []
     params: List[Any] = []
@@ -325,6 +318,7 @@ def photos():
 
             cur.execute(list_sql, params + [per_page, offset])
             rows = cur.fetchall()
+            has_next = offset + len(rows) < filtered_cnt
 
             photos_data = []
             for r in rows:
@@ -360,10 +354,12 @@ def photos():
         "photos.html",
         selected_db=selected_db,
         photo_typ_choices=PHOTO_TYP_CHOICES,
-        photos=photos_data,
-        page=page,
-        per_page=per_page,
-        filtered_cnt=filtered_cnt,
+          photos=photos_data,
+          page=page,
+          per_page=per_page,
+          prev_url=page_url("photos.photos", page - 1) if page > 1 else None,
+          next_url=page_url("photos.photos", page + 1) if has_next else None,
+          filtered_cnt=filtered_cnt,
         stats={
             "total_cnt": total_cnt,
             "total_bytes": total_bytes,
@@ -402,7 +398,11 @@ def upload_photos():
     author = (request.form.get("author") or "").strip()
     notes = (request.form.get("notes") or "").strip() or None
 
-    _validate_photo_typ(photo_typ)
+    try:
+        _validate_photo_typ(photo_typ)
+    except Exception as e:
+        flash(f"Upload failed: {e}", "danger")
+        return redirect(url_for("photos.photos"))
     if not datum:
         flash("Date is required.", "danger")
         return redirect(url_for("photos.photos"))
@@ -644,10 +644,13 @@ def serve_photo_file(id_photo: str):
 def serve_photo_thumb(id_photo: str):
     selected_db = session["selected_db"]
     _, thumb_path = _final_paths(selected_db, id_photo)
+    legacy_thumb_path = _legacy_photo_thumb_path(selected_db, id_photo)
 
     if not os.path.exists(thumb_path):
-        return ("", 404)
-    return send_file(thumb_path, as_attachment=False)
+        if not os.path.exists(legacy_thumb_path):
+            return ("", 404)
+        thumb_path = legacy_thumb_path
+    return send_file(thumb_path, mimetype="image/jpeg", as_attachment=False)
 
 
 # -------------------------
@@ -779,6 +782,7 @@ def edit_photo(id_photo: str):
 def delete_photo(id_photo: str):
     selected_db = session["selected_db"]
     final_path, thumb_path = _final_paths(selected_db, id_photo)
+    legacy_thumb_path = _legacy_photo_thumb_path(selected_db, id_photo)
 
     conn = get_terrain_connection(selected_db)
     conn.autocommit = False
@@ -808,9 +812,13 @@ def delete_photo(id_photo: str):
             pass
 
     try:
-        storage.delete_media_files(final_path, thumb_path)
-        flash("Photo deleted.", "success")
-        logger.info(f"[{selected_db}] photo deleted: {id_photo}")
+        failed_paths = storage.delete_media_files_checked(final_path, thumb_path, legacy_thumb_path)
+        if failed_paths:
+            flash("Photo deleted from DB, but FS delete failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] photo deleted DB ok, FS delete failed {id_photo}: {failed_paths}")
+        else:
+            flash("Photo deleted.", "success")
+            logger.info(f"[{selected_db}] photo deleted: {id_photo}")
     except Exception as e:
         flash("Photo deleted from DB, but FS delete failed (see logs).", "warning")
         logger.warning(f"[{selected_db}] photo deleted DB ok, FS delete failed {id_photo}: {e}")

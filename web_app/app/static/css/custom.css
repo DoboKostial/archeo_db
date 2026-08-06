@@ -307,16 +307,19 @@
   height: auto;
 }
 
+.gallery-panel,
 .list-panel,
 .polygons-list-panel {
   background: #fff9df;
 }
 
+.gallery-panel .table,
 .list-panel .table,
 .polygons-list-panel .table {
   background: #fff;
 }
 
+.gallery-panel .pagination,
 .list-panel .pagination,
 .polygons-list-panel .pagination {
   --bs-pagination-color: #6c5411;
