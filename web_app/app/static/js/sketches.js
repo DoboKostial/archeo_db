@@ -317,4 +317,9 @@ prefillSearchSelects(document);
   document.querySelectorAll(".btnDelete").forEach(btn => {
     btn.addEventListener("click", () => openDelete(btn.dataset.id));
   });
+
+  const requestedSketch = new URLSearchParams(window.location.search).get("edit_sketch");
+  if (requestedSketch) {
+    openEdit(requestedSketch).catch((err) => console.error(err));
+  }
 })();

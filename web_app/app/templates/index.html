@@ -116,19 +116,52 @@
             <div class="card shadow-sm">
                 <div class="card-body bg-light border border-danger rounded">
                     <h4 class="card-title mb-3">Choose the Database to Work With</h4>
-                    <form action="/select-db" method="POST" class="row g-3 align-items-end">
-                        <div class="col-12 col-md-8 col-xl-6">
-                            <label for="selected_db" class="form-label">Database</label>
-                            <select name="selected_db" id="selected_db" class="form-select">
-                                {% for db in db_sizes %}
-                                    <option value="{{ db.name }}">{{ db.name }} ({{ db.size_mb }} MB)</option>
-                                {% endfor %}
-                            </select>
+                    <div class="row g-3 align-items-stretch">
+                        <div class="col-12 col-lg-7">
+                            <form action="/select-db" method="POST" class="row g-3 align-items-end h-100">
+                                <div class="col-12 col-md-8">
+                                    <label for="selected_db" class="form-label">Database</label>
+                                    <select name="selected_db" id="selected_db" class="form-select">
+                                        {% for db in db_sizes %}
+                                            <option value="{{ db.name }}" {% if selected_db == db.name %}selected{% endif %}>
+                                                {{ db.name }} ({{ db.size_mb }} MB)
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-12 col-md-auto">
+                                    <button type="submit" class="btn btn-primary w-100">Choose</button>
+                                </div>
+                            </form>
                         </div>
-                        <div class="col-12 col-md-auto">
-                            <button type="submit" class="btn btn-primary w-100">Choose</button>
+                        <div class="col-12 col-lg-5">
+                            <div class="h-100 d-flex align-items-end">
+                                {% if selected_db %}
+                                    {% if selected_db_bad_checks is not none %}
+                                        {% if selected_db_bad_checks > 0 %}
+                                            <div class="alert alert-warning py-2 w-100 mb-0" role="alert">
+                                                Selected database <strong>{{ selected_db }}</strong> has
+                                                <strong>{{ selected_db_bad_checks }}</strong> BAD analyze check(s).
+                                                <a href="{{ url_for('analyze.analyze') }}" class="alert-link">Open Analyze</a>.
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-success py-2 w-100 mb-0" role="alert">
+                                                Selected database <strong>{{ selected_db }}</strong> has no BAD analyze checks.
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="alert alert-secondary py-2 w-100 mb-0" role="alert">
+                                            Selected database <strong>{{ selected_db }}</strong>; analyze status is not available.
+                                        </div>
+                                    {% endif %}
+                                {% else %}
+                                    <div class="alert alert-secondary py-2 w-100 mb-0" role="alert">
+                                        No database selected yet.
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>

@@ -265,4 +265,9 @@
   document.querySelectorAll(".btnDelete").forEach(btn => {
     btn.addEventListener("click", () => openDelete(btn.dataset.id));
   });
+
+  const requestedDrawing = new URLSearchParams(window.location.search).get("edit_drawing");
+  if (requestedDrawing) {
+    openEdit(requestedDrawing).catch((err) => console.error(err));
+  }
 })();

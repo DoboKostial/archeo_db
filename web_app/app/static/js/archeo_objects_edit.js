@@ -97,6 +97,13 @@
       });
     });
 
+    const requestedObject = new URLSearchParams(window.location.search).get("edit_object");
+    if (requestedObject) {
+      const btn = Array.from(document.querySelectorAll(".btn-edit"))
+        .find((candidate) => candidate.getAttribute("data-object-id") === requestedObject);
+      if (btn) btn.click();
+    }
+
     // save edit
     const saveEdit = document.getElementById("saveEdit");
     if (saveEdit) {

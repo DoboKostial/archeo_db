@@ -289,6 +289,17 @@
     }
   }
 
+  async function openPointById(id) {
+    const qs = new URLSearchParams({
+      id_from: id,
+      id_to: id,
+      limit: 1
+    });
+    const data = await requestJson(`${EP.list}?${qs.toString()}`);
+    const row = (data.rows || []).find((r) => String(r.id_pts) === String(id));
+    if (row) openEdit(row);
+  }
+
   async function doDelete(id) {
     if (!confirm(`Delete point ID ${id}?`)) return;
     const data = await requestJson(`${EP.delBase}/${id}`, { method: "POST" });
@@ -429,6 +440,11 @@
     bindMapEvents();
     bindModalEvents();
     await reloadAll();
+
+    const requestedPoint = new URLSearchParams(window.location.search).get("edit_geopt");
+    if (requestedPoint) {
+      await openPointById(requestedPoint);
+    }
   }
 
   window.addEventListener("load", () => {

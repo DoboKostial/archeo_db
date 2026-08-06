@@ -383,5 +383,10 @@
 
     wireRanges();
     wireGalleryButtons();
+
+    const requestedPhotogram = new URLSearchParams(window.location.search).get("edit_photogram");
+    if (requestedPhotogram) {
+      openEdit(requestedPhotogram).catch((err) => console.error(err));
+    }
   });
 })();

@@ -18,6 +18,7 @@ from app.queries import (
     get_terrain_db_list,
     get_terrain_db_sizes,
 )
+from app.utils.analyze_checks import count_bad_checks
 from app.utils.storage import validate_db_name
 
 main_bp = Blueprint("main", __name__)
@@ -85,6 +86,8 @@ def index():
     user_email = g.user_email
     user_role = g.user_role
     user_name_from_token = g.user_name
+    selected_db = session.get("selected_db")
+    selected_db_bad_checks = None
 
     try:
         conn = get_auth_connection()
@@ -120,6 +123,16 @@ def index():
                 }
             )
 
+        available_dbs = {db["name"] for db in db_sizes}
+        if selected_db:
+            try:
+                validate_db_name(selected_db)
+                if selected_db in available_dbs:
+                    selected_db_bad_checks = count_bad_checks(selected_db)
+            except Exception as e:
+                selected_db_bad_checks = None
+                logger.warning(f"Could not compute analyze BAD checks for {selected_db}: {e}")
+
     except Exception as e:
         logger.error(f"Error fetching data for /index: {e}")
         return redirect("/login")
@@ -139,6 +152,8 @@ def index():
         last_login=last_login.strftime("%Y-%m-%d") if last_login else "You are logged first time.",
         pg_version=pg_version,
         db_sizes=db_sizes,
+        selected_db=selected_db,
+        selected_db_bad_checks=selected_db_bad_checks,
         user_role=user_role,
         app_version=getattr(Config, "APP_VERSION", ""),
         mobile_api_base_url=(getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip(),

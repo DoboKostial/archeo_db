@@ -258,4 +258,9 @@
   document.querySelectorAll(".btnDelete").forEach(btn => {
     btn.addEventListener("click", () => openDelete(btn.dataset.id));
   });
+
+  const requestedPhoto = new URLSearchParams(window.location.search).get("edit_photo");
+  if (requestedPhoto) {
+    openEdit(requestedPhoto).catch((err) => console.error(err));
+  }
 })();
