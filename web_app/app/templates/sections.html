@@ -338,7 +338,7 @@
       });
     }
 
-    (function () {
+    function initEditSectionModal() {
       const editSecModal = document.getElementById('editSectionModal');
       if (!editSecModal) return;
 
@@ -389,7 +389,13 @@
           instance.show(btn);
         }
       }
-    })();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initEditSectionModal);
+    } else {
+      initEditSectionModal();
+    }
   </script>
 
   <!-- Map view modal -->
