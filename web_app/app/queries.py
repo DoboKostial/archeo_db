@@ -3440,12 +3440,84 @@ def rule_polygons_overlap_same_row_sql():
 
 def rule_polygons_missing_edges_sql():
     return """
-        SELECT polygon_name,
-               (geom_top IS NOT NULL) AS has_top_geom,
-               (geom_bottom IS NOT NULL) AS has_bottom_geom
-        FROM tab_polygons
-        WHERE geom_top IS NULL OR geom_bottom IS NULL
+        SELECT
+            p.polygon_name,
+            EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_top bt
+              WHERE bt.ref_polygon = p.polygon_name
+            ) AS has_top_binding,
+            (p.geom_top IS NOT NULL) AS has_top_geom,
+            EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_bottom bb
+              WHERE bb.ref_polygon = p.polygon_name
+            ) AS has_bottom_binding,
+            (p.geom_bottom IS NOT NULL) AS has_bottom_geom
+        FROM tab_polygons p
+        WHERE
+            p.geom_top IS NULL
+            OR p.geom_bottom IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_top bt
+              WHERE bt.ref_polygon = p.polygon_name
+            )
+            OR NOT EXISTS (
+              SELECT 1
+              FROM tab_polygon_geopts_binding_bottom bb
+              WHERE bb.ref_polygon = p.polygon_name
+            )
         ORDER BY polygon_name;
+    """
+
+
+def rule_polygons_bottom_outside_top_sql():
+    return """
+        WITH checked AS (
+          SELECT
+            polygon_name,
+            ST_Area(ST_Difference(geom_bottom, geom_top)) AS outside_area
+          FROM tab_polygons
+          WHERE geom_top IS NOT NULL
+            AND geom_bottom IS NOT NULL
+            AND NOT ST_CoveredBy(geom_bottom, geom_top)
+        )
+        SELECT
+          polygon_name,
+          ROUND(outside_area::numeric, 3) AS outside_area
+        FROM checked
+        WHERE outside_area > 0.0001
+        ORDER BY polygon_name;
+    """
+
+
+def rule_polygons_missing_geopts_sql():
+    return """
+        WITH ranges AS (
+          SELECT ref_polygon, 'top'::text AS side, pts_from, pts_to
+          FROM tab_polygon_geopts_binding_top
+          UNION ALL
+          SELECT ref_polygon, 'bottom'::text AS side, pts_from, pts_to
+          FROM tab_polygon_geopts_binding_bottom
+        ),
+        expected AS (
+          SELECT ref_polygon, side, generate_series(pts_from, pts_to) AS id_pts
+          FROM ranges
+        ),
+        missing AS (
+          SELECT e.ref_polygon, e.side, e.id_pts
+          FROM expected e
+          LEFT JOIN tab_geopts g ON g.id_pts = e.id_pts
+          WHERE g.id_pts IS NULL
+        )
+        SELECT
+          ref_polygon,
+          side,
+          ARRAY_AGG(id_pts ORDER BY id_pts) AS missing_geopt_ids
+        FROM missing
+        GROUP BY ref_polygon, side
+        ORDER BY ref_polygon, side;
     """
 
 
@@ -3469,6 +3541,19 @@ def rule_su_without_sketch_sql():
     """
 
 
+def rule_su_without_any_documentation_sql():
+    return """
+        SELECT s.id_sj
+        FROM tab_sj s
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_photo_sj p WHERE p.ref_sj = s.id_sj)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj pg WHERE pg.ref_sj = s.id_sj)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_sj_drawings d WHERE d.ref_sj = s.id_sj)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch k WHERE k.ref_sj = s.id_sj)
+        ORDER BY s.id_sj;
+    """
+
+
 def rule_su_without_relation_sql():
     return """
         SELECT s.id_sj
@@ -3480,6 +3565,32 @@ def rule_su_without_relation_sql():
         ) rel ON rel.sj = s.id_sj
         WHERE rel.sj IS NULL
         ORDER BY s.id_sj;
+    """
+
+
+def rule_su_without_polygon_sql():
+    return """
+        SELECT s.id_sj
+        FROM tab_sj s
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM tabaid_sj_polygon p
+          WHERE p.ref_sj = s.id_sj
+        )
+        ORDER BY s.id_sj;
+    """
+
+
+def rule_objects_without_su_sql():
+    return """
+        SELECT o.id_object
+        FROM tab_object o
+        WHERE NOT EXISTS (
+          SELECT 1
+          FROM tab_sj s
+          WHERE s.ref_object = o.id_object
+        )
+        ORDER BY o.id_object;
     """
 
 
@@ -3513,6 +3624,19 @@ def rule_sections_without_sketch_sql():
     """
 
 
+def rule_sections_without_any_documentation_sql():
+    return """
+        SELECT s.id_section
+        FROM tab_section s
+        WHERE
+          NOT EXISTS (SELECT 1 FROM tabaid_section_photos p WHERE p.ref_section = s.id_section)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_photograms pg WHERE pg.ref_section = s.id_section)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_drawings d WHERE d.ref_section = s.id_section)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_sketches k WHERE k.ref_section = s.id_section)
+        ORDER BY s.id_section;
+    """
+
+
 def rule_orphan_photos_sql():
     return """
         SELECT p.id_photo
@@ -3522,6 +3646,7 @@ def rule_orphan_photos_sql():
           AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_photos pp WHERE pp.ref_photo=p.id_photo)
           AND NOT EXISTS (SELECT 1 FROM tabaid_section_photos sp WHERE sp.ref_photo=p.id_photo)
           AND NOT EXISTS (SELECT 1 FROM tabaid_finds_photos fp WHERE fp.ref_photo=p.id_photo)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_samples_photos sap WHERE sap.ref_photo=p.id_photo)
         ORDER BY p.id_photo;
     """
 
@@ -3557,7 +3682,53 @@ def rule_orphan_photograms_sql():
         FROM tab_photograms p
         WHERE
           NOT EXISTS (SELECT 1 FROM tabaid_photogram_sj x WHERE x.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_polygon_photograms pp WHERE pp.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram)
+          AND NOT EXISTS (SELECT 1 FROM tabaid_photogram_geopts gp WHERE gp.ref_photogram=p.id_photogram)
         ORDER BY p.id_photogram;
+    """
+
+
+def rule_geopts_outside_srid_envelope_sql():
+    return """
+        WITH checked AS (
+          SELECT
+            g.id_pts,
+            g.x,
+            g.y,
+            g.h,
+            CASE
+              WHEN g.pts_geom IS NULL THEN NULL
+              ELSE ST_SRID(g.pts_geom)
+            END AS srid,
+            CASE
+              WHEN g.pts_geom IS NULL THEN 'missing geometry'
+              WHEN ST_SRID(g.pts_geom) = 4326
+                   AND NOT (g.x BETWEEN -180 AND 180 AND g.y BETWEEN -90 AND 90)
+                THEN 'outside EPSG:4326 lon/lat envelope'
+              WHEN ST_SRID(g.pts_geom) = 3857
+                   AND NOT (
+                     g.x BETWEEN -20037508.342789244 AND 20037508.342789244
+                     AND g.y BETWEEN -20037508.342789244 AND 20037508.342789244
+                   )
+                THEN 'outside EPSG:3857 Web Mercator envelope'
+              WHEN ST_SRID(g.pts_geom) BETWEEN 32601 AND 32660
+                   AND NOT (g.x BETWEEN 100000 AND 900000 AND g.y BETWEEN 0 AND 10000000)
+                THEN 'outside UTM north envelope'
+              WHEN ST_SRID(g.pts_geom) = 5514
+                   AND NOT (g.x BETWEEN -950000 AND -400000 AND g.y BETWEEN -1300000 AND -900000)
+                THEN 'outside broad EPSG:5514 S-JTSK envelope'
+              WHEN ST_SRID(g.pts_geom) = 3035
+                   AND NOT (g.x BETWEEN 1000000 AND 7500000 AND g.y BETWEEN 500000 AND 5500000)
+                THEN 'outside broad EPSG:3035 Europe envelope'
+              ELSE NULL
+            END AS reason
+          FROM tab_geopts g
+        )
+        SELECT id_pts, x, y, h, srid, reason
+        FROM checked
+        WHERE reason IS NOT NULL
+        ORDER BY id_pts;
     """
 
 #### 
