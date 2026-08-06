@@ -1,5 +1,6 @@
 {# templates/sketches.html #}
 {% extends "base.html" %}
+{% from "_media_entity_links.html" import entity_group %}
 {% block title %}Sketches{% endblock %}
 
 {% block content %}
@@ -201,13 +202,13 @@
             {% endif %}
 
             <div class="d-flex flex-wrap gap-1 mb-2">
-              <span class="badge text-bg-light">
+              <span class="badge text-bg-light media-links-badge">
                 Links:
-                SUs({{ g.link_counts.sj }}),
-                P({{ g.link_counts.polygon }}),
-                S({{ g.link_counts.section }}),
-                F({{ g.link_counts.find }}),
-                Sa({{ g.link_counts.sample }})
+                {{ entity_group("SUs", "su", g.links.sj_ids) }},
+                {{ entity_group("P", "polygon", g.links.polygon_names) }},
+                {{ entity_group("S", "section", g.links.section_ids) }},
+                {{ entity_group("F", "find", g.links.find_ids) }},
+                {{ entity_group("Sa", "sample", g.links.sample_ids) }}
               </span>
             </div>
 

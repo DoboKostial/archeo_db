@@ -342,6 +342,13 @@ def photos():
                         "find": r[15],
                         "sample": r[16],
                     },
+                    "links": {
+                        "sj_ids": list(r[17] or []),
+                        "polygon_names": list(r[18] or []),
+                        "section_ids": list(r[19] or []),
+                        "find_ids": list(r[20] or []),
+                        "sample_ids": list(r[21] or []),
+                    },
                 })
 
     finally:

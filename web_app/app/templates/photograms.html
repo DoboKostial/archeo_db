@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_media_entity_links.html" import entity_group %}
 {% block content %}
 
 <div class="alert alert-info" role="alert">
@@ -182,11 +183,12 @@
             <div class="d-flex flex-wrap gap-1 mb-2">
               <span class="badge text-bg-secondary">{{ g.photogram_typ }}</span>
 
-              <span class="badge text-bg-light">
-                Links: SUs({{ g.link_counts.sj }}),
-                Polygons({{ g.link_counts.polygon }}),
-                Sections({{ g.link_counts.section }}),
-                Geopts({{ g.link_counts.ranges }})
+              <span class="badge text-bg-light media-links-badge">
+                Links:
+                {{ entity_group("SUs", "su", g.links.sj_ids) }},
+                {{ entity_group("Polygons", "polygon", g.links.polygon_names) }},
+                {{ entity_group("Sections", "section", g.links.section_ids) }},
+                {{ entity_group("Geopts", "geopt", g.links.geopt_ranges) }}
               </span>
             </div>
 

@@ -182,6 +182,7 @@ def sketches():
                 lc = {}
         if lc is None:
             lc = {}
+        link_ids = lc if isinstance(lc, dict) else {}
         sketches_rows.append({
             "id_sketch": r[0],
             "sketch_typ": r[1],
@@ -194,7 +195,14 @@ def sketches():
                 "section": int(lc.get("section", 0)) if isinstance(lc, dict) else 0,
                 "find": int(lc.get("find", 0)) if isinstance(lc, dict) else 0,
                 "sample": int(lc.get("sample", 0)) if isinstance(lc, dict) else 0,
-            }
+            },
+            "links": {
+                "sj_ids": link_ids.get("sj_ids") or [],
+                "polygon_names": link_ids.get("polygon_names") or [],
+                "section_ids": link_ids.get("section_ids") or [],
+                "find_ids": link_ids.get("find_ids") or [],
+                "sample_ids": link_ids.get("sample_ids") or [],
+            },
         })
 
     def _human_bytes(n: int | None) -> str:

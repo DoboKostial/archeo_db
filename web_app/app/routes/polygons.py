@@ -39,12 +39,36 @@ MEDIA_DIRS = Config.MEDIA_DIRS  # {"photos": "photos", ...}
 ALLOWED_EXT = Config.ALLOWED_EXTENSIONS
 ALLOWED_MIME = Config.ALLOWED_MIME
 
+ALLOWED_ALLOCATIONS = {
+    "physical_separation",
+    "research_phase",
+    "horizontal_stratigraphy",
+    "other",
+}
+
+
+def _json_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else []
+        except Exception:
+            return []
+    return []
+
 
 # ---------- LIST + FORM PAGE ----------
 @polygons_bp.route('/polygons', methods=['GET'])
 @require_selected_db
 def polygons():
     selected_db = session.get('selected_db')
+    open_edit_polygon_name = (
+        (request.args.get('edit_polygon') or request.args.get('polygon_name') or '').strip()
+    )
 
     # list polygons
     conn = get_terrain_connection(selected_db)
@@ -54,7 +78,19 @@ def polygons():
         with conn.cursor() as cur:
             cur.execute(get_polygons_list())
             polys = [
-                {"id": row[0], "name": row[1], "points": row[2], "srid": row[3], "parent": row[4], "allocation_reason": row[5], "has_top": row[6], "has_bottom": row[7]}
+                {
+                    "id": row[0],
+                    "name": row[1],
+                    "points": row[2],
+                    "srid": row[3],
+                    "parent": row[4],
+                    "allocation_reason": row[5],
+                    "has_top": row[6],
+                    "has_bottom": row[7],
+                    "notes": row[8] or "",
+                    "top_ranges": _json_list(row[9]),
+                    "bottom_ranges": _json_list(row[10]),
+                }
                 for row in cur.fetchall()
             ]
             cur.execute(list_authors_sql())
@@ -65,7 +101,13 @@ def polygons():
     finally:
         conn.close()
 
-    return render_template('polygons.html', polygons=polys, selected_db=selected_db, authors=authors)
+    return render_template(
+        'polygons.html',
+        polygons=polys,
+        selected_db=selected_db,
+        authors=authors,
+        open_edit_polygon_name=open_edit_polygon_name,
+    )
 
 
 # ---------- MANUAL POLYGON CREATE (ID + name + ranges) ----------
@@ -112,13 +154,7 @@ def new_polygon_manual():
         if not allocation:
             raise ValueError("Allocation reason is required.")
 
-        allowed_alloc = {
-            "physical_separation",
-            "research_phase",
-            "horizontal_stratigraphy",
-            "other",
-        }
-        if allocation not in allowed_alloc:
+        if allocation not in ALLOWED_ALLOCATIONS:
             raise ValueError("Invalid allocation reason.")
 
         if parent_name and parent_name == polygon_name:
@@ -173,6 +209,79 @@ def new_polygon_manual():
     return redirect(url_for('polygons.polygons'))
 
 
+@polygons_bp.route('/polygons/edit', methods=['POST'])
+@require_selected_db
+def edit_polygon():
+    selected_db = session.get('selected_db')
+
+    polygon_name = (request.form.get('polygon_name') or '').strip()
+    parent_name = (request.form.get('parent_name') or '').strip()
+    allocation = (request.form.get('allocation_reason') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+
+    top_from = request.form.getlist('top_range_from[]')
+    top_to = request.form.getlist('top_range_to[]')
+    bot_from = request.form.getlist('bottom_range_from[]')
+    bot_to = request.form.getlist('bottom_range_to[]')
+
+    try:
+        if not polygon_name:
+            raise ValueError("Polygon name is required.")
+        if allocation not in ALLOWED_ALLOCATIONS:
+            raise ValueError("Invalid allocation reason.")
+        if parent_name and parent_name == polygon_name:
+            raise ValueError("Parent polygon cannot be the same as polygon name.")
+
+        top_ranges = _prep_ranges(top_from, top_to)
+        bot_ranges = _prep_ranges(bot_from, bot_to)
+        if not top_ranges and not bot_ranges:
+            raise ValueError("Provide at least one TOP or BOTTOM range of points.")
+
+        conn = get_terrain_connection(selected_db)
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute(polygon_exists_sql(), (polygon_name,))
+                if not cur.fetchone():
+                    raise ValueError(f'Polygon "{polygon_name}" not found.')
+
+                cur.execute(insert_polygon_manual_sql(), (polygon_name, parent_name, allocation, notes))
+
+                cur.execute(delete_bindings_top_sql(), (polygon_name,))
+                cur.execute(delete_bindings_bottom_sql(), (polygon_name,))
+
+                for f_i, t_i in top_ranges:
+                    cur.execute(insert_binding_top_sql(), (polygon_name, f_i, t_i))
+                for f_i, t_i in bot_ranges:
+                    cur.execute(insert_binding_bottom_sql(), (polygon_name, f_i, t_i))
+
+                cur.execute(rebuild_geom_sql(), (polygon_name,))
+
+            conn.commit()
+            flash(f'Polygon "{polygon_name}" updated and geometry rebuilt.', 'success')
+            logger.info(
+                f'[{selected_db}] polygon "{polygon_name}" edited: '
+                f'{len(top_ranges)} TOP range(s), {len(bot_ranges)} BOTTOM range(s), allocation={allocation}.'
+            )
+            return redirect(url_for('polygons.polygons'))
+        except Exception as e:
+            conn.rollback()
+            logger.error(f'[{selected_db}] polygon edit error: {e}')
+            flash(f'Error while editing polygon: {e}', 'danger')
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    except ValueError as ve:
+        flash(str(ve), 'warning')
+    except Exception as e:
+        flash(f'Unexpected error: {e}', 'danger')
+
+    return redirect(url_for('polygons.polygons', edit_polygon=polygon_name))
+
+
 
 # ---------- TXT/CSV UPLOAD (geopts + bindings + rebuild) ----------
 @polygons_bp.route('/upload-polygons', methods=['POST'])
@@ -192,13 +301,7 @@ def upload_polygons():
         flash('You must select a file, EPSG and side (TOP/BOTTOM).', 'danger')
         return redirect(url_for('polygons.polygons'))
 
-    allowed_alloc = {
-        "physical_separation",
-        "research_phase",
-        "horizontal_stratigraphy",
-        "other",
-    }
-    if allocation not in allowed_alloc:
+    if allocation not in ALLOWED_ALLOCATIONS:
         flash('Invalid allocation reason.', 'warning')
         return redirect(url_for('polygons.polygons'))
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_media_entity_links.html" import entity_group %}
 {% block content %}
 
 <div class="alert alert-info" role="alert">
@@ -183,10 +184,10 @@
                     <div class="small text-break">{{ g.notes }}</div>
                   {% endif %}
                   <div class="small text-muted">{{ g.file_size_h }}</div>
-                  <div class="small">
+                  <div class="small media-links-badge">
                     Links:
-                    <span class="badge text-bg-secondary">SU {{ g.link_counts.sj }}</span>
-                    <span class="badge text-bg-secondary">Section {{ g.link_counts.section }}</span>
+                    {{ entity_group("SUs", "su", g.links.sj) }},
+                    {{ entity_group("Sections", "section", g.links.section) }}
                   </div>
                 </div>
               </div>

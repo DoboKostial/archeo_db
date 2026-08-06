@@ -212,6 +212,7 @@ def photograms():
                 lc = {}
         if lc is None:
             lc = {}
+        link_ids = lc if isinstance(lc, dict) else {}
 
         photograms_rows.append({
             "id_photogram": r[0],
@@ -225,6 +226,12 @@ def photograms():
                 "polygon": int(lc.get("polygon", 0)) if isinstance(lc, dict) else 0,
                 "section": int(lc.get("section", 0)) if isinstance(lc, dict) else 0,
                 "ranges": int(lc.get("ranges", 0)) if isinstance(lc, dict) else 0,
+            },
+            "links": {
+                "sj_ids": link_ids.get("sj_ids") or [],
+                "polygon_names": link_ids.get("polygon_names") or [],
+                "section_ids": link_ids.get("section_ids") or [],
+                "geopt_ranges": link_ids.get("geopt_ranges") or [],
             },
         })
 

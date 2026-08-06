@@ -884,7 +884,10 @@ def get_polygons_list():
       parent (parent_name),
       allocation_reason (text),
       has_top (binding exists),
-      has_bottom (binding exists)
+      has_bottom (binding exists),
+      notes,
+      top_ranges,
+      bottom_ranges
     """
     return """
         SELECT
@@ -914,7 +917,33 @@ def get_polygons_list():
               FROM tab_polygon_geopts_binding_bottom bb
               WHERE bb.ref_polygon = p.polygon_name
               LIMIT 1
-            )                                           AS has_bottom
+            )                                           AS has_bottom,
+
+            p.notes                                     AS notes,
+
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  jsonb_build_object('from', bt.pts_from, 'to', bt.pts_to)
+                  ORDER BY bt.pts_from, bt.pts_to
+                )
+                FROM tab_polygon_geopts_binding_top bt
+                WHERE bt.ref_polygon = p.polygon_name
+              ),
+              '[]'::jsonb
+            )                                           AS top_ranges,
+
+            COALESCE(
+              (
+                SELECT jsonb_agg(
+                  jsonb_build_object('from', bb.pts_from, 'to', bb.pts_to)
+                  ORDER BY bb.pts_from, bb.pts_to
+                )
+                FROM tab_polygon_geopts_binding_bottom bb
+                WHERE bb.ref_polygon = p.polygon_name
+              ),
+              '[]'::jsonb
+            )                                           AS bottom_ranges
 
         FROM tab_polygons p
         ORDER BY p.polygon_name;
@@ -2159,7 +2188,12 @@ def list_photos_sql(where_sql: str = "", order_sql: str = "", limit_sql: str = "
             (SELECT COUNT(*) FROM tabaid_polygon_photos l WHERE l.ref_photo = p.id_photo) AS polygon_count,
             (SELECT COUNT(*) FROM tabaid_section_photos l WHERE l.ref_photo = p.id_photo) AS section_count,
             (SELECT COUNT(*) FROM tabaid_finds_photos l WHERE l.ref_photo = p.id_photo) AS find_count,
-            (SELECT COUNT(*) FROM tabaid_samples_photos l WHERE l.ref_photo = p.id_photo) AS sample_count
+            (SELECT COUNT(*) FROM tabaid_samples_photos l WHERE l.ref_photo = p.id_photo) AS sample_count,
+            ARRAY(SELECT l.ref_sj FROM tabaid_photo_sj l WHERE l.ref_photo = p.id_photo ORDER BY l.ref_sj) AS sj_ids,
+            ARRAY(SELECT l.ref_polygon FROM tabaid_polygon_photos l WHERE l.ref_photo = p.id_photo ORDER BY l.ref_polygon) AS polygon_names,
+            ARRAY(SELECT l.ref_section FROM tabaid_section_photos l WHERE l.ref_photo = p.id_photo ORDER BY l.ref_section) AS section_ids,
+            ARRAY(SELECT l.ref_find FROM tabaid_finds_photos l WHERE l.ref_photo = p.id_photo ORDER BY l.ref_find) AS find_ids,
+            ARRAY(SELECT l.ref_sample FROM tabaid_samples_photos l WHERE l.ref_photo = p.id_photo ORDER BY l.ref_sample) AS sample_ids
         FROM tab_photos p
     """
     return base + "\n" + (where_sql or "") + "\n" + (order_sql or "") + "\n" + (limit_sql or "") + ";"
@@ -2360,7 +2394,36 @@ def select_photograms_page_sql(
           'sj',      (SELECT COUNT(*) FROM tabaid_photogram_sj s WHERE s.ref_photogram=p.id_photogram),
           'polygon', (SELECT COUNT(*) FROM tabaid_polygon_photograms pp WHERE pp.ref_photogram=p.id_photogram),
           'section', (SELECT COUNT(*) FROM tabaid_section_photograms sp WHERE sp.ref_photogram=p.id_photogram),
-          'ranges',  (SELECT COUNT(*) FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram)
+          'ranges',  (SELECT COUNT(*) FROM tabaid_photogram_geopts g WHERE g.ref_photogram=p.id_photogram),
+          'sj_ids',
+            COALESCE(
+              (SELECT json_agg(s.ref_sj ORDER BY s.ref_sj)
+               FROM tabaid_photogram_sj s
+               WHERE s.ref_photogram=p.id_photogram),
+              '[]'::json
+            ),
+          'polygon_names',
+            COALESCE(
+              (SELECT json_agg(pp.ref_polygon ORDER BY pp.ref_polygon)
+               FROM tabaid_polygon_photograms pp
+               WHERE pp.ref_photogram=p.id_photogram),
+              '[]'::json
+            ),
+          'section_ids',
+            COALESCE(
+              (SELECT json_agg(sp.ref_section ORDER BY sp.ref_section)
+               FROM tabaid_section_photograms sp
+               WHERE sp.ref_photogram=p.id_photogram),
+              '[]'::json
+            ),
+          'geopt_ranges',
+            COALESCE(
+              (SELECT json_agg((g.ref_geopt_from::text || '-' || g.ref_geopt_to::text)
+                               ORDER BY g.ref_geopt_from, g.ref_geopt_to)
+               FROM tabaid_photogram_geopts g
+               WHERE g.ref_photogram=p.id_photogram),
+              '[]'::json
+            )
         ) AS link_counts
       FROM tab_photograms p
       WHERE {where_sql}
@@ -2646,7 +2709,42 @@ def select_sketches_page_sql(
           'polygon',COALESCE(poly.cnt, 0),
           'section',COALESCE(sec.cnt, 0),
           'find',   COALESCE(fd.cnt, 0),
-          'sample', COALESCE(sp.cnt, 0)
+          'sample', COALESCE(sp.cnt, 0),
+          'sj_ids',
+            COALESCE(
+              (SELECT jsonb_agg(x.ref_sj ORDER BY x.ref_sj)
+               FROM tabaid_sj_sketch x
+               WHERE x.ref_sketch = s.id_sketch),
+              '[]'::jsonb
+            ),
+          'polygon_names',
+            COALESCE(
+              (SELECT jsonb_agg(x.ref_polygon ORDER BY x.ref_polygon)
+               FROM tabaid_polygon_sketches x
+               WHERE x.ref_sketch = s.id_sketch),
+              '[]'::jsonb
+            ),
+          'section_ids',
+            COALESCE(
+              (SELECT jsonb_agg(x.ref_section ORDER BY x.ref_section)
+               FROM tabaid_section_sketches x
+               WHERE x.ref_sketch = s.id_sketch),
+              '[]'::jsonb
+            ),
+          'find_ids',
+            COALESCE(
+              (SELECT jsonb_agg(x.ref_find ORDER BY x.ref_find)
+               FROM tabaid_finds_sketches x
+               WHERE x.ref_sketch = s.id_sketch),
+              '[]'::jsonb
+            ),
+          'sample_ids',
+            COALESCE(
+              (SELECT jsonb_agg(x.ref_sample ORDER BY x.ref_sample)
+               FROM tabaid_samples_sketches x
+               WHERE x.ref_sketch = s.id_sketch),
+              '[]'::jsonb
+            )
         ) AS link_counts
       FROM tab_sketches s
 

@@ -418,7 +418,7 @@
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Edit find</h5>
+        <h5 class="modal-title">Edit find <span id="editFindTitle">—</span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
@@ -496,7 +496,7 @@
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Edit sample</h5>
+        <h5 class="modal-title">Edit sample <span id="editSampleTitle">—</span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 
@@ -767,9 +767,13 @@
     updFind: (id) => "{{ url_for('finds_samples.update_find', id_find=0) }}".replace("/0", "/" + id),
     updSample: (id) => "{{ url_for('finds_samples.update_sample', id_sample=0) }}".replace("/0", "/" + id),
     printFind: (id) => "{{ url_for('finds_samples.print_find_label', id_find=0) }}".replace("/0", "/" + id),
-    printSample: (id) => "{{ url_for('finds_samples.print_sample_label', id_sample=0) }}".replace("/0", "/" + id)
+    printSample: (id) => "{{ url_for('finds_samples.print_sample_label', id_sample=0) }}".replace("/0", "/" + id),
+    getFind: (id) => "{{ url_for('finds_samples.find_detail', id_find=0, format='json') }}".replace("/0", "/" + id),
+    getSample: (id) => "{{ url_for('finds_samples.sample_detail', id_sample=0, format='json') }}".replace("/0", "/" + id)
   };
 
+  const OPEN_EDIT_FIND_ID = {{ open_edit_find_id|tojson }};
+  const OPEN_EDIT_SAMPLE_ID = {{ open_edit_sample_id|tojson }};
   const cacheFinds = new Map();
   const cacheSamples = new Map();
   const LIST_PAGE_SIZE = 10;
@@ -1015,12 +1019,12 @@
   });
 
   // ----- edit modals -----
-  function openEditFind(id) {
-    const r = cacheFinds.get(id);
+  function fillEditFind(id, r) {
     if (!r) return;
 
     document.getElementById("editFindId").value = id;
     document.getElementById("editFindIdDisplay").value = id;
+    document.getElementById("editFindTitle").textContent = `#${id}`;
     document.getElementById("editFindType").value = r.ref_find_type || "";
     document.getElementById("editFindSj").value = r.ref_sj ?? "";
     document.getElementById("editFindCount").value = r.count ?? "";
@@ -1030,6 +1034,28 @@
     document.getElementById("editFindDescription").value = r.description || "";
 
     new bootstrap.Modal(document.getElementById("modalEditFind")).show();
+  }
+
+  function openEditFind(id) {
+    fillEditFind(id, cacheFinds.get(id));
+  }
+
+  async function openEditFindById(id) {
+    id = Number(id);
+    if (!id) return;
+
+    let r = cacheFinds.get(id);
+    if (!r) {
+      const res = await fetch(EP.getFind(id));
+      const data = await res.json().catch(() => ({ ok: false, error: "Find detail failed." }));
+      if (!res.ok || !data.ok || !data.row) {
+        alert(data.error || "Find detail failed.");
+        return;
+      }
+      r = data.row;
+      cacheFinds.set(id, r);
+    }
+    fillEditFind(id, r);
   }
 
   async function saveEditFind() {
@@ -1061,12 +1087,12 @@
 
   document.getElementById("btnSaveFindEdit").addEventListener("click", saveEditFind);
 
-  function openEditSample(id) {
-    const r = cacheSamples.get(id);
+  function fillEditSample(id, r) {
     if (!r) return;
 
     document.getElementById("editSampleId").value = id;
     document.getElementById("editSampleIdDisplay").value = id;
+    document.getElementById("editSampleTitle").textContent = `#${id}`;
     document.getElementById("editSampleType").value = r.ref_sample_type || "";
     document.getElementById("editSampleSj").value = r.ref_sj ?? "";
     document.getElementById("editSamplePolygon").value = r.ref_polygon || "";
@@ -1074,6 +1100,28 @@
     document.getElementById("editSampleDescription").value = r.description || "";
 
     new bootstrap.Modal(document.getElementById("modalEditSample")).show();
+  }
+
+  function openEditSample(id) {
+    fillEditSample(id, cacheSamples.get(id));
+  }
+
+  async function openEditSampleById(id) {
+    id = Number(id);
+    if (!id) return;
+
+    let r = cacheSamples.get(id);
+    if (!r) {
+      const res = await fetch(EP.getSample(id));
+      const data = await res.json().catch(() => ({ ok: false, error: "Sample detail failed." }));
+      if (!res.ok || !data.ok || !data.row) {
+        alert(data.error || "Sample detail failed.");
+        return;
+      }
+      r = data.row;
+      cacheSamples.set(id, r);
+    }
+    fillEditSample(id, r);
   }
 
   async function saveEditSample() {
@@ -1131,6 +1179,11 @@
     syncDocSelectors();
     await reloadFinds(1);
     await reloadSamples(1);
+    if (OPEN_EDIT_FIND_ID) {
+      await openEditFindById(OPEN_EDIT_FIND_ID);
+    } else if (OPEN_EDIT_SAMPLE_ID) {
+      await openEditSampleById(OPEN_EDIT_SAMPLE_ID);
+    }
   });
 </script>
 

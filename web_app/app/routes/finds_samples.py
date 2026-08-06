@@ -114,6 +114,8 @@ def _pagination_args(default_limit: int = 10, max_limit: int = 100):
 @require_selected_db
 def finds_samples():
     selected_db = session["selected_db"]
+    open_edit_find_id = request.args.get("edit_find", type=int)
+    open_edit_sample_id = request.args.get("edit_sample", type=int)
     conn = get_terrain_connection(selected_db)
 
     try:
@@ -148,6 +150,8 @@ def finds_samples():
         last_finds=last_finds,
         last_samples=last_samples,
         allowed_ext=", ".join(sorted(ALLOWED_EXT)),
+        open_edit_find_id=open_edit_find_id,
+        open_edit_sample_id=open_edit_sample_id,
     )
 
 
@@ -533,6 +537,23 @@ def find_detail(id_find: int):
         if not r:
             return Response("Not found.", status=404)
 
+        if request.args.get("format") == "json":
+            return jsonify(
+                {
+                    "ok": True,
+                    "row": {
+                        "id_find": id_find,
+                        "ref_find_type": r[1],
+                        "ref_sj": r[2],
+                        "count": r[3],
+                        "box": r[4],
+                        "ref_polygon": r[5],
+                        "ref_geopt": r[6],
+                        "description": r[7],
+                    },
+                }
+            )
+
         return render_template(
             "find_sample_detail.html",
             item_kind="Find",
@@ -563,6 +584,21 @@ def sample_detail(id_sample: int):
             r = cur.fetchone()
         if not r:
             return Response("Not found.", status=404)
+
+        if request.args.get("format") == "json":
+            return jsonify(
+                {
+                    "ok": True,
+                    "row": {
+                        "id_sample": id_sample,
+                        "ref_sample_type": r[1],
+                        "ref_sj": r[2],
+                        "ref_polygon": r[3],
+                        "ref_geopt": r[4],
+                        "description": r[5],
+                    },
+                }
+            )
 
         return render_template(
             "find_sample_detail.html",

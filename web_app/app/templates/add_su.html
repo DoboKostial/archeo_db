@@ -1139,5 +1139,8 @@
 
 
 <!-- External JS -->
+<script>
+  window.ArcheoDBOpenEditSuId = {{ open_edit_su_id|tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/su.js') }}"></script>
 {% endblock %}

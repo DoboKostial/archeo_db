@@ -238,6 +238,7 @@ def _save_su_subtype(cur, sj_id, sj_typ, form):
 @require_selected_db
 def add_su():
     selected_db = session["selected_db"]
+    open_edit_su_id = request.args.get("edit_su", type=int)
     conn = get_terrain_connection(selected_db)
     cur = conn.cursor()
 
@@ -312,6 +313,7 @@ def add_su():
                         sj_count_negativ=sj_count_negativ,
                         sj_count_structure=sj_count_structure,
                         form_data=form_data,
+                        open_edit_su_id=open_edit_su_id,
                     )
 
                 sj_typ = (request.form.get("sj_typ") or "").strip().lower()
@@ -461,6 +463,7 @@ def add_su():
             sj_count_negativ=sj_count_negativ,
             sj_count_structure=sj_count_structure,
             form_data=form_data,
+            open_edit_su_id=open_edit_su_id,
         )
 
     finally:

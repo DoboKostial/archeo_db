@@ -1,5 +1,6 @@
 {# templates/photos.html #}
 {% extends "base.html" %}
+{% from "_media_entity_links.html" import entity_group %}
 {% block title %}Photos{% endblock %}
 
 {% block content %}
@@ -253,13 +254,13 @@
               {% else %}
                 <span class="badge text-bg-light">no GPS</span>
               {% endif %}
-              <span class="badge text-bg-light">
+              <span class="badge text-bg-light media-links-badge">
                 Links:
-                SUs ({{ p.link_counts.sj }}),
-                Polygons ({{ p.link_counts.polygon }}),
-                Sections ({{ p.link_counts.section }})<br>
-                Finds ({{ p.link_counts.find }}),
-                Samples ({{ p.link_counts.sample }})
+                {{ entity_group("SUs", "su", p.links.sj_ids) }},
+                {{ entity_group("Polygons", "polygon", p.links.polygon_names) }},
+                {{ entity_group("Sections", "section", p.links.section_ids) }}<br>
+                {{ entity_group("Finds", "find", p.links.find_ids) }},
+                {{ entity_group("Samples", "sample", p.links.sample_ids) }}
               </span>
             </div>
             {% if p.notes %}

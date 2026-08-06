@@ -163,6 +163,7 @@ def _build_link_sql(media_type: str):
 @require_selected_db
 def sections():
     selected_db = session.get("selected_db")
+    open_edit_section_id = request.args.get("edit_section", type=int)
 
     conn = get_terrain_connection(selected_db)
     sections_rows = []
@@ -209,6 +210,7 @@ def sections():
         sections=sections_rows,
         authors=authors,
         sj_ids=sj_ids,
+        open_edit_section_id=open_edit_section_id,
     )
 
 

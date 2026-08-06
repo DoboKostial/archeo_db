@@ -224,7 +224,7 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <form class="modal-content" method="POST" action="{{ url_for('sections.new_section_manual') }}">
         <div class="modal-header">
-          <h5 class="modal-title">Edit section</h5>
+          <h5 class="modal-title">Edit section <span id="editSectionTitle">—</span></h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
@@ -354,6 +354,7 @@
         const sectionId = section.id || '';
         document.getElementById('editSectionId').value = sectionId;
         document.getElementById('editSectionIdDisplay').value = sectionId;
+        document.getElementById('editSectionTitle').textContent = sectionId ? `#${sectionId}` : '—';
         document.getElementById('editSectionDescription').value = section.description || '';
 
         const typeSelect = document.getElementById('editSectionType');
@@ -370,6 +371,24 @@
           option.selected = selectedSjs.has(option.value);
         });
       });
+
+      const requestedId = {{ open_edit_section_id|tojson }};
+      if (requestedId) {
+        const targetId = String(requestedId);
+        const buttons = Array.from(document.querySelectorAll('[data-section]'));
+        const btn = buttons.find((candidate) => {
+          try {
+            const section = JSON.parse(candidate.getAttribute('data-section') || '{}');
+            return String(section.id) === targetId;
+          } catch (err) {
+            return false;
+          }
+        });
+        if (btn && window.bootstrap) {
+          const instance = bootstrap.Modal.getInstance(editSecModal) || new bootstrap.Modal(editSecModal);
+          instance.show(btn);
+        }
+      }
     })();
   </script>
 

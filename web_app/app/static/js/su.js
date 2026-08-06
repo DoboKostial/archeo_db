@@ -588,6 +588,24 @@
 
     typ.addEventListener("change", toggleEditTypeFields);
     toggleEditTypeFields();
+
+    const requestedId = window.ArcheoDBOpenEditSuId;
+    if (requestedId) {
+      const targetId = String(requestedId);
+      const buttons = Array.from(document.querySelectorAll("[data-su]"));
+      const btn = buttons.find((candidate) => {
+        try {
+          const su = JSON.parse(candidate.getAttribute("data-su") || "{}");
+          return String(su.id) === targetId;
+        } catch (_error) {
+          return false;
+        }
+      });
+      if (btn && window.bootstrap) {
+        const instance = bootstrap.Modal.getInstance(modal) || new bootstrap.Modal(modal);
+        instance.show(btn);
+      }
+    }
   }
 
   document.addEventListener("DOMContentLoaded", function () {

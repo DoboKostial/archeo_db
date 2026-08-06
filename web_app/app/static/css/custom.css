@@ -330,6 +330,23 @@
   --bs-pagination-focus-box-shadow: 0 0 0 .2rem rgba(214, 158, 46, .2);
 }
 
+.media-links-badge {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.entity-inline-link {
+  color: #0d6efd;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.entity-inline-link:hover,
+.entity-inline-link:focus {
+  color: #084298;
+  text-decoration: underline;
+}
+
 .finds-samples-page {
   --fs-find-accent: #8a6f3e;
   --fs-sample-accent: #64706f;
