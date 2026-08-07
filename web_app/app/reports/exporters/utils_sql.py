@@ -1,8 +1,14 @@
 # app/reports/exporters/utils_sql.py
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, List, Tuple
+
+
+def _quote_string(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
 
 
 def sql_quote(v: Any) -> str:
@@ -10,13 +16,19 @@ def sql_quote(v: Any) -> str:
         return "NULL"
     if isinstance(v, bool):
         return "TRUE" if v else "FALSE"
-    if isinstance(v, (int, float)):
+    if isinstance(v, memoryview):
+        v = v.tobytes()
+    if isinstance(v, bytes):
+        return f"decode('{v.hex()}', 'hex')"
+    if isinstance(v, (int, float, Decimal)):
         return str(v)
     if isinstance(v, datetime):
-        return "'" + v.isoformat(sep=" ", timespec="seconds") + "'"
-    s = str(v)
-    s = s.replace("\\", "\\\\").replace("'", "''")
-    return f"'{s}'"
+        return _quote_string(v.isoformat(sep=" ", timespec="seconds"))
+    if isinstance(v, date):
+        return _quote_string(v.isoformat())
+    if isinstance(v, (dict, list)):
+        return _quote_string(json.dumps(v, ensure_ascii=False))
+    return _quote_string(str(v))
 
 
 def dump_table_inserts(cur, table: str, where_sql: str, params: Tuple[Any, ...]) -> str:

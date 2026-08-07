@@ -8,7 +8,6 @@ from flask import Blueprint, render_template, request, session, send_file, abort
 
 from app.logger import logger
 from app.i18n.reporting.translator import ReportingTranslator
-from app.reports.context import ReportContext
 from app.reports.registry import REPORT_SPECS
 from app.reports.service import build_report_context, generate_report_pdf
 from app.reports.exporters import get_exporter
@@ -17,6 +16,14 @@ from app.utils.decorators import require_selected_db
 reports_bp = Blueprint("reports", __name__)
 
 translator = ReportingTranslator(logger=logger)
+
+
+def _ensure_report_format(report_id: str, fmt: str) -> None:
+    spec = REPORT_SPECS.get(report_id)
+    if spec is None:
+        raise KeyError(f"Unknown report_id '{report_id}'")
+    if fmt not in spec.formats:
+        raise KeyError(f"Report '{report_id}' does not support format '{fmt}'")
 
 
 @reports_bp.get("/reports")
@@ -74,6 +81,7 @@ def reports():
         # Keep the app responsive; return an empty page with flashed message
         return render_template(
             "reports.html",
+            selected_db=selected_db,
             lang=lang_norm,
             languages=[],
             reports=[],
@@ -90,6 +98,7 @@ def generate_report(report_id: str):
     lang = request.args.get("lang")
 
     try:
+        _ensure_report_format(report_id, "pdf")
         ctx = build_report_context(
             translator=translator,
             selected_db=selected_db,
@@ -132,6 +141,7 @@ def export_excel(export_id: str):
     lang = request.args.get("lang")
 
     try:
+        _ensure_report_format(export_id, "xlsx")
         ctx = build_report_context(
             translator=translator,
             selected_db=selected_db,
@@ -171,6 +181,7 @@ def export_sql(export_id: str):
     lang = request.args.get("lang")
 
     try:
+        _ensure_report_format(export_id, "sql")
         ctx = build_report_context(
             translator=translator,
             selected_db=selected_db,

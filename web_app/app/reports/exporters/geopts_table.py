@@ -16,7 +16,7 @@ from app.queries import (
 )
 
 from .utils_excel import set_basic_column_widths
-from .utils_sql import dump_table_inserts
+from .utils_sql import dump_table_inserts_columns
 
 
 class GeoptsTableExporter:
@@ -49,7 +49,7 @@ class GeoptsTableExporter:
             "-- ArcheoDB export: geopts_table",
             f"-- Database: {ctx.selected_db}",
             f"-- Generated: {ts}",
-            "-- NOTE: data-only dump (INSERTs). No binaries included.",
+            "-- NOTE: data-only dump (INSERTs). Derived geometry is excluded and recalculated from x/y/h by trigger.",
             "",
             "BEGIN;",
             "",
@@ -57,7 +57,13 @@ class GeoptsTableExporter:
 
         with get_terrain_connection(ctx.selected_db) as conn:
             with conn.cursor() as cur:
-                out.append(dump_table_inserts(cur, "tab_geopts", "", ()))
+                out.append(dump_table_inserts_columns(
+                    cur,
+                    "tab_geopts",
+                    ["id_pts", "x", "y", "h", "code", "notes"],
+                    "",
+                    (),
+                ))
 
         out.append("COMMIT;\n")
         return "\n".join(s for s in out if s)

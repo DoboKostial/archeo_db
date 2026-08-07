@@ -16,7 +16,7 @@ from app.queries import report_photos_table_list_all_sql
 
 from .utils_excel import set_basic_column_widths
 from .utils_media import list_files_for_media_id
-from .utils_sql import dump_table_inserts
+from .utils_sql import dump_table_inserts, dump_table_inserts_columns
 
 
 class PhotosTableExporter:
@@ -136,7 +136,7 @@ class PhotosTableExporter:
             "-- ArcheoDB export: photos_table",
             f"-- Database: {ctx.selected_db}",
             f"-- Generated: {ts}",
-            "-- NOTE: data-only dump (INSERTs). No binaries included.",
+            "-- NOTE: data-only dump (INSERTs). No binaries included; derived geometry is recalculated from GPS fields by trigger.",
             "",
             "BEGIN;",
             "",
@@ -147,7 +147,18 @@ class PhotosTableExporter:
 
         with get_terrain_connection(ctx.selected_db) as conn:
             with conn.cursor() as cur:
-                out.append(dump_table_inserts(cur, "tab_photos", "WHERE id_photo = ANY(%s)", (ids,)))
+                out.append(dump_table_inserts_columns(
+                    cur,
+                    "tab_photos",
+                    [
+                        "id_photo", "photo_typ", "datum", "author", "notes",
+                        "mime_type", "file_size", "checksum_sha256",
+                        "shoot_datetime", "gps_lat", "gps_lon", "gps_alt",
+                        "exif_json",
+                    ],
+                    "WHERE id_photo = ANY(%s)",
+                    (ids,),
+                ))
                 out.append(dump_table_inserts(cur, "tabaid_photo_sj", "WHERE ref_photo = ANY(%s)", (ids,)))
                 out.append(dump_table_inserts(cur, "tabaid_section_photos", "WHERE ref_photo = ANY(%s)", (ids,)))
                 out.append(dump_table_inserts(cur, "tabaid_polygon_photos", "WHERE ref_photo = ANY(%s)", (ids,)))
