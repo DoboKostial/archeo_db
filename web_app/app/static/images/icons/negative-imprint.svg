@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 48" role="img" aria-label="Imprint">
+  <ellipse cx="45" cy="34" rx="18.2" ry="8.5" fill="#674023"/>
+  <ellipse cx="45" cy="34" rx="12.8" ry="5.7" fill="#2d1b12"/>
+  <ellipse cx="45" cy="34" rx="7.2" ry="3.1" fill="#15100d"/>
+  <path d="M42 5.7h6.6v30.7H42Z" fill="#8f623e" stroke="#614026" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M44.2 8.1h2v20.4h-2Z" fill="#ecd9c0"/>
+  <path d="M42.5 28.4c-2.8 2.8-3.6 5.6-2.5 8.2h10.5c1-2.6.1-5.4-2.8-8.2Z" fill="#56351f"/>
+  <path d="M35.8 37.2c4.4 3.7 14.6 4.4 19.7.1" fill="none" stroke="#9d6b47" stroke-width="2.3" stroke-linecap="round" opacity=".55"/>
+</svg>

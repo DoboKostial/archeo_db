@@ -1,0 +1,30 @@
+{% macro entity_link(kind, value) -%}
+  {%- set text = value|string -%}
+  {%- if kind == "su" -%}
+    <a class="entity-inline-link" href="{{ url_for('su.add_su', edit_su=value) }}">{{ text }}</a>
+  {%- elif kind == "polygon" -%}
+    <a class="entity-inline-link" href="{{ url_for('polygons.polygons', edit_polygon=value) }}">{{ text }}</a>
+  {%- elif kind == "section" -%}
+    <a class="entity-inline-link" href="{{ url_for('sections.sections', edit_section=value) }}">{{ text }}</a>
+  {%- elif kind == "find" -%}
+    <a class="entity-inline-link" href="{{ url_for('finds_samples.finds_samples', edit_find=value) }}">{{ text }}</a>
+  {%- elif kind == "sample" -%}
+    <a class="entity-inline-link" href="{{ url_for('finds_samples.finds_samples', edit_sample=value) }}">{{ text }}</a>
+  {%- elif kind == "geopt" -%}
+    <span>{{ text }}</span>
+  {%- else -%}
+    <span>{{ text }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro entity_group(label, kind, values) -%}
+  <span class="entity-link-group">{{ label }} (
+    {%- if values -%}
+      {%- for value in values -%}
+        {{ entity_link(kind, value) }}{{ ", " if not loop.last }}
+      {%- endfor -%}
+    {%- else -%}
+      0
+    {%- endif -%}
+  )</span>
+{%- endmacro %}

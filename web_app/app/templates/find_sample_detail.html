@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ item_kind }} {{ item_id }}{% endblock %}
+
+{% block content %}
+<h2>{{ item_kind }} {{ item_id }}</h2>
+<ul>
+  <li>Type: <strong>{{ type_code }}</strong> ({{ type_label }})</li>
+  {% for label, value, emphasize in details %}
+    <li>
+      {{ label }}:
+      {% if value is none or value == "" %}
+        &mdash;
+      {% elif emphasize %}
+        <strong>{{ value }}</strong>
+      {% else %}
+        {{ value }}
+      {% endif %}
+    </li>
+  {% endfor %}
+</ul>
+<p><a href="{{ url_for('finds_samples.finds_samples') }}">Back</a></p>
+{% endblock %}
