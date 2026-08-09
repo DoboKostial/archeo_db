@@ -35,6 +35,17 @@ class Config:
     ADMIN_NAME = 'XXX'
     ADMIN_EMAIL = "XXX"
 
+    # Outgoing email. Defaults preserve a local MTA setup on localhost:25.
+    MAIL_SERVER = "localhost"
+    MAIL_PORT = 25
+    MAIL_USERNAME = ""
+    MAIL_PASSWORD = ""
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = False
+    MAIL_TIMEOUT = 10
+    MAIL_DEFAULT_SENDER = ""  # fallback: ADMIN_EMAIL
+    MAIL_REPLY_TO = ""  # fallback: ADMIN_EMAIL
+
     # === PATHS (define absolute paths for server!) ===
 
     # Single log file for whole app
