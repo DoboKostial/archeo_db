@@ -90,10 +90,10 @@ class CreateDbTemplateTests(unittest.TestCase):
         self.assertNotRegex(negativ_block, re.compile(r"\bexcav_extent\b", re.IGNORECASE))
 
     def test_auth_template_creates_expected_database_and_users_table(self) -> None:
-        self.assertIn("CREATE DATABASE auth_db OWNER app_terrain_db ENCODING 'UTF8';", self.auth_sql)
+        self.assertIn("CREATE DATABASE auth_db OWNER own_auth_db ENCODING 'UTF8';", self.auth_sql)
         self.assertRegex(
             self.auth_sql,
-            re.compile(r"CREATE TABLE\s+app_users\s*\(", re.IGNORECASE),
+            re.compile(r"CREATE TABLE\s+(?:public\.)?app_users\s*\(", re.IGNORECASE),
         )
 
 
