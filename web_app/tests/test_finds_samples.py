@@ -126,6 +126,8 @@ def test_finds_samples_page_uses_neutral_work_surface(client, monkeypatch):
     assert "samplesPaginationWrap" in html
     assert "findsPagination" in html
     assert "samplesPagination" in html
+    assert "X-CSRFToken" in html
+    assert "fetchJson" in html
     assert "Save find" in html
     assert "Save sample" in html
     assert "btn btn-dark" in html

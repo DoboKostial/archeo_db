@@ -779,6 +779,29 @@
   const LIST_PAGE_SIZE = 10;
   let findsPage = 1;
   let samplesPage = 1;
+  const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+
+  async function fetchJson(url, options = {}) {
+    const headers = new Headers(options.headers || {});
+    const method = (options.method || "GET").toUpperCase();
+    if (method !== "GET" && CSRF_TOKEN) {
+      headers.set("X-CSRFToken", CSRF_TOKEN);
+    }
+
+    const res = await fetch(url, { ...options, headers });
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await res.json();
+      if (!res.ok && data.ok !== false) data.ok = false;
+      return data;
+    }
+
+    const text = await res.text();
+    return {
+      ok: false,
+      error: text ? `Request failed (${res.status}).` : `Request failed (${res.status}).`
+    };
+  }
 
   function addFileInput(containerId) {
     const div = document.getElementById(containerId);
@@ -1005,8 +1028,7 @@
     if (!entity || !id) return;
 
     const url = (entity === "find") ? EP.delFind(id) : EP.delSample(id);
-    const res = await fetch(url, { method: "POST" });
-    const data = await res.json();
+    const data = await fetchJson(url, { method: "POST" });
 
     if (!data.ok) {
       alert(data.error || "Delete failed.");
@@ -1075,12 +1097,11 @@
       description: document.getElementById("editFindDescription").value
     };
 
-    const res = await fetch(EP.updFind(id), {
+    const data = await fetchJson(EP.updFind(id), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
     if (!data.ok) {
       alert(data.error || "Update failed.");
       return;
@@ -1139,12 +1160,11 @@
       description: document.getElementById("editSampleDescription").value
     };
 
-    const res = await fetch(EP.updSample(id), {
+    const data = await fetchJson(EP.updSample(id), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    const data = await res.json();
     if (!data.ok) {
       alert(data.error || "Update failed.");
       return;
