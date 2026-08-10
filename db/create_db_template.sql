@@ -505,7 +505,7 @@ CREATE TABLE IF NOT EXISTS tab_finds (
   id_find        int4  NOT NULL,                 -- manual ID (entered by user)
   ref_find_type  text  NOT NULL,                 -- FK -> gloss_find_type(type_code)
   description    text  NULL,
-  count          int2  NOT NULL,                 -- number of pieces in the bag
+  count          int2  NULL,                     -- number of pieces in the bag, if known
   ref_sj         int4  NOT NULL,                 -- mandatory: comes from one stratigraphic unit
   ref_geopt      int4  NULL,                     -- optional: NO FK (geopts may be imported later)
   ref_polygon    text  NULL,                     -- optional: FK to tab_polygons
@@ -513,7 +513,7 @@ CREATE TABLE IF NOT EXISTS tab_finds (
   CONSTRAINT tab_finds_pk PRIMARY KEY (id_find), CONSTRAINT tab_finds_sj_fk FOREIGN KEY (ref_sj) REFERENCES tab_sj(id_sj) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT tab_finds_polygon_fk FOREIGN KEY (ref_polygon) REFERENCES tab_polygons(polygon_name) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT tab_finds_find_type_fk FOREIGN KEY (ref_find_type) REFERENCES gloss_find_type(type_code) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT tab_finds_count_check CHECK (count > 0),
+  CONSTRAINT tab_finds_count_check CHECK (count IS NULL OR count > 0),
   CONSTRAINT tab_finds_box_check CHECK (box > 0)
 );
 CREATE INDEX IF NOT EXISTS tab_finds_ref_sj_idx      ON tab_finds(ref_sj);

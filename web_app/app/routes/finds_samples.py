@@ -93,6 +93,13 @@ def _optional_int(form_value: str):
     return int(v) if v else None
 
 
+def _optional_positive_int(form_value: str, field_label: str):
+    value = _optional_int(form_value)
+    if value is not None and value <= 0:
+        raise ValueError(f"{field_label} must be > 0 when provided.")
+    return value
+
+
 def _pagination_args(default_limit: int = 10, max_limit: int = 100):
     try:
         limit = int(request.args.get("limit") or default_limit)
@@ -226,7 +233,7 @@ def add_find():
         id_find = _require_int(request.form.get("id_find"), "Find ID")
         ref_find_type = (request.form.get("ref_find_type") or "").strip().lower()
         ref_sj = _require_int(request.form.get("ref_sj"), "SJ")
-        count = _require_int(request.form.get("count"), "Count")
+        count = _optional_positive_int(request.form.get("count"), "Count")
         box = _require_int(request.form.get("box"), "Box")
 
         ref_geopt = _optional_int(request.form.get("ref_geopt"))
@@ -235,8 +242,6 @@ def add_find():
 
         if not ref_find_type:
             raise ValueError("Find type is required.")
-        if count <= 0:
-            raise ValueError("Count must be > 0.")
         if box <= 0:
             raise ValueError("Box must be > 0.")
 
@@ -337,7 +342,7 @@ def update_find(id_find: int):
     try:
         ref_find_type = (payload.get("ref_find_type") or "").strip().lower()
         ref_sj = int(payload.get("ref_sj"))
-        count = int(payload.get("count"))
+        count = _optional_positive_int(payload.get("count"), "Count")
         box = int(payload.get("box"))
 
         ref_geopt = payload.get("ref_geopt")
@@ -348,8 +353,6 @@ def update_find(id_find: int):
 
         if not ref_find_type:
             raise ValueError("Find type is required.")
-        if count <= 0:
-            raise ValueError("Count must be > 0.")
         if box <= 0:
             raise ValueError("Box must be > 0.")
 
@@ -640,7 +643,7 @@ def print_find_label(id_find: int):
     lines = [
         f"Type: {_humanize_code(r[1])} ({r[1]})",
         f"SJ: {r[2]}",
-        f"Count: {r[3]}",
+        f"Count: {r[3] if r[3] is not None else '—'}",
         f"Box: {r[4]}",
         f"Polygon: {r[5] or '—'}",
         f"Geopt: {r[6] or '—'}",

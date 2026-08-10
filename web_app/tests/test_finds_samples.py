@@ -55,6 +55,49 @@ class _Connection:
         return None
 
 
+class _RecordingCursor:
+    def __init__(self):
+        self.executed = []
+        self.query = None
+        self.params = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _exc_type, _exc, _tb):
+        return False
+
+    def execute(self, query, params=None):
+        self.query = query
+        self.params = params
+        self.executed.append((query, params))
+
+    def fetchone(self):
+        if self.query == "find-exists":
+            return None
+        return None
+
+
+class _RecordingConnection:
+    def __init__(self):
+        self.cursor_obj = _RecordingCursor()
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def cursor(self):
+        return self.cursor_obj
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+    def close(self):
+        self.closed = True
+
+
 def test_finds_samples_page_uses_neutral_work_surface(client, monkeypatch):
     monkeypatch.setattr(finds_samples_routes, "get_terrain_connection", lambda _dbname: _Connection())
     monkeypatch.setattr(finds_samples_routes, "list_find_types_sql", lambda: "find-types")
@@ -124,3 +167,63 @@ def test_finds_samples_list_endpoints_return_page_metadata(client, monkeypatch):
     assert samples_json["limit"] == 10
     assert samples_json["offset"] == 10
     assert [row["id_sample"] for row in samples_json["rows"]] == [1]
+
+
+def test_add_find_accepts_empty_count(client, monkeypatch):
+    conn = _RecordingConnection()
+    monkeypatch.setattr(finds_samples_routes, "get_terrain_connection", lambda _dbname: conn)
+    monkeypatch.setattr(finds_samples_routes, "find_exists_sql", lambda: "find-exists")
+    monkeypatch.setattr(finds_samples_routes, "insert_find_sql", lambda: "insert-find")
+
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+
+    response = client.post(
+        "/finds-samples/find/add",
+        data={
+            "id_find": "101",
+            "ref_find_type": "pottery",
+            "ref_sj": "7",
+            "count": "",
+            "box": "3",
+            "ref_geopt": "",
+            "ref_polygon": "",
+            "description": "",
+        },
+    )
+
+    assert response.status_code == 302
+    assert conn.committed is True
+    insert_query, insert_params = conn.cursor_obj.executed[-1]
+    assert insert_query == "insert-find"
+    assert insert_params[3] is None
+
+
+def test_update_find_accepts_empty_count(client, monkeypatch):
+    conn = _RecordingConnection()
+    monkeypatch.setattr(finds_samples_routes, "get_terrain_connection", lambda _dbname: conn)
+    monkeypatch.setattr(finds_samples_routes, "update_find_sql", lambda: "update-find")
+
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+
+    response = client.post(
+        "/finds-samples/find/update/101",
+        json={
+            "ref_find_type": "pottery",
+            "ref_sj": "7",
+            "count": "",
+            "box": "3",
+            "ref_geopt": "",
+            "ref_polygon": "",
+            "description": "",
+        },
+    )
+    data = response.get_json()
+
+    assert response.status_code == 200
+    assert data["ok"] is True
+    assert conn.committed is True
+    update_query, update_params = conn.cursor_obj.executed[-1]
+    assert update_query == "update-find"
+    assert update_params[2] is None

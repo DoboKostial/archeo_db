@@ -96,6 +96,13 @@ class CreateDbTemplateTests(unittest.TestCase):
             re.compile(r"CREATE TABLE\s+(?:public\.)?app_users\s*\(", re.IGNORECASE),
         )
 
+    def test_find_count_is_optional_when_not_counted_in_field(self) -> None:
+        finds_block = _table_block(self.template_sql, "tab_finds")
+
+        self.assertRegex(finds_block, re.compile(r"\bcount\s+int2\s+NULL\b", re.IGNORECASE))
+        self.assertIn("count IS NULL OR count > 0", finds_block)
+        self.assertNotRegex(finds_block, re.compile(r"\bcount\s+int2\s+NOT NULL\b", re.IGNORECASE))
+
 
 if __name__ == "__main__":
     unittest.main()

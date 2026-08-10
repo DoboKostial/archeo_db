@@ -58,8 +58,8 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">Count</label>
-                  <input name="count" type="number" min="1" class="form-control" required>
+                  <label class="form-label">Count (optional)</label>
+                  <input name="count" type="number" min="1" class="form-control">
                 </div>
 
                 <div class="col-md-4">
@@ -446,8 +446,8 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">Count</label>
-            <input id="editFindCount" type="number" min="1" class="form-control" required>
+            <label class="form-label">Count (optional)</label>
+            <input id="editFindCount" type="number" min="1" class="form-control">
           </div>
 
           <div class="col-md-4">
@@ -807,6 +807,10 @@
     `;
   }
 
+  function displayValue(value) {
+    return (value === null || value === undefined || value === "") ? "—" : value;
+  }
+
   function appendPagerButton(pager, label, page, disabled, active, onPage) {
     const li = document.createElement("li");
     li.className = "page-item";
@@ -911,7 +915,7 @@
         <td>${r.id_find}</td>
         <td>${r.ref_find_type}</td>
         <td>${r.ref_sj}</td>
-        <td>${r.count}</td>
+        <td>${displayValue(r.count)}</td>
         <td>${r.box}</td>
         <td>${r.ref_polygon || ""}</td>
         <td>${r.ref_geopt || ""}</td>
