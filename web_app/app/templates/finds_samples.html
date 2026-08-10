@@ -63,8 +63,8 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">Box</label>
-                  <input name="box" type="number" min="1" class="form-control" required>
+                  <label class="form-label">Box (optional)</label>
+                  <input name="box" type="number" min="1" class="form-control">
                 </div>
 
                 <div class="col-md-4">
@@ -451,8 +451,8 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">Box</label>
-            <input id="editFindBox" type="number" min="1" class="form-control" required>
+            <label class="form-label">Box (optional)</label>
+            <input id="editFindBox" type="number" min="1" class="form-control">
           </div>
 
           <div class="col-md-4">
@@ -939,7 +939,7 @@
         <td>${r.ref_find_type}</td>
         <td>${r.ref_sj}</td>
         <td>${displayValue(r.count)}</td>
-        <td>${r.box}</td>
+        <td>${displayValue(r.box)}</td>
         <td>${r.ref_polygon || ""}</td>
         <td>${r.ref_geopt || ""}</td>
         <td>${btnsFind(r)}</td>

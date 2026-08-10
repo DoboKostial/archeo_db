@@ -103,6 +103,13 @@ class CreateDbTemplateTests(unittest.TestCase):
         self.assertIn("count IS NULL OR count > 0", finds_block)
         self.assertNotRegex(finds_block, re.compile(r"\bcount\s+int2\s+NOT NULL\b", re.IGNORECASE))
 
+    def test_find_box_is_optional_when_not_assigned_in_field(self) -> None:
+        finds_block = _table_block(self.template_sql, "tab_finds")
+
+        self.assertRegex(finds_block, re.compile(r"\bbox\s+int2\s+NULL\b", re.IGNORECASE))
+        self.assertIn("box IS NULL OR box > 0", finds_block)
+        self.assertNotRegex(finds_block, re.compile(r"\bbox\s+int2\s+NOT NULL\b", re.IGNORECASE))
+
 
 if __name__ == "__main__":
     unittest.main()

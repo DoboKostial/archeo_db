@@ -187,7 +187,7 @@ def test_add_find_accepts_empty_count(client, monkeypatch):
             "ref_find_type": "pottery",
             "ref_sj": "7",
             "count": "",
-            "box": "3",
+            "box": "",
             "ref_geopt": "",
             "ref_polygon": "",
             "description": "",
@@ -199,6 +199,7 @@ def test_add_find_accepts_empty_count(client, monkeypatch):
     insert_query, insert_params = conn.cursor_obj.executed[-1]
     assert insert_query == "insert-find"
     assert insert_params[3] is None
+    assert insert_params[7] is None
 
 
 def test_update_find_accepts_empty_count(client, monkeypatch):
@@ -215,7 +216,7 @@ def test_update_find_accepts_empty_count(client, monkeypatch):
             "ref_find_type": "pottery",
             "ref_sj": "7",
             "count": "",
-            "box": "3",
+            "box": "",
             "ref_geopt": "",
             "ref_polygon": "",
             "description": "",
@@ -229,3 +230,4 @@ def test_update_find_accepts_empty_count(client, monkeypatch):
     update_query, update_params = conn.cursor_obj.executed[-1]
     assert update_query == "update-find"
     assert update_params[2] is None
+    assert update_params[6] is None

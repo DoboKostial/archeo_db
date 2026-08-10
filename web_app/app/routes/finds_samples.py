@@ -234,7 +234,7 @@ def add_find():
         ref_find_type = (request.form.get("ref_find_type") or "").strip().lower()
         ref_sj = _require_int(request.form.get("ref_sj"), "SJ")
         count = _optional_positive_int(request.form.get("count"), "Count")
-        box = _require_int(request.form.get("box"), "Box")
+        box = _optional_positive_int(request.form.get("box"), "Box")
 
         ref_geopt = _optional_int(request.form.get("ref_geopt"))
         ref_polygon = (request.form.get("ref_polygon") or "").strip() or None
@@ -242,8 +242,6 @@ def add_find():
 
         if not ref_find_type:
             raise ValueError("Find type is required.")
-        if box <= 0:
-            raise ValueError("Box must be > 0.")
 
     except Exception as e:
         flash(str(e), "danger")
@@ -343,7 +341,7 @@ def update_find(id_find: int):
         ref_find_type = (payload.get("ref_find_type") or "").strip().lower()
         ref_sj = int(payload.get("ref_sj"))
         count = _optional_positive_int(payload.get("count"), "Count")
-        box = int(payload.get("box"))
+        box = _optional_positive_int(payload.get("box"), "Box")
 
         ref_geopt = payload.get("ref_geopt")
         ref_geopt = int(ref_geopt) if str(ref_geopt).strip() != "" else None
@@ -353,8 +351,6 @@ def update_find(id_find: int):
 
         if not ref_find_type:
             raise ValueError("Find type is required.")
-        if box <= 0:
-            raise ValueError("Box must be > 0.")
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -644,7 +640,7 @@ def print_find_label(id_find: int):
         f"Type: {_humanize_code(r[1])} ({r[1]})",
         f"SJ: {r[2]}",
         f"Count: {r[3] if r[3] is not None else '—'}",
-        f"Box: {r[4]}",
+        f"Box: {r[4] if r[4] is not None else '—'}",
         f"Polygon: {r[5] or '—'}",
         f"Geopt: {r[6] or '—'}",
     ]
