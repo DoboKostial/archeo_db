@@ -1120,9 +1120,10 @@ function initAllPolygonsMap() {
   _allPolyMap = L.map('mapAllPolygons', { preferCanvas: true });
 
   // Basic OSM tiles (replace with your own basemap if you already have one)
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 22,
-    attribution: '&copy; OpenStreetMap contributors'
+    referrerPolicy: 'strict-origin-when-cross-origin',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(_allPolyMap);
 
   return _allPolyMap;

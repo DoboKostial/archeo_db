@@ -440,9 +440,10 @@
       if (_sectionsMapView) return _sectionsMapView;
 
       _sectionsMapView = L.map('sectionsMapView', { preferCanvas: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 22,
-        attribution: '&copy; OpenStreetMap contributors'
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(_sectionsMapView);
 
       return _sectionsMapView;
