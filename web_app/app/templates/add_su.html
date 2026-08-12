@@ -254,20 +254,20 @@
                 <label class="form-label">Deposit removed</label>
                 <input type="hidden" id="deposit_removed" name="deposit_removed" value="{{ form_data.deposit_removed if form_data else '' }}">
                 <div class="deposit-choice-grid deposit-removed-grid" data-choice-group data-choice-target="deposit_removed">
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="machinery" title="machinery" aria-label="Deposit removed by machinery">
-                    <span class="deposit-mini-icon removed-machinery" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="excavator" title="excavator" aria-label="Deposit removed by excavator">
+                    <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-excavator.png') }}" alt="" aria-hidden="true">
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="pickaxe" title="pickaxe" aria-label="Deposit removed by pickaxe">
-                    <span class="deposit-mini-icon removed-pickaxe" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="not_removed" title="not removed" aria-label="Deposit not removed">
+                    <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-not-removed.png') }}" alt="" aria-hidden="true">
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="shovel" title="shovel" aria-label="Deposit removed by shovel">
-                    <span class="deposit-mini-icon removed-shovel" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="pick" title="pick" aria-label="Deposit removed by pick">
+                    <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-pick.png') }}" alt="" aria-hidden="true">
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="scraper" title="scraper" aria-label="Deposit removed by scraper">
-                    <span class="deposit-mini-icon removed-scraper" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="shovel" title="shovel" aria-label="Deposit removed by shovel">
+                    <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-shovel.png') }}" alt="" aria-hidden="true">
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="spatula" title="spatula" aria-label="Deposit removed by spatula">
-                    <span class="deposit-mini-icon removed-spatula" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="spatula" title="spatula" aria-label="Deposit removed by spatula">
+                    <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-spatula.png') }}" alt="" aria-hidden="true">
                   </button>
                 </div>
               </div>
@@ -806,7 +806,24 @@
                 </div>
                 <div class="mb-2">
                   <label class="form-label">Deposit removed</label>
-                  <input type="text" class="form-control" name="deposit_removed" id="edit_deposit_removed">
+                  <input type="hidden" name="deposit_removed" id="edit_deposit_removed">
+                  <div class="deposit-choice-grid deposit-removed-grid" data-choice-group data-choice-target="edit_deposit_removed">
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="excavator" title="excavator" aria-label="Deposit removed by excavator">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-excavator.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="not_removed" title="not removed" aria-label="Deposit not removed">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-not-removed.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="pick" title="pick" aria-label="Deposit removed by pick">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-pick.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="shovel" title="shovel" aria-label="Deposit removed by shovel">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-shovel.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="spatula" title="spatula" aria-label="Deposit removed by spatula">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-spatula.png') }}" alt="" aria-hidden="true">
+                    </button>
+                  </div>
                 </div>
               </div>
 
