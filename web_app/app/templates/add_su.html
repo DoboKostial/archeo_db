@@ -228,17 +228,21 @@
                 <label class="form-label">Boundary visibility</label>
                 <input type="hidden" id="boundary_visibility" name="boundary_visibility" value="{{ form_data.boundary_visibility if form_data else '' }}">
                 <div class="deposit-choice-grid deposit-boundary-grid" data-choice-group data-choice-target="boundary_visibility">
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="sharp" title="sharp" aria-label="Boundary visibility sharp">
-                    <span class="deposit-mini-icon boundary-sharp" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="very_good" data-choice-aliases="sharp" title="Very good" aria-label="Boundary visibility very good">
+                    <span class="boundary-choice-icon boundary-very-good" aria-hidden="true"></span>
+                    <span>Very good</span>
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="distinctive" title="distinctive" aria-label="Boundary visibility distinctive">
-                    <span class="deposit-mini-icon boundary-distinctive" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="clear" data-choice-aliases="distinctive" title="Clear" aria-label="Boundary visibility clear">
+                    <span class="boundary-choice-icon boundary-clear" aria-hidden="true"></span>
+                    <span>Clear</span>
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="non-distinctive" title="non-distinctive" aria-label="Boundary visibility non-distinctive">
-                    <span class="deposit-mini-icon boundary-non-distinctive" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="not_clear" data-choice-aliases="non-distinctive" title="Not clear" aria-label="Boundary visibility not clear">
+                    <span class="boundary-choice-icon boundary-not-clear" aria-hidden="true"></span>
+                    <span>Not clear</span>
                   </button>
-                  <button type="button" class="deposit-choice-btn icon-only" data-choice-value="hypotetical" title="hypotetical" aria-label="Boundary visibility hypotetical">
-                    <span class="deposit-mini-icon boundary-hypotetical" aria-hidden="true"></span>
+                  <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="hypothetical" data-choice-aliases="hypotetical" title="Hypothetical" aria-label="Boundary visibility hypothetical">
+                    <span class="boundary-choice-icon boundary-hypothetical" aria-hidden="true"></span>
+                    <span>Hypothetical</span>
                   </button>
                 </div>
               </div>
@@ -794,7 +798,25 @@
                 </div>
                 <div class="mb-2">
                   <label class="form-label">Boundary visibility</label>
-                  <input type="text" class="form-control" name="boundary_visibility" id="edit_boundary_visibility">
+                  <input type="hidden" name="boundary_visibility" id="edit_boundary_visibility">
+                  <div class="deposit-choice-grid deposit-boundary-grid" data-choice-group data-choice-target="edit_boundary_visibility">
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="very_good" data-choice-aliases="sharp" title="Very good" aria-label="Boundary visibility very good">
+                      <span class="boundary-choice-icon boundary-very-good" aria-hidden="true"></span>
+                      <span>Very good</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="clear" data-choice-aliases="distinctive" title="Clear" aria-label="Boundary visibility clear">
+                      <span class="boundary-choice-icon boundary-clear" aria-hidden="true"></span>
+                      <span>Clear</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="not_clear" data-choice-aliases="non-distinctive" title="Not clear" aria-label="Boundary visibility not clear">
+                      <span class="boundary-choice-icon boundary-not-clear" aria-hidden="true"></span>
+                      <span>Not clear</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="hypothetical" data-choice-aliases="hypotetical" title="Hypothetical" aria-label="Boundary visibility hypothetical">
+                      <span class="boundary-choice-icon boundary-hypothetical" aria-hidden="true"></span>
+                      <span>Hypothetical</span>
+                    </button>
+                  </div>
                 </div>
                 <div class="mb-2">
                   <label class="form-label">Structure</label>

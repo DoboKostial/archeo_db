@@ -72,7 +72,11 @@
       function syncActiveButton() {
         const selectedValue = normalize(input.value);
         buttons.forEach((button) => {
-          const isActive = normalize(button.getAttribute("data-choice-value")) === selectedValue;
+          const acceptedValues = [button.getAttribute("data-choice-value")]
+            .concat((button.getAttribute("data-choice-aliases") || "").split(","))
+            .map(normalize)
+            .filter(Boolean);
+          const isActive = acceptedValues.includes(selectedValue);
           button.classList.toggle("active", isActive);
           button.setAttribute("aria-pressed", isActive ? "true" : "false");
         });
