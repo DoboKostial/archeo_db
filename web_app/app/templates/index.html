@@ -3,7 +3,7 @@
 {% block content %}
 <div class="dashboard-grid">
     <div class="row g-4">
-        <div class="col-12 col-lg-6">
+        <div class="col-12 col-lg-6" id="mobile-login">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <h4 class="card-title mb-3">Welcome, {{ user_name }}!</h4>
@@ -90,19 +90,25 @@
         <div class="col-12 col-lg-6">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
-                    <h4 class="card-title mb-3">Mobile App Setup</h4>
+                    <h4 class="card-title mb-3">Mobile App Login</h4>
                     {% if mobile_api_base_url %}
                         <p class="mb-2">
-                            Configuration of Android app by scanning this QR code from the mobile.
+                            Scan this QR code in ArcheoDB Mobile to configure the server and sign in as your current account.
                         </p>
                         <p class="mb-3"><strong>Mobile API URI:</strong> {{ mobile_api_base_url }}</p>
+                        <p class="small text-muted mb-3">
+                            The QR code is single-use and expires after {{ mobile_login_grant_seconds }} seconds.
+                        </p>
                         <div class="text-center text-lg-start">
                             <img
                                 src="{{ url_for('main.mobile_api_qr') }}"
-                                alt="Mobile API setup QR"
+                                alt="One-time ArcheoDB Mobile login QR"
                                 class="dashboard-qr img-fluid border rounded p-2 bg-white"
                             >
                         </div>
+                        <a class="btn btn-sm btn-outline-secondary mt-3" href="{{ url_for('main.index') }}#mobile-login">
+                            Generate a new login QR
+                        </a>
                     {% else %}
                         <div class="alert alert-warning mb-0" role="alert">
                             MOBILE_API_BASE_URL is not configured in web_app/config.py.

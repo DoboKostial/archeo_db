@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import io
 from pathlib import Path
 
@@ -161,6 +162,58 @@ def test_password_reset_token_cannot_authenticate_as_session(client):
 
     assert response.status_code == 302
     assert response.headers["Location"].startswith("/login")
+
+
+def test_mobile_login_qr_is_personal_single_use_payload(client, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        main_routes.Config,
+        "MOBILE_API_BASE_URL",
+        "https://mobile.example/api/",
+        raising=False,
+    )
+    monkeypatch.setattr(main_routes, "_create_mobile_login_code", lambda _email: "A" * 43)
+    monkeypatch.setattr(
+        main_routes,
+        "_mobile_api_qr_svg",
+        lambda payload: captured.setdefault("payload", payload) or "<svg/>",
+    )
+
+    response = client.get("/mobile-api-qr.svg")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store, no-cache, max-age=0"
+    assert captured["payload"].startswith("archeodb-mobile://login?")
+    assert "server=https%3A%2F%2Fmobile.example%2Fapi%2F" in captured["payload"]
+    assert f"code={'A' * 43}" in captured["payload"]
+    assert "security-test@example.invalid" not in captured["payload"]
+
+
+def test_mobile_login_code_is_hashed_before_storage(monkeypatch):
+    class _Connection:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    connection = _Connection()
+    captured = {}
+    login_code = "B" * 43
+    monkeypatch.setattr(main_routes.secrets, "token_urlsafe", lambda _size: login_code)
+    monkeypatch.setattr(main_routes, "get_auth_connection", lambda: connection)
+
+    def capture_grant(_conn, email, token_hash, expires_at):
+        captured.update(email=email, token_hash=token_hash, expires_at=expires_at)
+
+    monkeypatch.setattr(main_routes, "create_mobile_login_grant", capture_grant)
+
+    result = main_routes._create_mobile_login_code("user@example.invalid")
+
+    assert result == login_code
+    assert captured["email"] == "user@example.invalid"
+    assert captured["token_hash"] == hashlib.sha256(login_code.encode("ascii")).hexdigest()
+    assert login_code not in captured["token_hash"]
+    assert connection.closed is True
 
 
 def test_disabled_user_is_rejected_on_each_request(client, monkeypatch):

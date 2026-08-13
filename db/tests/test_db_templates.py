@@ -89,11 +89,38 @@ class CreateDbTemplateTests(unittest.TestCase):
         self.assertIn("tab_sj_excav_extent_chk", sj_block)
         self.assertNotRegex(negativ_block, re.compile(r"\bexcav_extent\b", re.IGNORECASE))
 
+    def test_excavation_extent_migration_preserves_existing_values(self) -> None:
+        migration = (DB_DIR / "migrations" / "20260813_move_excav_extent_to_su.sql").read_text(
+            encoding="utf-8",
+        )
+
+        self.assertIn("ADD COLUMN excav_extent NUMERIC(3,0) NULL", migration)
+        self.assertIn("SET excav_extent = CASE", migration)
+        self.assertIn("WHEN 'whole' THEN 100", migration)
+        self.assertIn("WHEN 'more_than_50' THEN 75", migration)
+        self.assertIn("WHEN 'around_50' THEN 50", migration)
+        self.assertIn("WHEN 'less_than_50' THEN 25", migration)
+        self.assertIn("DROP COLUMN excav_extent", migration)
+        self.assertIn("tab_sj_excav_extent_chk", migration)
+
     def test_auth_template_creates_expected_database_and_users_table(self) -> None:
         self.assertIn("CREATE DATABASE auth_db OWNER own_auth_db ENCODING 'UTF8';", self.auth_sql)
         self.assertRegex(
             self.auth_sql,
             re.compile(r"CREATE TABLE\s+(?:public\.)?app_users\s*\(", re.IGNORECASE),
+        )
+
+    def test_auth_template_provisions_single_use_mobile_login_grants(self) -> None:
+        grant_block = _table_block(self.auth_sql, "public.mobile_login_grants")
+
+        self.assertRegex(grant_block, re.compile(r"\btoken_hash\s+char\(64\)", re.IGNORECASE))
+        self.assertRegex(grant_block, re.compile(r"\bexpires_at\s+timestamptz\s+NOT NULL", re.IGNORECASE))
+        self.assertRegex(grant_block, re.compile(r"\bused_at\s+timestamptz\s+NULL", re.IGNORECASE))
+        self.assertIn("SECURITY DEFINER", self.auth_sql)
+        self.assertIn("consume_mobile_login_grant", self.auth_sql)
+        self.assertIn(
+            "GRANT EXECUTE ON FUNCTION public.consume_mobile_login_grant(text) TO app_mobile_db",
+            self.auth_sql,
         )
 
     def test_find_count_is_optional_when_not_counted_in_field(self) -> None:

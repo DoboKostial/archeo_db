@@ -1,7 +1,10 @@
 # web_app/app/routes/main.py
 import os
+import hashlib
+import secrets
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from flask import Blueprint, render_template, redirect, request, session, flash, Response
 from flask import g
@@ -17,6 +20,7 @@ from app.queries import (
     get_pg_version,
     get_terrain_db_list,
     get_terrain_db_sizes,
+    create_mobile_login_grant,
 )
 from app.utils.analyze_checks import count_bad_checks
 from app.utils.storage import validate_db_name
@@ -55,9 +59,32 @@ def _directory_size_bytes(path: str) -> int:
     return total
 
 
-def _mobile_api_qr_payload() -> str:
+def _mobile_api_qr_payload(login_code: str) -> str:
     mobile_api_base_url = (getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip()
-    return f"archeodb-mobile://configure?server={quote(mobile_api_base_url, safe='')}"
+    return (
+        "archeodb-mobile://login"
+        f"?server={quote(mobile_api_base_url, safe='')}"
+        f"&code={quote(login_code, safe='')}"
+    )
+
+
+def _mobile_login_grant_seconds() -> int:
+    configured = int(getattr(Config, "MOBILE_LOGIN_GRANT_SECONDS", 120))
+    return max(30, min(configured, 300))
+
+
+def _create_mobile_login_code(user_email: str) -> str:
+    login_code = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(login_code.encode("ascii")).hexdigest()
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=_mobile_login_grant_seconds())
+
+    conn = get_auth_connection()
+    try:
+        create_mobile_login_grant(conn, user_email, token_hash, expires_at)
+    finally:
+        conn.close()
+
+    return login_code
 
 
 def _mobile_api_qr_svg(payload: str) -> str:
@@ -157,6 +184,7 @@ def index():
         user_role=user_role,
         app_version=getattr(Config, "APP_VERSION", ""),
         mobile_api_base_url=(getattr(Config, "MOBILE_API_BASE_URL", "") or "").strip(),
+        mobile_login_grant_seconds=_mobile_login_grant_seconds(),
     )
 
 
@@ -167,12 +195,16 @@ def mobile_api_qr():
         return Response(status=404)
 
     try:
-        svg = _mobile_api_qr_svg(_mobile_api_qr_payload())
+        login_code = _create_mobile_login_code(g.user_email)
+        svg = _mobile_api_qr_svg(_mobile_api_qr_payload(login_code))
     except Exception as e:
-        logger.error(f"Error generating mobile API QR: {e}")
+        logger.error(f"Error generating mobile login QR for {g.user_email}: {e}")
         return Response(status=500)
 
-    return Response(svg, mimetype="image/svg+xml")
+    response = Response(svg, mimetype="image/svg+xml")
+    response.headers["Cache-Control"] = "no-store, no-cache, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @main_bp.route("/select-db", methods=["POST"])

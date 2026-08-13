@@ -100,6 +100,21 @@ def update_last_login(conn, email):
         conn.commit()
 
 
+def create_mobile_login_grant(conn, email, token_hash, expires_at):
+    with conn.cursor() as cur:
+        cur.execute("""
+            DELETE FROM mobile_login_grants
+            WHERE expires_at <= CURRENT_TIMESTAMP
+               OR used_at < CURRENT_TIMESTAMP - INTERVAL '1 day'
+               OR (user_mail = %s AND used_at IS NULL)
+        """, (email,))
+        cur.execute("""
+            INSERT INTO mobile_login_grants (token_hash, user_mail, expires_at)
+            VALUES (%s, %s, %s)
+        """, (token_hash, email, expires_at))
+        conn.commit()
+
+
 # For index/dashboard
 def get_pg_version():
     return "SELECT version()"
