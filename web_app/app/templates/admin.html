@@ -22,22 +22,92 @@
         <td>{{ "Active" if enabled else "Disabled" }}</td>
         <td>{{ last_login.strftime('%Y-%m-%d') if last_login else "—" }}</td>
         <td>
+          <div class="d-flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#editUserModal{{ loop.index }}"
+          >Edit</button>
           {% if enabled %}
-            <form method="POST" action="{{ url_for('admin.disable_user') }}">
+            <form method="POST" action="{{ url_for('admin.disable_user') }}" class="d-inline">
               <input type="hidden" name="mail" value="{{ mail }}">
               <button type="submit" class="btn btn-sm btn-warning">Deactivate</button>
             </form>
           {% else %}
-            <form method="POST" action="{{ url_for('admin.enable_user') }}">
+            <form method="POST" action="{{ url_for('admin.enable_user') }}" class="d-inline">
               <input type="hidden" name="mail" value="{{ mail }}">
               <button type="submit" class="btn btn-sm btn-success">Activate</button>
             </form>
           {% endif %}
+          </div>
         </td>
       </tr>
+
     {% endfor %}
   </tbody>
 </table>
+
+{% for name, mail, role, enabled, last_login in users %}
+  <div class="modal fade" id="editUserModal{{ loop.index }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="POST" action="{{ url_for('admin.edit_user') }}">
+          <div class="modal-header">
+            <h5 class="modal-title">Edit user</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="mail" value="{{ mail }}">
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" value="{{ mail }}" disabled>
+              <div class="form-text">Email is the user identifier and cannot be changed.</div>
+            </div>
+            <div class="mb-3">
+              <label for="edit-user-name-{{ loop.index }}" class="form-label">
+                Name <span class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                id="edit-user-name-{{ loop.index }}"
+                name="name"
+                value="{{ name }}"
+                maxlength="150"
+                required
+              >
+            </div>
+            <div class="mb-3">
+              <label for="edit-user-role-{{ loop.index }}" class="form-label">
+                Role <span class="text-danger">*</span>
+              </label>
+              <select
+                class="form-select"
+                id="edit-user-role-{{ loop.index }}"
+                name="group_role"
+                required
+              >
+                {% if role not in user_roles %}
+                  <option value="" selected disabled>Current role: {{ role }} (select a replacement)</option>
+                {% endif %}
+                {% for role_option in user_roles %}
+                  <option value="{{ role_option }}" {% if role == role_option %}selected{% endif %}>
+                    {{ role_option }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endfor %}
 
 <!-- pagination controls -->
 <nav aria-label="User pagination">
@@ -66,19 +136,19 @@
 <h4>Add new user</h4>
 <form method="POST" action="{{ url_for('admin.add_user') }}">
   <div class="mb-3">
-    <label for="name" class="form-label">Name</label>
-    <input type="text" class="form-control" id="name" name="name" required>
+    <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+    <input type="text" class="form-control" id="name" name="name" maxlength="150" required>
   </div>
   <div class="mb-3">
-    <label for="mail" class="form-label">Email</label>
-    <input type="email" class="form-control" id="mail" name="mail" required>
+    <label for="mail" class="form-label">Email <span class="text-danger">*</span></label>
+    <input type="email" class="form-control" id="mail" name="mail" maxlength="80" required>
   </div>
   <div class="mb-3">
-    <label for="group_role" class="form-label">Role</label>
+    <label for="group_role" class="form-label">Role <span class="text-danger">*</span></label>
     <select class="form-select" id="group_role" name="group_role" required>
-      <option value="archeolog">archeolog</option>
-      <option value="documentator">documentator</option>
-      <option value="analyst">analyst</option>
+      {% for role_option in user_roles %}
+        <option value="{{ role_option }}">{{ role_option }}</option>
+      {% endfor %}
     </select>
   </div>
   <button type="submit" class="btn btn-success">Create user</button>

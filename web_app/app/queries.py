@@ -159,6 +159,33 @@ def list_app_users_sql():
     """
 
 
+def get_app_user_for_edit_sql():
+    return """
+        SELECT name, group_role
+        FROM app_users
+        WHERE mail = %s;
+    """
+
+
+def update_app_user_profile_sql():
+    return """
+        UPDATE app_users
+        SET name = %s,
+            group_role = %s
+        WHERE mail = %s;
+    """
+
+
+def upsert_personalia_user_sql():
+    return """
+        INSERT INTO gloss_personalia (mail, name, group_role)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (mail) DO UPDATE
+        SET name = EXCLUDED.name,
+            group_role = EXCLUDED.group_role;
+    """
+
+
 def epsg_exists_in_spatial_ref_sys_sql():
     # Use in terrain_db_template
     return "SELECT 1 FROM spatial_ref_sys WHERE srid = %s;"

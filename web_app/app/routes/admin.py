@@ -15,16 +15,23 @@ from app.queries import (
     get_terrain_db_sizes,
     count_app_users_sql,
     list_app_users_sql,
+    get_app_user_for_edit_sql,
+    update_app_user_profile_sql,
     srid_search_exact_sql,
     srid_search_text_sql,
 )
 from app.utils.auth import generate_random_password, send_new_account_email
-from app.utils.admin import sync_single_user_to_all_terrain_dbs, sync_single_db
+from app.utils.admin import (
+    sync_single_user_to_all_terrain_dbs,
+    sync_user_profile_to_all_terrain_dbs,
+    sync_single_db,
+)
 from app.utils.geom_utils import update_geometry_srid, detect_db_srid, epsg_exists_in_template_spatial_ref_sys
 from app.utils.decorators import archeolog_required
 from app.utils.storage import safe_join, validate_db_name
 
 admin_bp = Blueprint('admin', __name__)
+USER_ROLES = ("archeolog", "documentator", "analyst")
 
 
 def _terrain_database_available(dbname: str) -> bool:
@@ -119,7 +126,14 @@ def admin():
 
     conn.close()
 
-    return render_template('admin.html', users=users, page=page, total_pages=total_pages, terrain_dbs=terrain_dbs)
+    return render_template(
+        'admin.html',
+        users=users,
+        page=page,
+        total_pages=total_pages,
+        terrain_dbs=terrain_dbs,
+        user_roles=USER_ROLES,
+    )
 
 
 # creating new app user in administration panel
@@ -131,13 +145,23 @@ def add_user():
     cur = conn.cursor()
 
     # reading data from form
-    name = request.form.get('name')
-    mail = request.form.get('mail')
-    group_role = request.form.get('group_role')
+    name = (request.form.get('name') or '').strip()
+    mail = (request.form.get('mail') or '').strip()
+    group_role = (request.form.get('group_role') or '').strip()
 
     if not name or not mail or not group_role:
         conn.close()
         flash("Missing data in the form.", "danger")
+        return redirect('/admin')
+
+    if len(name) > 150 or len(mail) > 80:
+        conn.close()
+        flash("Name or email is too long.", "danger")
+        return redirect('/admin')
+
+    if group_role not in USER_ROLES:
+        conn.close()
+        flash("Invalid user role.", "danger")
         return redirect('/admin')
 
     # duplicity check
@@ -174,6 +198,54 @@ def add_user():
         flash("User was created but sync to terrain DBs failed.", "warning")
 
     return redirect('/admin')
+
+
+@admin_bp.post('/edit-user')
+@archeolog_required
+def edit_user():
+    current_user = g.user_email
+    user_mail = (request.form.get('mail') or '').strip()
+    name = (request.form.get('name') or '').strip()
+    group_role = (request.form.get('group_role') or '').strip()
+
+    if not user_mail or not name or not group_role:
+        flash("Missing data in the user edit form.", "danger")
+        return redirect(url_for('admin.admin'))
+    if len(user_mail) > 80 or len(name) > 150:
+        flash("Name or email is too long.", "danger")
+        return redirect(url_for('admin.admin'))
+    if group_role not in USER_ROLES:
+        flash("Invalid user role.", "danger")
+        return redirect(url_for('admin.admin'))
+
+    conn = get_auth_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(get_app_user_for_edit_sql(), (user_mail,))
+        if cur.fetchone() is None:
+            flash(f"User {user_mail} was not found.", "warning")
+            return redirect(url_for('admin.admin'))
+
+        cur.execute(update_app_user_profile_sql(), (name, group_role, user_mail))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error while editing user {user_mail}: {e}")
+        flash("Error while updating user.", "danger")
+        return redirect(url_for('admin.admin'))
+    finally:
+        cur.close()
+        conn.close()
+
+    logger.info(
+        f"User {current_user} updated user {user_mail}: name={name!r}, role={group_role}"
+    )
+    synced = sync_user_profile_to_all_terrain_dbs(user_mail, name, group_role)
+    flash(f"User {user_mail} was updated.", "success")
+    if not synced:
+        flash("User was updated in auth_db, but synchronization to terrain DBs failed.", "warning")
+
+    return redirect(url_for('admin.admin'))
 
 
 @admin_bp.route('/disable-user', methods=['POST'])

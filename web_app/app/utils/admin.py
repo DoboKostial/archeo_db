@@ -11,7 +11,7 @@ from flask import current_app, has_app_context, session
 from config import Config
 from app.logger import logger
 from app.database import get_terrain_connection
-from app.queries import get_terrain_db_list
+from app.queries import get_terrain_db_list, upsert_personalia_user_sql
 
 ####
 # functions
@@ -67,6 +67,35 @@ def sync_single_user_to_all_terrain_dbs(mail: str, name: str, group_role: str) -
         return True
     except Exception as e:
         logger.error(f"Error while synchronization of user {mail}: {e}")
+        return False
+
+
+def sync_user_profile_to_all_terrain_dbs(mail: str, name: str, group_role: str) -> bool:
+    logger.info(f"Starting profile synchronization for user {mail} to all terrain DBs")
+    try:
+        conn = get_terrain_connection(Config.AUTH_DB_NAME)
+        try:
+            terrain_dbs = get_terrain_db_list(conn)
+        finally:
+            conn.close()
+
+        all_synced = True
+        for db_name in terrain_dbs:
+            try:
+                conn_terrain = get_terrain_connection(db_name)
+                try:
+                    with conn_terrain.cursor() as cur:
+                        cur.execute(upsert_personalia_user_sql(), (mail, name, group_role))
+                    conn_terrain.commit()
+                finally:
+                    conn_terrain.close()
+            except Exception as e:
+                all_synced = False
+                logger.error(f"Error while syncing user profile {mail} to DB '{db_name}': {e}")
+
+        return all_synced
+    except Exception as e:
+        logger.error(f"Error while synchronizing user profile {mail}: {e}")
         return False
 
 
