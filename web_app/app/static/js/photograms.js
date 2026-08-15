@@ -210,6 +210,7 @@
     const form = qs("#editForm");
     const editIdEl = qs("#editId");
     const typSel = qs("#editTyp");
+    const datumInp = qs("#editDatum");
     const notesInp = qs("#editNotes");
     const rangesWrap = qs("#editRanges");
 
@@ -228,6 +229,7 @@
     // reset
     form.action = editAction;
     if (editIdEl) editIdEl.textContent = id;
+    if (datumInp) datumInp.value = "";
     if (notesInp) notesInp.value = "";
     if (rangesWrap) rangesWrap.innerHTML = "";
 
@@ -243,6 +245,7 @@
     const data = await resp.json();
 
     if (typSel && data.photogram_typ) typSel.value = data.photogram_typ;
+    if (datumInp) datumInp.value = data.datum || "";
     if (notesInp) notesInp.value = data.notes || "";
 
     // --- Fill modal SearchSelect UI (NOT just hidden inputs) ---

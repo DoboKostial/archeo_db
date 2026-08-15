@@ -623,8 +623,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <div class="row g-2">
           <div class="col-md-6">
-            <label class="form-label">Photogram type</label>
-            <input type="text" name="photogram_typ" class="form-control">
+            <label class="form-label">Photogram type <span class="text-danger">*</span></label>
+            <input type="text" name="photogram_typ" class="form-control" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Date <span class="text-danger">*</span></label>
+            <input type="date" name="datum" class="form-control" value="{{ today_iso }}" required>
           </div>
           <div class="col-12">
             <label class="form-label">Notes</label>

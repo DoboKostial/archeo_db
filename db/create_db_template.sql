@@ -477,6 +477,7 @@ CREATE INDEX tab_drawings_checksum_idx   ON tab_drawings (checksum_sha256);
 CREATE TABLE tab_photograms (
 	id_photogram TEXT NOT NULL,
 	photogram_typ TEXT NOT NULL,
+	datum DATE NOT NULL,
 	ref_sketch VARCHAR(120) NULL,
 	notes TEXT NULL,
 	mime_type TEXT NOT NULL,
@@ -493,6 +494,7 @@ CREATE TABLE tab_photograms (
 	CONSTRAINT tab_photograms_ref_sketch_fkey FOREIGN KEY (ref_sketch) REFERENCES tab_sketches(id_sketch) ON DELETE SET NULL ON UPDATE CASCADE
 );
 CREATE INDEX tab_photograms_checksum_idx ON tab_photograms USING btree (checksum_sha256);
+CREATE INDEX tab_photograms_datum_idx ON tab_photograms USING btree (datum);
 CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms USING btree (ref_sketch);
 
 

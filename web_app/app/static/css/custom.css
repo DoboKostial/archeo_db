@@ -335,6 +335,21 @@
   line-height: 1.35;
 }
 
+.photogram-thumb-link {
+  display: flex;
+  height: 180px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fff;
+}
+
+.photogram-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .entity-inline-link {
   color: #0d6efd;
   text-decoration: none;

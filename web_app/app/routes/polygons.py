@@ -3,6 +3,7 @@
 
 from io import BytesIO
 import os
+from datetime import date
 from psycopg2.extras import Json
 import json
 import zipfile
@@ -107,6 +108,7 @@ def polygons():
         selected_db=selected_db,
         authors=authors,
         open_edit_polygon_name=open_edit_polygon_name,
+        today_iso=date.today().isoformat(),
     )
 
 
@@ -687,6 +689,10 @@ def upload_polygon_media(media_type):
         datum = (request.form.get("datum") or "").strip() or None
     else:  # photograms
         photogram_typ = (request.form.get("photogram_typ") or "").strip()
+        datum = (request.form.get("datum") or "").strip()
+        if not datum:
+            flash("Photogram date is required.", "warning")
+            return redirect(url_for("polygons.polygons"))
         ref_sketch = (request.form.get("ref_sketch") or "").strip() or None
         ref_photo_from = (request.form.get("ref_photo_from") or "").strip() or None
         ref_photo_to = (request.form.get("ref_photo_to") or "").strip() or None
@@ -780,6 +786,7 @@ def upload_polygon_media(media_type):
                         (
                             pk_name,
                             photogram_typ or "",
+                            datum,
                             ref_sketch,          # ref_sketch
                             notes,               # notes
                             mime,                # mime_type

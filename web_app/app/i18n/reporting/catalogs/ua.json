@@ -163,6 +163,7 @@
   "field.photogram.thumb": "Попередній перегляд",
   "field.photogram.id": "Фотограма",
   "field.photogram.type": "Тип",
+  "field.photogram.date": "Дата",
   "field.photogram.size": "Розмір",
   "field.photogram.ref_sketch": "Ескіз",
   "field.photogram.ref_photo_from": "Фото від",

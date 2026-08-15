@@ -157,6 +157,7 @@
   "field.photogram.thumb": "Thumb",
   "field.photogram.id": "Photogram",
   "field.photogram.type": "Type",
+  "field.photogram.date": "Date",
   "field.photogram.size": "Size",
   "field.photogram.ref_sketch": "Sketch",
   "field.photogram.ref_photo_from": "Photo from",

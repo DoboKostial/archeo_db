@@ -163,6 +163,7 @@
   "field.photogram.thumb": "Anteprima",
   "field.photogram.id": "Fotogramma",
   "field.photogram.type": "Tipo",
+  "field.photogram.date": "Data",
   "field.photogram.size": "Dimensione",
   "field.photogram.ref_sketch": "Schizzo",
   "field.photogram.ref_photo_from": "Foto da",

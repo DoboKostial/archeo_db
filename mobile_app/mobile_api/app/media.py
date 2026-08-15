@@ -185,13 +185,13 @@ def _insert_media_row(cur, kind: str, media_id: str, media_type: str | None, aut
         cur.execute(
             """
             INSERT INTO tab_photograms (
-                id_photogram, photogram_typ, ref_sketch, notes,
+                id_photogram, photogram_typ, datum, ref_sketch, notes,
                 mime_type, file_size, checksum_sha256,
                 ref_photo_from, ref_photo_to
             )
-            VALUES (%s, %s, NULL, %s, %s, %s, %s, NULL, NULL)
+            VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, NULL, NULL)
             """,
-            (media_id, media_type, notes, mime_type, file_size, checksum_sha256),
+            (media_id, media_type, today, notes, mime_type, file_size, checksum_sha256),
         )
 
 

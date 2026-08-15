@@ -163,6 +163,7 @@
   "field.photogram.thumb": "Előnézet",
   "field.photogram.id": "Fotogram",
   "field.photogram.type": "Típus",
+  "field.photogram.date": "Dátum",
   "field.photogram.size": "Méret",
   "field.photogram.ref_sketch": "Vázlat",
   "field.photogram.ref_photo_from": "Fotó tól",

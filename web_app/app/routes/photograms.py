@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from datetime import date
 from typing import Any
 
 from flask import Blueprint, abort, render_template, request, redirect, url_for, flash, session, jsonify, send_file
@@ -204,7 +205,7 @@ def photograms():
 
     photograms_rows = []
     for r in rows:
-        lc = r[6]
+        lc = r[7]
         if isinstance(lc, str):
             try:
                 lc = json.loads(lc)
@@ -217,10 +218,11 @@ def photograms():
         photograms_rows.append({
             "id_photogram": r[0],
             "photogram_typ": r[1],
-            "ref_sketch": r[2],
-            "notes": r[3],
-            "ref_photo_from": r[4],
-            "ref_photo_to": r[5],
+            "datum": r[2],
+            "ref_sketch": r[3],
+            "notes": r[4],
+            "ref_photo_from": r[5],
+            "ref_photo_to": r[6],
             "link_counts": {
                 "sj": int(lc.get("sj", 0)) if isinstance(lc, dict) else 0,
                 "polygon": int(lc.get("polygon", 0)) if isinstance(lc, dict) else 0,
@@ -268,6 +270,7 @@ def photograms():
         stats=stats,
         filters=filters,
         photogram_typ_choices=PHOTOGRAM_TYP_CHOICES,
+        today_iso=date.today().isoformat(),
     )
 
 
@@ -281,6 +284,12 @@ def upload_photograms():
 
     typ = (request.form.get("photogram_typ") or "").strip()
     notes = (request.form.get("notes") or "").strip() or None
+
+    try:
+        datum = date.fromisoformat((request.form.get("datum") or "").strip())
+    except ValueError:
+        flash("Upload failed: Date is required and must use YYYY-MM-DD.", "danger")
+        return redirect(url_for("photograms.photograms"))
 
     ref_sketch = (request.form.get("ref_sketch") or "").strip() or None
     ref_photo_from = (request.form.get("ref_photo_from") or "").strip() or None
@@ -405,6 +414,7 @@ def upload_photograms():
                     (
                         it["pk_name"],
                         typ,
+                        datum,
                         ref_sketch,
                         notes,
                         it["mime"],
@@ -579,10 +589,11 @@ def api_detail(id_photogram: str):
     data = {
         "id_photogram": row[0],
         "photogram_typ": row[1],
-        "ref_sketch": row[2],
-        "notes": row[3],
-        "ref_photo_from": row[4],
-        "ref_photo_to": row[5],
+        "datum": row[2].isoformat(),
+        "ref_sketch": row[3],
+        "notes": row[4],
+        "ref_photo_from": row[5],
+        "ref_photo_to": row[6],
         "links": {
             "sj_ids": links[0] or [],
             "polygon_names": links[1] or [],
@@ -604,6 +615,12 @@ def edit_photogram(id_photogram: str):
 
     typ = (request.form.get("photogram_typ") or "").strip()
     notes = (request.form.get("notes") or "").strip() or None
+
+    try:
+        datum = date.fromisoformat((request.form.get("datum") or "").strip())
+    except ValueError:
+        flash("Edit failed: Date is required and must use YYYY-MM-DD.", "danger")
+        return redirect(url_for("photograms.photograms"))
     ref_sketch = (request.form.get("ref_sketch") or "").strip() or None
     ref_photo_from = (request.form.get("ref_photo_from") or "").strip() or None
     ref_photo_to = (request.form.get("ref_photo_to") or "").strip() or None
@@ -691,6 +708,7 @@ def edit_photogram(id_photogram: str):
                     update_photogram_sql(),
                     (
                         typ,
+                        datum,
                         ref_sketch,
                         notes,
                         new_mime,

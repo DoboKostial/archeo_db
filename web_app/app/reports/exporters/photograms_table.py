@@ -34,7 +34,7 @@ class PhotogramsTableExporter:
         ws.title = "Photograms"
 
         headers = [
-            "id_photogram", "photogram_typ", "ref_sketch", "notes",
+            "id_photogram", "photogram_typ", "datum", "ref_sketch", "notes",
             "mime_type", "file_size", "checksum_sha256",
             "ref_photo_from", "ref_photo_to",
             "sj_ids", "section_ids", "polygon_names", "geopt_ranges",
@@ -49,6 +49,7 @@ class PhotogramsTableExporter:
             ws.append([
                 p.get("id_photogram"),
                 p.get("photogram_typ"),
+                p.get("datum"),
                 p.get("ref_sketch"),
                 p.get("notes"),
                 p.get("mime_type"),

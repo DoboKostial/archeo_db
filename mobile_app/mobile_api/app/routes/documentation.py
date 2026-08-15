@@ -72,7 +72,7 @@ DOC_CONFIG = {
         "id_col": "id_photogram",
         "type_col": "photogram_typ",
         "notes_col": "notes",
-        "date_col": None,
+        "date_col": "datum",
         "author_col": None,
         "allowed_types": {"stereo", "resection", "synthetic", "other"},
         "relations": {
@@ -103,8 +103,12 @@ def _nullable_date(value):
     return date.fromisoformat(text)
 
 
-def _uses_author_date(feature_id: str) -> bool:
+def _uses_author(feature_id: str) -> bool:
     return feature_id in {"photos", "sketches", "drawings"}
+
+
+def _uses_date(feature_id: str) -> bool:
+    return feature_id in {"photos", "sketches", "drawings", "photograms"}
 
 
 def _uses_type(feature_id: str) -> bool:
@@ -169,6 +173,7 @@ def _list_docs(cur, terrain_db: str, feature_id: str):
             SELECT
                 id_photogram,
                 photogram_typ,
+                datum,
                 notes,
                 mime_type,
                 file_size,
@@ -215,13 +220,14 @@ def _list_docs(cur, terrain_db: str, feature_id: str):
             item = {
                 "id": row[0],
                 "type": row[1],
-                "notes": row[2],
-                "mime_type": row[3] or "application/octet-stream",
-                "file_size": row[4] or 0,
+                "datum": row[2].isoformat() if row[2] else None,
+                "notes": row[3],
+                "mime_type": row[4] or "application/octet-stream",
+                "file_size": row[5] or 0,
                 "content_path": _doc_content_path(terrain_db, feature_id, row[0]),
-                "ref_sketch": row[5],
-                "ref_photo_from": row[6],
-                "ref_photo_to": row[7],
+                "ref_sketch": row[6],
+                "ref_photo_from": row[7],
+                "ref_photo_to": row[8],
             }
         elif feature_id == "drawings":
             item = {
@@ -256,6 +262,7 @@ def _load_doc(cur, terrain_db: str, feature_id: str, doc_id: str):
             SELECT
                 id_photogram,
                 photogram_typ,
+                datum,
                 notes,
                 mime_type,
                 file_size,
@@ -306,14 +313,15 @@ def _load_doc(cur, terrain_db: str, feature_id: str, doc_id: str):
         return {
             "id": row[0],
             "type": row[1],
-            "notes": row[2],
-            "mime_type": row[3] or "application/octet-stream",
-            "file_size": row[4] or 0,
+            "datum": row[2].isoformat() if row[2] else None,
+            "notes": row[3],
+            "mime_type": row[4] or "application/octet-stream",
+            "file_size": row[5] or 0,
             "content_path": _doc_content_path(terrain_db, feature_id, row[0]),
             "relations": _load_relations(cur, feature_id, row[0]),
-            "ref_sketch": row[5],
-            "ref_photo_from": row[6],
-            "ref_photo_to": row[7],
+            "ref_sketch": row[6],
+            "ref_photo_from": row[7],
+            "ref_photo_to": row[8],
         }
     if feature_id == "drawings":
         return {
@@ -423,11 +431,11 @@ def create_documentation(terrain_db: str, feature_id: str):
 
     tmp_path = None
     try:
-        author_email = _nullable_text(request.form.get("author")) or ((claims or {}).get("email") if _uses_author_date(feature_id) else None)
+        author_email = _nullable_text(request.form.get("author")) or ((claims or {}).get("email") if _uses_author(feature_id) else None)
         doc_date = _nullable_date(request.form.get("datum"))
-        if _uses_author_date(feature_id) and not author_email:
+        if _uses_author(feature_id) and not author_email:
             return _json_error("Author is missing.", 400)
-        if _uses_author_date(feature_id) and doc_date is None:
+        if _uses_date(feature_id) and doc_date is None:
             doc_date = date.today()
 
         with tempfile.NamedTemporaryFile(delete=False) as tmp_handle:
@@ -445,12 +453,13 @@ def create_documentation(terrain_db: str, feature_id: str):
                     cur.execute(
                         """
                         INSERT INTO tab_photograms
-                            (id_photogram, photogram_typ, notes, ref_sketch, ref_photo_from, ref_photo_to, mime_type, file_size, checksum_sha256)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            (id_photogram, photogram_typ, datum, notes, ref_sketch, ref_photo_from, ref_photo_to, mime_type, file_size, checksum_sha256)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             doc_id,
                             media_type,
+                            doc_date,
                             notes,
                             ref_sketch,
                             ref_photo_from,
@@ -563,10 +572,13 @@ def update_documentation(terrain_db: str, feature_id: str, doc_id: str):
                 if existing is None:
                     return _json_error("Record not found.", 404)
                 if feature_id == "photograms":
+                    if doc_date is None:
+                        doc_date = _nullable_date(existing.get("datum")) or date.today()
                     cur.execute(
                         """
                         UPDATE tab_photograms
                         SET photogram_typ = %s,
+                            datum = %s,
                             notes = %s,
                             ref_sketch = %s,
                             ref_photo_from = %s,
@@ -575,6 +587,7 @@ def update_documentation(terrain_db: str, feature_id: str, doc_id: str):
                         """,
                         (
                             media_type,
+                            doc_date,
                             notes,
                             _nullable_text(payload.get("ref_sketch")),
                             _nullable_text(payload.get("ref_photo_from")),

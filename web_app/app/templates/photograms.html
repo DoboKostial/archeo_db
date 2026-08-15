@@ -30,7 +30,7 @@
         <!-- LEFT: files + metadata -->
         <div class="col-lg-6">
           <div class="border rounded-3 p-3 bg-white h-100">
-            <div class="fw-semibold mb-2">Files</div>
+            <div class="fw-semibold mb-2">Files <span class="text-danger">*</span></div>
             <input type="file"
                    class="form-control"
                    name="files"
@@ -46,13 +46,18 @@
             <div class="fw-semibold mb-2">Metadata</div>
 
             <div class="mb-2">
-              <label class="form-label">Photogram type</label>
+              <label class="form-label">Photogram type <span class="text-danger">*</span></label>
               <select class="form-select" name="photogram_typ" required>
                 <option value="" selected disabled>-- select --</option>
                 {% for t in photogram_typ_choices %}
                   <option value="{{ t }}">{{ t }}</option>
                 {% endfor %}
               </select>
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label">Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control" name="datum" value="{{ today_iso }}" required>
             </div>
 
             <div class="mb-2">
@@ -170,8 +175,8 @@
       {% for g in photograms %}
       <div class="col-sm-6 col-md-4 col-lg-3">
         <div class="card h-100 shadow-sm">
-          <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=g.id_photogram) }}" target="_blank">
-            <img class="card-img-top"
+          <a class="photogram-thumb-link" href="{{ url_for('photograms.serve_photogram_file', id_photogram=g.id_photogram) }}" target="_blank">
+            <img class="card-img-top photogram-thumb"
                  src="{{ url_for('photograms.serve_photogram_thumb', id_photogram=g.id_photogram) }}"
                  alt="{{ g.id_photogram }}"
                  onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=&quot;p-3 text-muted small&quot;>No thumbnail</div>');">
@@ -179,6 +184,7 @@
 
           <div class="card-body">
             <div class="small text-muted mb-1">{{ g.id_photogram }}</div>
+            <div class="small mb-2"><span class="text-muted">Date:</span> {{ g.datum }}</div>
 
             <div class="d-flex flex-wrap gap-1 mb-2">
               <span class="badge text-bg-secondary">{{ g.photogram_typ }}</span>
@@ -399,12 +405,17 @@
               <div class="fw-semibold mb-2">Metadata</div>
 
               <div class="mb-2">
-                <label class="form-label">Photogram type</label>
+                <label class="form-label">Photogram type <span class="text-danger">*</span></label>
                 <select class="form-select" name="photogram_typ" id="editTyp" required>
                   {% for t in photogram_typ_choices %}
                     <option value="{{ t }}">{{ t }}</option>
                   {% endfor %}
                 </select>
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label">Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="datum" id="editDatum" required>
               </div>
 
               <div class="mb-2">

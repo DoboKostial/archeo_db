@@ -1,8 +1,12 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from io import BytesIO
 
+from openpyxl import load_workbook
+
+from app.queries import insert_photogram_sql, report_photograms_table_list_all_sql, update_photogram_sql
 from app.reports.context import ReportContext
-from app.reports.exporters import geopts_table, photos_table
+from app.reports.exporters import geopts_table, photograms_table, photos_table
 from app.reports.exporters.registry import EXPORTERS
 from app.reports.exporters.utils_sql import sql_quote
 from app.reports.registry import REPORT_GENERATORS, REPORT_SPECS, ReportSpec
@@ -108,6 +112,32 @@ def test_photos_sql_export_excludes_centroid_and_keeps_json(monkeypatch):
     assert "photo_centroid" not in sql_text
     assert "exif_json" in sql_text
     assert '"ok": true' in sql_text
+
+
+def test_photogram_date_is_part_of_write_and_report_queries():
+    assert "photogram_typ, datum" in insert_photogram_sql()
+    assert "datum=%s" in update_photogram_sql()
+    assert "p.datum" in report_photograms_table_list_all_sql()
+
+
+def test_photogram_xlsx_exports_date(monkeypatch):
+    monkeypatch.setattr(
+        photograms_table.PhotogramsTableExporter,
+        "_fetch_rows",
+        lambda _self, _ctx: [{
+            "id_photogram": "1_model.jpg",
+            "photogram_typ": "synthetic",
+            "datum": date(2026, 8, 15),
+        }],
+    )
+    monkeypatch.setattr(photograms_table, "list_files_for_media_id", lambda *_args: [])
+
+    content = photograms_table.PhotogramsTableExporter().to_xlsx(_ctx())
+    sheet = load_workbook(BytesIO(content)).active
+
+    headers = [cell.value for cell in sheet[1]]
+    assert "datum" in headers
+    assert sheet.cell(row=2, column=headers.index("datum") + 1).value == datetime(2026, 8, 15)
 
 
 def test_report_registry_matches_generators_and_exporters():

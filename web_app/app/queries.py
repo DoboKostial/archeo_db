@@ -2270,17 +2270,18 @@ def stats_by_type_sql():
 def insert_photogram_sql():
     return """
         INSERT INTO tab_photograms (
-            id_photogram, photogram_typ, ref_sketch, notes,
+            id_photogram, photogram_typ, datum, ref_sketch, notes,
             mime_type, file_size, checksum_sha256,
             ref_photo_from, ref_photo_to
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
     """
 
 def update_photogram_sql():
     return """
         UPDATE tab_photograms
         SET photogram_typ=%s,
+            datum=%s,
             ref_sketch=%s,
             notes=%s,
             mime_type=%s,
@@ -2428,6 +2429,7 @@ def select_photograms_page_sql(
       SELECT
         p.id_photogram,
         p.photogram_typ,
+        p.datum,
         p.ref_sketch,
         p.notes,
         p.ref_photo_from,
@@ -2476,7 +2478,7 @@ def select_photograms_page_sql(
 
 def select_photogram_detail_sql():
     return """
-      SELECT id_photogram, photogram_typ, ref_sketch, notes, ref_photo_from, ref_photo_to
+      SELECT id_photogram, photogram_typ, datum, ref_sketch, notes, ref_photo_from, ref_photo_to
       FROM tab_photograms
       WHERE id_photogram=%s;
     """
@@ -4373,6 +4375,7 @@ def report_photograms_table_list_all_sql():
         SELECT
             p.id_photogram,
             p.photogram_typ,
+            p.datum,
             p.ref_sketch,
             COALESCE(p.notes,'') AS notes,
             p.mime_type,

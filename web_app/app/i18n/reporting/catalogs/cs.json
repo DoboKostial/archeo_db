@@ -163,6 +163,7 @@
   "field.photogram.thumb": "Thumb",
   "field.photogram.id": "Fotogram",
   "field.photogram.type": "Typ",
+  "field.photogram.date": "Datum",
   "field.photogram.size": "Velikost",
   "field.photogram.ref_sketch": "Skica",
   "field.photogram.ref_photo_from": "Foto od",

@@ -161,6 +161,7 @@ def generate_photograms_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
         Paragraph(ctx.t("field.photogram.thumb"), HEADER),
         Paragraph(ctx.t("field.photogram.id"), HEADER),
         Paragraph(ctx.t("field.photogram.type"), HEADER),
+        Paragraph(ctx.t("field.photogram.date"), HEADER),
         Paragraph(ctx.t("field.photogram.size"), HEADER),
         Paragraph(ctx.t("field.photogram.ref_sketch"), HEADER),
         Paragraph(ctx.t("field.photogram.ref_photo_from"), HEADER),
@@ -183,6 +184,7 @@ def generate_photograms_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
             thumb,
             Paragraph(pid, CELL),
             Paragraph(_v(p.get("photogram_typ")), CELL),
+            Paragraph(_v(p.get("datum")), CELL),
             Paragraph(_fmt_size(p.get("file_size")), CELL),
             Paragraph(_v(p.get("ref_sketch")), CELL),
             Paragraph(_v(p.get("ref_photo_from")), CELL),
@@ -195,8 +197,8 @@ def generate_photograms_table_pdf(ctx: ReportContext, payload: dict) -> bytes:
         ])
 
     col_widths = [
-        52*mm, 34*mm, 20*mm, 14*mm, 28*mm, 20*mm, 20*mm,
-        28*mm, 10*mm, 16*mm, 18*mm, 14*mm
+        40*mm, 31*mm, 18*mm, 17*mm, 13*mm, 24*mm, 19*mm, 19*mm,
+        25*mm, 10*mm, 15*mm, 17*mm, 14*mm
     ]
 
     t = Table(data, colWidths=col_widths, repeatRows=1)
