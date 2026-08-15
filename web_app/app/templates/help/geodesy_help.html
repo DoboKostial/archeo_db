@@ -1,0 +1,31 @@
+<p>
+  Import a CSV or TXT file containing one geodetic point per row. The expected
+  column order is <code>id_pts, x, y, h, code, notes</code>. The point code and
+  notes are optional. Coordinates must use the project SRID shown in the form.
+</p>
+
+<p class="mb-2"><strong>Point codes</strong></p>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr><th>Code</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>SU</code></td><td>Tracking boundaries of a stratigraphic unit</td></tr>
+      <tr><td><code>FX</code></td><td>Fix, for example a nail</td></tr>
+      <tr><td><code>EP</code></td><td>Excavation polygon</td></tr>
+      <tr><td><code>FO</code></td><td>Photogrammetric point</td></tr>
+      <tr><td><code>NI</code></td><td>Nivelation for making surfaces</td></tr>
+      <tr><td><code>PF</code></td><td>Point field for total station stationing</td></tr>
+      <tr><td><code>FI</code></td><td>Point for precise finds measuring</td></tr>
+      <tr><td><code>PR</code></td><td>Direct profile measuring</td></tr>
+      <tr><td><code>SP</code></td><td>Special meaning, described freely in notes</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p class="mb-0">
+  Supported delimiters are comma, semicolon and whitespace. A header row is
+  optional. Empty lines and lines beginning with <code>#</code> or <code>//</code>
+  are ignored.
+</p>
