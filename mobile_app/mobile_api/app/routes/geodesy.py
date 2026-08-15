@@ -13,7 +13,7 @@ from app.validators import _validate_terrain_db
 geodesy_bp = Blueprint("geodesy", __name__)
 logger = logging.getLogger("mobile_api.geodesy")
 
-GEOPT_CODES = ["SU", "FX", "EP", "FP", "NI", "PF", "SP"]
+GEOPT_CODES = ["SU", "FX", "EP", "FO", "NI", "PF", "FI", "PR", "SP"]
 DEFAULT_LIST_LIMIT = 500
 MAX_LIST_LIMIT = 5000
 DEFAULT_GEOJSON_LIMIT = 5000
@@ -43,7 +43,7 @@ def _upsert_geopt_sql():
             %s,
             CASE
               WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
-              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FO','NI','PF','FI','PR','SP')
                 THEN UPPER(BTRIM(%s))::geopt_code
               ELSE NULL
             END,
@@ -84,7 +84,7 @@ def _update_geopt_sql():
         h = %s,
         code = CASE
                  WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
-                 WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+                 WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FO','NI','PF','FI','PR','SP')
                    THEN UPPER(BTRIM(%s))::geopt_code
                  ELSE NULL
                END,

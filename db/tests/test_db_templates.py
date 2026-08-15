@@ -64,6 +64,22 @@ class CreateDbTemplateTests(unittest.TestCase):
                 )
                 self.assertRegex(self.template_sql, pattern)
 
+    def test_geodetic_point_codes_are_complete_and_migratable(self) -> None:
+        enum_match = re.search(
+            r"CREATE TYPE\s+geopt_code\s+AS ENUM\s*\((.*?)\)\s*;",
+            self.template_sql,
+            re.IGNORECASE | re.DOTALL,
+        )
+        self.assertIsNotNone(enum_match)
+        enum_codes = re.findall(r"'([A-Z]{2})'", enum_match.group(1))
+        self.assertEqual(enum_codes, ["SU", "FX", "EP", "FO", "NI", "PF", "FI", "PR", "SP"])
+
+        migration = (DB_DIR / "migrations" / "20260815_add_geopt_codes.sql").read_text(
+            encoding="utf-8",
+        )
+        self.assertIn("ADD VALUE IF NOT EXISTS 'FI' BEFORE 'SP'", migration)
+        self.assertIn("ADD VALUE IF NOT EXISTS 'PR' BEFORE 'SP'", migration)
+
     def test_join_table_identifier_lengths_match_parent_keys(self) -> None:
         expected_matches = [
             ("tab_photos", "id_photo", "tabaid_polygon_photos", "ref_photo"),

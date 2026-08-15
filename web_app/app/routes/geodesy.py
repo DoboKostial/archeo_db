@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
-from flask import Blueprint, jsonify, render_template, request, flash, redirect, url_for, session
+from flask import Blueprint, jsonify, render_template, request, flash, redirect, send_file, url_for, session
 
 from app.logger import logger
 from app.database import get_terrain_connection
@@ -16,6 +16,9 @@ from app.queries import (
     find_geopts_srid_sql,
     upsert_geopt_sql,
     list_geopts_sql,
+    export_geopts_sql,
+    count_geopts_sql,
+    geopts_overview_sql,
     delete_geopt_sql,
     update_geopt_sql,
     geojson_geopts_bbox_sql,
@@ -23,8 +26,11 @@ from app.queries import (
     geojson_photos_bbox_sql,
     geopts_extent_4326_sql
 )
+from app.utils.pagination import search_page_args
 
 geodesy_bp = Blueprint('geodesy', __name__)
+
+GEOPT_CODES = ('SU', 'FX', 'EP', 'FO', 'NI', 'PF', 'FI', 'PR', 'SP')
 
 
 # -------------------------
@@ -164,6 +170,18 @@ def _limit_arg(default: int, maximum: int) -> int:
     return min(value, maximum)
 
 
+def _geopt_filter_params() -> tuple:
+    q = (request.args.get('q') or '').strip() or None
+    q_like = f"%{q}%" if q else None
+    id_from_v = _optional_int_arg('id_from')
+    id_to_v = _optional_int_arg('id_to')
+    return (
+        q, q_like, q_like,
+        id_from_v, id_from_v,
+        id_to_v, id_to_v,
+    )
+
+
 def _get_target_srid(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(find_geopts_srid_sql())
@@ -186,12 +204,23 @@ def geodesy():
     conn = get_terrain_connection(selected_db)
     try:
         target_srid = _get_target_srid(conn)
+        with conn.cursor() as cur:
+            cur.execute(geopts_overview_sql())
+            overview_row = cur.fetchone() or (0, None)
     finally:
         conn.close()
 
-    # Optional: expose codes list for UI
-    codes = ['SU', 'FX', 'EP', 'FP', 'NI', 'PF', 'SP']
-    return render_template('geodesy.html', selected_db=selected_db, target_srid=target_srid, codes=codes)
+    overview = {
+        'point_count': int(overview_row[0] or 0),
+        'last_point_id': overview_row[1] if len(overview_row) > 1 else None,
+    }
+    return render_template(
+        'geodesy.html',
+        selected_db=selected_db,
+        target_srid=target_srid,
+        codes=GEOPT_CODES,
+        overview=overview,
+    )
 
 
 @geodesy_bp.route('/geodesy/upload', methods=['POST'])
@@ -265,27 +294,29 @@ def upload_geopts():
 def list_geopts():
     """
     JSON list of existing points (for modal table).
-    Supports filters: q, id_from, id_to, limit
+    Supports filters: q, id_from, id_to, page, limit
     """
     selected_db = session.get('selected_db')
 
-    q = (request.args.get('q') or '').strip() or None
-    id_from_v = _optional_int_arg('id_from')
-    id_to_v = _optional_int_arg('id_to')
-    limit = _limit_arg(default=500, maximum=5000)
-    q_like = f"%{q}%" if q else None
-
+    filter_params = _geopt_filter_params()
+    page, limit, offset = search_page_args(
+        request.args.get('page'),
+        request.args.get('limit'),
+        default_limit=25,
+        max_limit=100,
+    )
     conn = get_terrain_connection(selected_db)
     try:
         with conn.cursor() as cur:
+            cur.execute(count_geopts_sql(), filter_params)
+            total = int((cur.fetchone() or (0,))[0] or 0)
+            total_pages = max(1, (total + limit - 1) // limit)
+            page = min(page, total_pages)
+            offset = (page - 1) * limit
+
             cur.execute(
                 list_geopts_sql(),
-                (
-                    q, q_like, q_like,
-                    id_from_v, id_from_v,
-                    id_to_v, id_to_v,
-                    limit,
-                ),
+                filter_params + (limit, offset),
             )
             rows = cur.fetchall()
 
@@ -300,11 +331,51 @@ def list_geopts():
             )
             for r in rows
         ]
-        return jsonify({"ok": True, "rows": data})
+        return jsonify({
+            "ok": True,
+            "rows": data,
+            "total": total,
+            "page": page,
+            "per_page": limit,
+            "total_pages": total_pages,
+        })
 
     except Exception as e:
         logger.exception(f"[{selected_db}] geodesy list failed: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@geodesy_bp.route('/geodesy/download', methods=['GET'])
+@require_selected_db
+def download_geopts():
+    """Download all geodetic points matching the modal filters as tab-separated text."""
+    selected_db = session.get('selected_db')
+    conn = get_terrain_connection(selected_db)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(export_geopts_sql(), _geopt_filter_params())
+            rows = cur.fetchall()
+
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter='\t', lineterminator='\n')
+        writer.writerow(('id_pts', 'x', 'y', 'h', 'code', 'notes'))
+        writer.writerows(rows)
+
+        payload = io.BytesIO(output.getvalue().encode('utf-8'))
+        logger.info(f"[{selected_db}] geodesy export: points={len(rows)}")
+        return send_file(
+            payload,
+            mimetype='text/plain',
+            as_attachment=True,
+            download_name=f'{selected_db}_geodesy_points.txt',
+            max_age=0,
+        )
+    except Exception as e:
+        logger.exception(f"[{selected_db}] geodesy export failed: {e}")
+        flash(f'Geodesy export failed: {e}', 'danger')
+        return redirect(url_for('geodesy.geodesy'))
     finally:
         conn.close()
 

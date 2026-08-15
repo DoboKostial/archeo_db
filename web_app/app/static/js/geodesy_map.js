@@ -8,9 +8,11 @@
     SU: "#1f77b4",
     FX: "#ff7f0e",
     EP: "#2ca02c",
-    FP: "#d62728",
+    FO: "#d62728",
     NI: "#9467bd",
     PF: "#8c564b",
+    FI: "#e377c2",
+    PR: "#17becf",
     SP: "#7f7f7f",
     "": "#111111",
     null: "#111111",
@@ -24,6 +26,10 @@
   let reloadTimer = null;
   let reloadGeneration = 0;
   let initialized = false;
+  let modalPage = 1;
+  let modalRows = new Map();
+
+  const modalPageSize = 25;
 
   function byId(id) {
     return document.getElementById(id);
@@ -264,15 +270,19 @@
       q: fieldValue("modalQ"),
       id_from: fieldValue("modalFrom"),
       id_to: fieldValue("modalTo"),
-      limit: 1000
+      page: modalPage,
+      limit: modalPageSize
     });
     const data = await requestJson(`${EP.list}?${qs.toString()}`);
     if (!data.ok) throw new Error(data.error || "list failed");
 
     const tb = byId("geoptsTbody");
     tb.textContent = "";
+    modalPage = Number(data.page) || 1;
+    modalRows = new Map();
 
     for (const r of data.rows || []) {
+      modalRows.set(String(r.id_pts), r);
       const tr = document.createElement("tr");
       appendTextCell(tr, r.id_pts);
       appendTextCell(tr, r.x);
@@ -287,6 +297,15 @@
       tr.appendChild(actions);
       tb.appendChild(tr);
     }
+
+    const total = Number(data.total) || 0;
+    const totalPages = Number(data.total_pages) || 1;
+    const first = total ? ((modalPage - 1) * modalPageSize) + 1 : 0;
+    const last = total ? first + (data.rows || []).length - 1 : 0;
+    byId("geoptsPageSummary").textContent = total ? `Showing ${first}-${last} of ${total}` : "0 points";
+    byId("geoptsPageLabel").textContent = `Page ${modalPage} of ${totalPages}`;
+    byId("btnGeoptsPrev").disabled = modalPage <= 1;
+    byId("btnGeoptsNext").disabled = modalPage >= totalPages;
   }
 
   async function openPointById(id) {
@@ -382,9 +401,20 @@
 
   function bindModalEvents() {
     byId("geoptsModal")?.addEventListener("shown.bs.modal", () => {
+      modalPage = 1;
       modalReload().catch(console.error);
     });
     byId("btnModalReload")?.addEventListener("click", () => {
+      modalPage = 1;
+      modalReload().catch(console.error);
+    });
+    byId("btnGeoptsPrev")?.addEventListener("click", () => {
+      if (modalPage <= 1) return;
+      modalPage -= 1;
+      modalReload().catch(console.error);
+    });
+    byId("btnGeoptsNext")?.addEventListener("click", () => {
+      modalPage += 1;
       modalReload().catch(console.error);
     });
     byId("geoptsTbody")?.addEventListener("click", async (e) => {
@@ -404,15 +434,12 @@
       }
 
       if (action === "edit") {
-        const qs = new URLSearchParams({
-          q: fieldValue("modalQ"),
-          id_from: fieldValue("modalFrom"),
-          id_to: fieldValue("modalTo"),
-          limit: 1000
-        });
-        const data = await requestJson(`${EP.list}?${qs.toString()}`);
-        const row = (data.rows || []).find((r) => String(r.id_pts) === String(id));
-        if (row) openEdit(row);
+        const row = modalRows.get(String(id));
+        if (row) {
+          openEdit(row);
+        } else {
+          await openPointById(id);
+        }
       }
     });
     byId("btnSaveEdit")?.addEventListener("click", () => {

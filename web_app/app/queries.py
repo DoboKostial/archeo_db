@@ -1719,7 +1719,7 @@ def upsert_geopt_sql():
             %s,
             CASE
               WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
-              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+              WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FO','NI','PF','FI','PR','SP')
                 THEN UPPER(BTRIM(%s))::geopt_code
               ELSE NULL
             END,
@@ -1741,7 +1741,7 @@ def upsert_geopt_sql():
 def list_geopts_sql():
     """
     List points (for modal table).
-    Params: (q_like, q_like, id_from, id_to, limit)
+    Params: (q, q_like, q_like, id_from, id_from, id_to, id_to, limit, offset)
     """
     return """
       SELECT id_pts, x, y, h, code::text AS code, notes
@@ -1755,7 +1755,48 @@ def list_geopts_sql():
         AND (%s IS NULL OR id_pts >= %s)
         AND (%s IS NULL OR id_pts <= %s)
       ORDER BY id_pts
-      LIMIT %s;
+      LIMIT %s OFFSET %s;
+    """
+
+
+def export_geopts_sql():
+    """Export every point matching the modal filters."""
+    return """
+      SELECT id_pts, x, y, h, code::text AS code, notes
+      FROM tab_geopts
+      WHERE
+        (
+          %s IS NULL
+          OR code::text ILIKE %s
+          OR notes ILIKE %s
+        )
+        AND (%s IS NULL OR id_pts >= %s)
+        AND (%s IS NULL OR id_pts <= %s)
+      ORDER BY id_pts;
+    """
+
+
+def count_geopts_sql():
+    """Count points matching the modal filters."""
+    return """
+      SELECT COUNT(*)::int
+      FROM tab_geopts
+      WHERE
+        (
+          %s IS NULL
+          OR code::text ILIKE %s
+          OR notes ILIKE %s
+        )
+        AND (%s IS NULL OR id_pts >= %s)
+        AND (%s IS NULL OR id_pts <= %s);
+    """
+
+
+def geopts_overview_sql():
+    """Return total point count and highest point ID."""
+    return """
+      SELECT COUNT(*)::int, MAX(id_pts)::int
+      FROM tab_geopts;
     """
 
 
@@ -1776,7 +1817,7 @@ def update_geopt_sql():
         h = %s,
         code = CASE
                  WHEN NULLIF(BTRIM(%s), '') IS NULL THEN NULL
-                 WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FP','NI','PF','SP')
+                 WHEN UPPER(BTRIM(%s)) IN ('SU','FX','EP','FO','NI','PF','FI','PR','SP')
                    THEN UPPER(BTRIM(%s))::geopt_code
                  ELSE NULL
                END,

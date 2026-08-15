@@ -199,8 +199,10 @@ CREATE TYPE geopt_code AS ENUM (
       'FX', -- fix (e.g. nail)
       'EP', -- excavation polygon
       'FO', -- photogrammetric point
-      'NI', -- nielation for making surfaces
+      'NI', -- nivelation for making surfaces
       'PF', -- point field for total station stationing
+      'FI', -- point for precise finds measuring
+      'PR', -- direct profile measuring
       'SP'  -- special meaning (free)
 );
 
