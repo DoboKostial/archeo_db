@@ -20,6 +20,7 @@ class Config:
     TERRAIN_DB_PASSWORD = "XXX"
     TERRAIN_DB_HOST = "XXX"
     TERRAIN_DB_PORT = 5432 # or port Postgres listens
+    DB_CONNECT_TIMEOUT = 5
 
     # Secret key for JWT
     SECRET_KEY = "XXX"

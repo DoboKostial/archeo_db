@@ -5,6 +5,10 @@ import psycopg2
 from config import Config
 
 
+def _connect_timeout() -> int:
+    return int(getattr(Config, "DB_CONNECT_TIMEOUT", 5) or 5)
+
+
 def get_auth_connection():
     return psycopg2.connect(
         dbname=Config.AUTH_DB_NAME,
@@ -12,6 +16,7 @@ def get_auth_connection():
         password=Config.AUTH_DB_PASSWORD,
         host=Config.AUTH_DB_HOST,
         port=Config.AUTH_DB_PORT,
+        connect_timeout=_connect_timeout(),
     )
 
 
@@ -22,6 +27,7 @@ def get_terrain_connection(dbname: str):
         password=Config.TERRAIN_DB_PASSWORD,
         host=Config.TERRAIN_DB_HOST,
         port=Config.TERRAIN_DB_PORT,
+        connect_timeout=_connect_timeout(),
     )
 
 

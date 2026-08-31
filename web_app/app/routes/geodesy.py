@@ -234,14 +234,14 @@ def upload_geopts():
     source_epsg = (request.form.get('source_epsg') or '').strip()
 
     if not file:
-        flash('Musíš vybrat soubor (CSV/TXT).', 'danger')
+        flash('The file is required (CSV/TXT).', 'danger')
         return redirect(url_for('geodesy.geodesy'))
 
     conn = get_terrain_connection(selected_db)
     try:
         target_srid = _get_target_srid(conn)
         if target_srid <= 0:
-            flash('Projektový SRID není nastaven (Find_SRID pro tab_geopts.pts_geom).', 'danger')
+            flash('Project SRID is not set (Find_SRID pro tab_geopts.pts_geom).', 'danger')
             return redirect(url_for('geodesy.geodesy'))
 
         try:
@@ -283,7 +283,7 @@ def upload_geopts():
     except Exception as e:
         conn.rollback()
         logger.exception(f"[{selected_db}] geodesy upload failed: {e}")
-        flash(f'Import selhal: {e}', 'danger')
+        flash(f'Import failed: {e}', 'danger')
         return redirect(url_for('geodesy.geodesy'))
     finally:
         conn.close()

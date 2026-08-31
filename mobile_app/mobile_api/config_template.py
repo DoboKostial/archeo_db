@@ -25,6 +25,7 @@ class Config:
     TERRAIN_DB_PASSWORD = "CHANGE_ME_MOBILE"
     TERRAIN_DB_HOST = "localhost"
     TERRAIN_DB_PORT = 5432
+    DB_CONNECT_TIMEOUT = 5
 
     # JWT signing for mobile access tokens issued by this service
     JWT_SECRET_KEY = "CHANGE_ME_MOBILE_API_SECRET"

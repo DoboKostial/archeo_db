@@ -10,6 +10,10 @@ from app.logger import logger
 from app.utils.storage import safe_join, validate_db_name
 
 
+def _connect_timeout() -> int:
+    return int(getattr(Config, "DB_CONNECT_TIMEOUT", 5) or 5)
+
+
 class ClosingConnection(psycopg2.extensions.connection):
     """A psycopg2 connection whose context manager also closes the socket."""
 
@@ -27,6 +31,7 @@ def get_auth_connection():
         password=Config.AUTH_DB_PASSWORD,
         host=Config.AUTH_DB_HOST,
         port=Config.AUTH_DB_PORT,
+        connect_timeout=_connect_timeout(),
         connection_factory=ClosingConnection,
     )
 
@@ -37,6 +42,7 @@ def get_terrain_connection(dbname):
         password=Config.TERRAIN_DB_PASSWORD,
         host=Config.TERRAIN_DB_HOST,
         port=Config.TERRAIN_DB_PORT,
+        connect_timeout=_connect_timeout(),
         connection_factory=ClosingConnection,
     )
 
