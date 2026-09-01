@@ -51,7 +51,7 @@ class Config:
     # === PATHS (define absolute paths for server!) ===
 
     # Single log file for whole app
-    APP_LOG = "XXX"  # e.g. "/var/log/archeodb.log"
+    APP_LOG = "XXX"  # e.g. "/var/log/archeodb/archeodb.log"
     LOG_LEVEL = "WARNING"  # change for "DEBUG", "WARNING", "ERROR"
 
     # while we do pg_dump for DB backups, lets provide direct path to pg_dump binary

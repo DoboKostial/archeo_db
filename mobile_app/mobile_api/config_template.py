@@ -58,9 +58,9 @@ class Config:
     MAX_UPLOAD_FILE_BYTES = 64 * 1024 * 1024
     MAX_TEXT_UPLOAD_BYTES = 8 * 1024 * 1024
 
-    # Shared media storage. In production this should point to the same mounted
-    # data directory used by the main stack.
-    DATA_DIR = "CHANGE_ME_SHARED_DATA_DIR"  # e.g. "/var/www/archeodb_web_app/data/"
+    # Shared media storage. In production this must point to the same POSIX
+    # data directory or mounted storage layer used by the web stack.
+    DATA_DIR = "CHANGE_ME_SHARED_DATA_DIR"  # e.g. "/data/data_dir"
     MEDIA_DIRS = {
         "photos": "photos",
         "sketches": "sketches",
