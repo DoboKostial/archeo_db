@@ -26,14 +26,14 @@ from app.queries import (
 from app.utils.auth import send_password_reset_email, send_password_change_email
 from app.utils.tokens import (
     create_password_reset_token,
-    create_session_token,
+    create_session_token_with_payload,
     decode_password_reset_token,
     password_reset_token_matches,
+    session_cookie_max_age,
 )
 
 auth_bp = Blueprint("auth", __name__)
 
-JWT_SESSION_MINUTES = 60
 RESET_TOKEN_MINUTES = 30
 
 _RATE_LIMIT_LOCK = Lock()
@@ -212,7 +212,7 @@ def login():
         except Exception as e:
             logger.warning(f"Could not update last_login for {email}: {e}")
 
-        token = create_session_token(email, name, role, JWT_SESSION_MINUTES)
+        token, token_payload = create_session_token_with_payload(email, name, role)
 
         logger.info(f"Successful login for: {email} role={role}")
 
@@ -231,7 +231,7 @@ def login():
             httponly=True,
             secure=bool(current_app.config.get("SESSION_COOKIE_SECURE", True)),
             samesite="Lax",
-            max_age=JWT_SESSION_MINUTES * 60,
+            max_age=session_cookie_max_age(token_payload),
         )
         return resp
 

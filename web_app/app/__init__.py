@@ -9,7 +9,12 @@ from app.logger import logger
 from app.extensions import csrf
 from app.queries import get_user_access_state
 from app.reports.service import init_report_generators
-from app.utils.tokens import decode_session_token
+from app.utils.tokens import (
+    decode_session_token,
+    refresh_session_token,
+    session_absolute_timeout_reached,
+    session_cookie_max_age,
+)
 
 def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -94,6 +99,10 @@ def create_app():
             logger.warning(f"Invalid token: {e} ({request.method} {request.path})")
             return _unauthorized()
 
+        if session_absolute_timeout_reached(payload):
+            logger.info(f"Absolute session timeout reached: {request.method} {request.path}")
+            return _unauthorized()
+
         email = payload.get("email", "") or ""
         conn = None
         try:
@@ -122,6 +131,26 @@ def create_app():
         if request.endpoint.startswith("admin.") and g.user_role != "archeolog":
             logger.warning(f"Forbidden admin access for {g.user_email} role={g.user_role} -> {request.path}")
             return _forbidden()
+
+        if request.endpoint != "auth.logout":
+            refreshed_token, refreshed_payload = refresh_session_token(payload)
+            g._refreshed_session_token = refreshed_token
+            g._refreshed_session_payload = refreshed_payload
+
+    @app.after_request
+    def refresh_session_cookie(response):
+        token = getattr(g, "_refreshed_session_token", None)
+        payload = getattr(g, "_refreshed_session_payload", None)
+        if token and payload and request.endpoint != "auth.logout":
+            response.set_cookie(
+                "token",
+                token,
+                httponly=True,
+                secure=bool(app.config.get("SESSION_COOKIE_SECURE", True)),
+                samesite="Lax",
+                max_age=session_cookie_max_age(payload),
+            )
+        return response
 
     @app.errorhandler(RequestEntityTooLarge)
     def upload_too_large(_error):

@@ -29,6 +29,8 @@ class Config:
     SESSION_COOKIE_SECURE = True
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
+    WEB_SESSION_IDLE_MINUTES = 120
+    WEB_SESSION_ABSOLUTE_MINUTES = 720  # 0 disables absolute timeout
 
     # CSRF (Flask-WTF)
     WTF_CSRF_HEADERS = ["X-CSRFToken", "X-CSRF-Token"]
