@@ -40,20 +40,18 @@
 
             <!-- FILES -->
             <div class="mb-2">
-              <label class="form-label">Files</label>
+              <label class="form-label">Files (multiple)</label>
 
-              <div class="input-group mb-2">
-                <input type="file"
-                       class="form-control"
-                       name="files"
-                       accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
-                       required>
-                <button type="button" class="btn btn-outline-secondary" id="btnAddFile">+ add more</button>
+              <input type="file"
+                     class="form-control"
+                     name="files"
+                     multiple
+                     accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
+                     required>
+
+              <div class="form-text">
+                Select one or more files. Metadata and links apply to all uploaded files in this batch.
               </div>
-
-              <div id="extraFiles"></div>
-
-              <div class="form-text">Unique filename + unique content per project.</div>
             </div>
 
             <div class="row g-2">

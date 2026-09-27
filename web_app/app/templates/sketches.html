@@ -36,17 +36,16 @@
 
           <div class="row g-2">
             <div class="col-12">
-              <label class="form-label">Files</label>
+              <label class="form-label">Files (multiple)</label>
               <input type="file"
                      class="form-control"
                      name="files"
+                     multiple
                      accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
                      required>
-              <div id="extraFiles" class="mt-2"></div>
-              <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="btnAddFile">
-                + add more
-              </button>
-              <div class="form-text">All files will be uploaded with the same properties and links.</div>
+              <div class="form-text">
+                Select one or more files. Metadata and links apply to all uploaded files in this batch.
+              </div>
             </div>
 
             <div class="col-md-6">

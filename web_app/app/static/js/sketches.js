@@ -177,33 +177,6 @@ prefillSearchSelects(document);
 
 
   // ---------------------------
-  // Upload: add more file inputs
-  // ---------------------------
-  const btnAddFile = document.getElementById("btnAddFile");
-  const extraFiles = document.getElementById("extraFiles");
-
-  const makeFileRow = () => {
-    const row = document.createElement("div");
-    row.className = "input-group mb-2";
-    row.innerHTML = `
-      <input type="file"
-             name="files"
-             class="form-control"
-             accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf"
-             required>
-      <button type="button" class="btn btn-outline-danger">Remove</button>
-    `;
-    row.querySelector("button").addEventListener("click", () => row.remove());
-    return row;
-  };
-
-  if (btnAddFile && extraFiles) {
-    btnAddFile.addEventListener("click", () => {
-      extraFiles.appendChild(makeFileRow());
-    });
-  }
-
-  // ---------------------------
   // Bulk selection wiring
   // ---------------------------
   const bulkForm = document.getElementById("bulkForm");
