@@ -1,15 +1,24 @@
 import hashlib
+import logging
 import os
 import re
 import tempfile
 from datetime import date
 from uuid import uuid4
 
+from PIL import Image, ImageOps
+
 from config import Config
+
+logger = logging.getLogger("mobile_api.media")
+
+Image.MAX_IMAGE_PIXELS = 80_000_000
 
 PHOTO_TYP_CHOICES = {"vertical", "horizontal", "skew", "general", "detail"}
 SKETCH_TYP_CHOICES = {"sketch", "photosketch", "general", "other"}
 PHOTOGRAM_TYP_CHOICES = {"stereo", "resection", "synthetic", "other"}
+
+_THUMBNAIL_MIME_TYPES = {"image/jpeg", "image/png", "image/tiff"}
 
 PK_REGEX = re.compile(r"^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$")
 
@@ -140,6 +149,62 @@ def _media_file_path(terrain_db: str, kind: str, media_id: str) -> str:
     return file_path
 
 
+def _media_thumbnail_path(file_path: str) -> str:
+    media_dir = os.path.dirname(file_path)
+    media_name = os.path.splitext(os.path.basename(file_path))[0]
+    thumb_path = _safe_join(media_dir, "thumbs", f"{media_name}.jpg")
+    if not _is_path_under(media_dir, thumb_path):
+        raise ValueError("Invalid thumbnail path.")
+    return thumb_path
+
+
+def _make_thumbnail(src_path: str, dst_path: str, max_side: int) -> None:
+    thumb_dir = os.path.dirname(dst_path)
+    os.makedirs(thumb_dir, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=thumb_dir,
+            prefix=".thumb-",
+            suffix=".jpg",
+            delete=False,
+        ) as handle:
+            temp_path = handle.name
+
+        with Image.open(src_path) as image:
+            image = ImageOps.exif_transpose(image)
+            image.thumbnail((max_side, max_side))
+
+            if image.mode in ("RGBA", "LA") or (
+                image.mode == "P" and "transparency" in image.info
+            ):
+                rgba = image.convert("RGBA")
+                rgb = Image.new("RGB", rgba.size, "white")
+                rgb.paste(rgba, mask=rgba.getchannel("A"))
+                image = rgb
+            elif image.mode != "RGB":
+                image = image.convert("RGB")
+
+            image.save(temp_path, format="JPEG", quality=80, optimize=True)
+
+        os.replace(temp_path, dst_path)
+        temp_path = None
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
+def _remove_stored_media(file_path: str | None) -> None:
+    if not file_path:
+        return
+    for path in (file_path, _media_thumbnail_path(file_path)):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            logger.warning("Failed to remove media file %s", path, exc_info=True)
+
+
 def _ensure_author_exists(cur, author_email: str):
     cur.execute("SELECT 1 FROM gloss_personalia WHERE mail = %s LIMIT 1", (author_email,))
     return cur.fetchone() is not None
@@ -195,21 +260,16 @@ def _insert_media_row(cur, kind: str, media_id: str, media_type: str | None, aut
         )
 
 
-def _store_media_upload(cur, terrain_db: str, kind: str, file_storage, media_type, author_email: str, notes):
-    """Save an uploaded file into the shared media directory and insert its
-    media row. Returns (media_id, mime_type, final_path). On failure the
-    stored file is removed before the exception propagates; the caller must
-    remove final_path itself if the transaction fails after this returns."""
+def _store_media_file(terrain_db: str, kind: str, media_id: str, file_storage):
+    """Store an upload and its thumbnail on the shared data filesystem."""
+    final_path = _media_file_path(terrain_db, kind, media_id)
+    target_dir = os.path.dirname(final_path)
     temp_path = None
-    final_path = None
     try:
-        media_id = _make_unique_media_pk(cur, terrain_db, kind, file_storage.filename)
-        final_path = _media_file_path(terrain_db, kind, media_id)
-        target_dir = os.path.dirname(final_path)
         os.makedirs(target_dir, exist_ok=True)
 
-        # Keep the temporary file on the target filesystem so the final
-        # os.replace remains atomic even when /tmp and DATA_DIR are separate.
+        # The temporary file must be on the target filesystem so os.replace
+        # remains atomic when DATA_DIR is a separate mount.
         with tempfile.NamedTemporaryFile(
             dir=target_dir,
             prefix=".upload-",
@@ -225,6 +285,47 @@ def _store_media_upload(cur, terrain_db: str, kind: str, file_storage, media_typ
         os.replace(temp_path, final_path)
         temp_path = None
 
+        if mime_type in _THUMBNAIL_MIME_TYPES:
+            thumb_path = _media_thumbnail_path(final_path)
+            try:
+                _make_thumbnail(
+                    final_path,
+                    thumb_path,
+                    int(getattr(Config, "THUMB_MAX_SIDE", 256)),
+                )
+            except Exception:
+                logger.warning(
+                    "Thumbnail creation failed for %s",
+                    final_path,
+                    exc_info=True,
+                )
+
+        return mime_type, file_size, checksum_sha256, final_path
+    except Exception:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        _remove_stored_media(final_path)
+        raise
+
+
+def _store_media_upload(cur, terrain_db: str, kind: str, file_storage, media_type, author_email: str, notes):
+    """Save an uploaded file into the shared media directory and insert its
+    media row. Returns (media_id, mime_type, final_path). On failure the
+    stored files are removed before the exception propagates; the caller must
+    call _remove_stored_media if the transaction fails after this returns."""
+    final_path = None
+    try:
+        media_id = _make_unique_media_pk(cur, terrain_db, kind, file_storage.filename)
+        mime_type, file_size, checksum_sha256, final_path = _store_media_file(
+            terrain_db,
+            kind,
+            media_id,
+            file_storage,
+        )
+
         _insert_media_row(
             cur,
             kind,
@@ -238,10 +339,5 @@ def _store_media_upload(cur, terrain_db: str, kind: str, file_storage, media_typ
         )
         return media_id, mime_type, final_path
     except Exception:
-        for path in (temp_path, final_path):
-            if path and os.path.exists(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+        _remove_stored_media(final_path)
         raise

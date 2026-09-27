@@ -13,6 +13,7 @@ from app.media import (
     SKETCH_TYP_CHOICES,
     _ensure_author_exists,
     _media_file_path,
+    _remove_stored_media,
     _store_media_upload,
 )
 from app.responses import _json_error
@@ -606,8 +607,7 @@ def upload_su_media(terrain_db: str, feature_id: str, su_id: int):
             }
         ), 201
     except Exception as e:
-        if final_path and os.path.exists(final_path):
-            os.remove(final_path)
+        _remove_stored_media(final_path)
         if isinstance(e, ValueError):
             return _json_error(str(e), 400)
         logger.exception("SU media upload failed for %s/%s/%s: %s", terrain_db, feature_id, su_id, e)

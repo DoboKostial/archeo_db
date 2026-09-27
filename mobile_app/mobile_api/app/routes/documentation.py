@@ -1,6 +1,5 @@
 import logging
 import os
-import tempfile
 from datetime import date
 from urllib.parse import quote
 from uuid import uuid4
@@ -11,10 +10,10 @@ from app.database import terrain_connection, terrain_transaction
 from app.auth_tokens import require_mobile_token
 from app.media import (
     _db_prefix_from_name,
-    _detect_mime,
     _media_file_path,
+    _remove_stored_media,
     _sanitize_filename,
-    _sha256_file,
+    _store_media_file,
 )
 from app.responses import _json_error
 from app.validators import _validate_terrain_db
@@ -429,7 +428,7 @@ def create_documentation(terrain_db: str, feature_id: str):
     if _uses_type(feature_id) and media_type not in cfg["allowed_types"]:
         return _json_error("Invalid documentation type.", 400)
 
-    tmp_path = None
+    final_path = None
     try:
         author_email = _nullable_text(request.form.get("author")) or ((claims or {}).get("email") if _uses_author(feature_id) else None)
         doc_date = _nullable_date(request.form.get("datum"))
@@ -438,17 +437,15 @@ def create_documentation(terrain_db: str, feature_id: str):
         if _uses_date(feature_id) and doc_date is None:
             doc_date = date.today()
 
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_handle:
-            file_storage.save(tmp_handle)
-            tmp_path = tmp_handle.name
-
-        mime_type = _detect_mime(tmp_path, file_storage.filename)
-        file_size = os.path.getsize(tmp_path)
-        checksum = _sha256_file(tmp_path)
-
         with terrain_transaction(terrain_db) as conn:
             with conn.cursor() as cur:
                 doc_id = _make_doc_id(cur, terrain_db, feature_id, file_storage.filename)
+                mime_type, file_size, checksum, final_path = _store_media_file(
+                    terrain_db,
+                    feature_id,
+                    doc_id,
+                    file_storage,
+                )
                 if feature_id == "photograms":
                     cur.execute(
                         """
@@ -505,21 +502,15 @@ def create_documentation(terrain_db: str, feature_id: str):
                         ),
                     )
 
-                final_path = _media_file_path(terrain_db, feature_id, doc_id)
-                os.makedirs(os.path.dirname(final_path), exist_ok=True)
-                os.replace(tmp_path, final_path)
-                tmp_path = None
-
                 detail = _load_doc(cur, terrain_db, feature_id, doc_id)
         return jsonify({"message": "Documentation was saved.", "record": detail}), 201
     except ValueError as e:
+        _remove_stored_media(final_path)
         return _json_error(str(e), 400)
     except Exception as e:
+        _remove_stored_media(final_path)
         logger.exception("Documentation create failed for %s/%s: %s", terrain_db, feature_id, e)
         return _json_error("Internal server error.", 500)
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
 
 
 @documentation_bp.get("/api/mobile/terrain/<terrain_db>/documentation/<feature_id>/<doc_id>")
@@ -661,8 +652,7 @@ def delete_documentation(terrain_db: str, feature_id: str, doc_id: str):
                 if cur.rowcount == 0:
                     return _json_error("Record not found.", 404)
         path = _media_file_path(terrain_db, feature_id, doc_id)
-        if os.path.exists(path):
-            os.remove(path)
+        _remove_stored_media(path)
         return jsonify({"message": "Documentation was deleted."})
     except Exception as e:
         logger.exception("Documentation delete failed for %s/%s/%s: %s", terrain_db, feature_id, doc_id, e)
