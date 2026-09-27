@@ -7,7 +7,10 @@ import uuid
 from datetime import date
 from typing import Any
 
-from flask import Blueprint, abort, render_template, request, redirect, url_for, flash, session, jsonify, send_file
+from flask import (
+    Blueprint, abort, render_template, request, redirect, url_for, flash,
+    session, jsonify, send_file
+)
 from psycopg2.extras import Json
 
 from config import Config
@@ -22,6 +25,7 @@ from app.utils import (
 )
 
 from app.utils.decorators import require_selected_db
+from app.utils.media_bulk import build_media_zip
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 from app.queries import (
@@ -479,7 +483,7 @@ def upload_photograms():
 
 
 # ---------------------------------------
-# BULK (links only)
+# BULK (links, download, delete)
 # ---------------------------------------
 @photograms_bp.post("/photograms/bulk")
 @require_selected_db
@@ -490,6 +494,62 @@ def bulk_photograms():
     ids = request.form.getlist("photogram_ids")
     if not ids:
         flash("No photograms selected.", "warning")
+        return redirect(url_for("photograms.photograms"))
+    ids = [pid for pid in ((pid or "").strip() for pid in ids) if pid]
+    if not ids:
+        flash("No photograms selected.", "warning")
+        return redirect(url_for("photograms.photograms"))
+
+    if action == "download":
+        try:
+            zip_path, download_name, included, missing = build_media_zip(
+                selected_db,
+                "photograms",
+                [(pid, _final_paths(selected_db, pid)[0]) for pid in ids],
+            )
+        except Exception as e:
+            flash(f"Download failed: {e}", "danger")
+            logger.warning(f"[{selected_db}] photograms bulk download failed: {e}")
+            return redirect(url_for("photograms.photograms"))
+
+        if missing:
+            logger.warning(f"[{selected_db}] photograms bulk download skipped missing files: {missing}")
+        logger.info(f"[{selected_db}] photograms bulk download: requested={len(ids)} included={included}")
+        response = send_file(zip_path, mimetype="application/zip", as_attachment=True, download_name=download_name)
+        response.call_on_close(lambda: cleanup_upload(zip_path))
+        return response
+
+    if action == "delete":
+        try:
+            paths_by_id = {pid: _final_paths(selected_db, pid) for pid in ids}
+        except Exception as e:
+            flash(f"Bulk delete failed: {e}", "danger")
+            return redirect(url_for("photograms.photograms"))
+
+        try:
+            with get_terrain_connection(selected_db) as conn:
+                with conn.cursor() as cur:
+                    for pid in ids:
+                        cur.execute(photogram_exists_sql(), (pid,))
+                        if not cur.fetchone():
+                            raise ValueError(f"Photogram not found: {pid}")
+                        cur.execute(delete_photogram_sql(), (pid,))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"[{selected_db}] photograms bulk delete failed: {e}")
+            flash(f"Bulk delete failed: {e}", "danger")
+            return redirect(url_for("photograms.photograms"))
+
+        failed_paths: list[str] = []
+        for final_path, thumb_path in paths_by_id.values():
+            failed_paths.extend(delete_media_files_checked(final_path, thumb_path))
+
+        if failed_paths:
+            flash(f"Deleted {len(ids)} photogram(s) from DB, but some FS deletes failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] photograms bulk delete FS failed: {failed_paths}")
+        else:
+            flash(f"Deleted {len(ids)} photogram(s).", "success")
+            logger.info(f"[{selected_db}] photograms bulk delete: count={len(ids)}")
         return redirect(url_for("photograms.photograms"))
 
     sj_ids = request.form.getlist("ref_sj")

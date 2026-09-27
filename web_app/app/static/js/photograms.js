@@ -361,6 +361,45 @@
   }
 
   // ---------------------------
+  // Bulk selection wiring
+  // ---------------------------
+  function wireBulkSelection() {
+    const bulkForm = qs("#bulkForm");
+    const bulkSelectedContainer = qs("#bulkSelectedContainer");
+    if (!bulkForm || !bulkSelectedContainer) return;
+
+    const renderBulkSelected = () => {
+      bulkSelectedContainer.innerHTML = "";
+      qsa(".photogram-check:checked").forEach(chk => {
+        bulkSelectedContainer.appendChild(el(`<input type="hidden" name="photogram_ids" value="${chk.value}">`));
+      });
+    };
+
+    qsa(".photogram-check").forEach(chk => {
+      chk.addEventListener("change", renderBulkSelected);
+    });
+
+    const btnSelectAll = qs("#btnSelectAll");
+    const btnClear = qs("#btnClearSelection");
+    if (btnSelectAll) btnSelectAll.addEventListener("click", () => {
+      qsa(".photogram-check").forEach(chk => chk.checked = true);
+      renderBulkSelected();
+    });
+    if (btnClear) btnClear.addEventListener("click", () => {
+      qsa(".photogram-check").forEach(chk => chk.checked = false);
+      renderBulkSelected();
+    });
+
+    bulkForm.addEventListener("submit", (ev) => {
+      renderBulkSelected();
+      const action = qs('[name="action"]', bulkForm)?.value || "";
+      if (action === "delete" && !window.confirm("Delete selected photograms? This cannot be undone.")) {
+        ev.preventDefault();
+      }
+    });
+  }
+
+  // ---------------------------
   // Gallery buttons
   // ---------------------------
   function wireGalleryButtons() {
@@ -385,6 +424,7 @@
     initAllSearchSelect(document);
 
     wireRanges();
+    wireBulkSelection();
     wireGalleryButtons();
 
     const requestedPhotogram = new URLSearchParams(window.location.search).get("edit_photogram");

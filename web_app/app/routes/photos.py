@@ -5,7 +5,8 @@ import os
 from typing import Any, Dict, List, Tuple
 
 from flask import (
-    Blueprint, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+    Blueprint, flash, jsonify, redirect, render_template, request, send_file,
+    session, url_for
 )
 from psycopg2.extras import Json
 
@@ -39,6 +40,7 @@ from app.utils.decorators import require_selected_db
 from app.utils import storage
 from app.utils import validate_mime, validate_extension, sha256_file
 from app.utils.images import make_thumbnail, extract_exif, detect_mime
+from app.utils.media_bulk import build_media_zip
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 # media_map (whitelisted mapping for link tables/columns)
@@ -834,7 +836,7 @@ def delete_photo(id_photo: str):
 
 
 # -------------------------
-# Bulk actions (add/remove links)
+# Bulk actions (add/remove links, download, delete)
 # -------------------------
 
 @photos_bp.post("/photos/bulk")
@@ -848,6 +850,72 @@ def bulk_photos():
     if not photo_ids:
         flash("No photos selected.", "warning")
         return redirect(url_for("photos.photos"))
+
+    if action == "download":
+        try:
+            zip_path, download_name, included, missing = build_media_zip(
+                selected_db,
+                "photos",
+                [(pid, _final_paths(selected_db, pid)[0]) for pid in photo_ids],
+            )
+        except Exception as e:
+            flash(f"Download failed: {e}", "danger")
+            logger.warning(f"[{selected_db}] photos bulk download failed: {e}")
+            return redirect(url_for("photos.photos"))
+
+        if missing:
+            logger.warning(f"[{selected_db}] photos bulk download skipped missing files: {missing}")
+        logger.info(f"[{selected_db}] photos bulk download: requested={len(photo_ids)} included={included}")
+        response = send_file(zip_path, mimetype="application/zip", as_attachment=True, download_name=download_name)
+        response.call_on_close(lambda: storage.cleanup_upload(zip_path))
+        return response
+
+    if action == "delete":
+        try:
+            paths_by_id = {
+                pid: (*_final_paths(selected_db, pid), _legacy_photo_thumb_path(selected_db, pid))
+                for pid in photo_ids
+            }
+        except Exception as e:
+            flash(f"Bulk delete failed: {e}", "danger")
+            return redirect(url_for("photos.photos"))
+
+        conn = get_terrain_connection(selected_db)
+        conn.autocommit = False
+        try:
+            with conn.cursor() as cur:
+                for pid in photo_ids:
+                    cur.execute(photo_exists_sql(), (pid,))
+                    if not cur.fetchone():
+                        raise ValueError(f"Photo not found: {pid}")
+                    cur.execute(delete_photo_sql(), (pid,))
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            flash(f"Bulk delete failed: {e}", "danger")
+            logger.warning(f"[{selected_db}] photos bulk delete failed: {e}")
+            return redirect(url_for("photos.photos"))
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+        failed_paths: list[str] = []
+        for final_path, thumb_path, legacy_thumb_path in paths_by_id.values():
+            failed_paths.extend(storage.delete_media_files_checked(final_path, thumb_path, legacy_thumb_path))
+
+        if failed_paths:
+            flash(f"Deleted {len(photo_ids)} photo(s) from DB, but some FS deletes failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] photos bulk delete FS failed: {failed_paths}")
+        else:
+            flash(f"Deleted {len(photo_ids)} photo(s).", "success")
+            logger.info(f"[{selected_db}] photos bulk delete: count={len(photo_ids)}")
+        return redirect(url_for("photos.photos"))
+
     if action not in ("add_links", "remove_links"):
         flash("Invalid bulk action.", "danger")
         return redirect(url_for("photos.photos"))

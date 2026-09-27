@@ -38,6 +38,7 @@ from app.utils import (
     validate_pk,
 )
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
+from app.utils.media_bulk import build_media_zip
 
 # SQL imports (from app/queries)
 from app.queries import (
@@ -785,12 +786,31 @@ def bulk_drawings():
     selected_db = session["selected_db"]
 
     ids = request.form.getlist("drawing_ids")
-    ids = [i for i in ids if (i or "").strip()]
+    ids = [i for i in ((i or "").strip() for i in ids) if i]
     if not ids:
         flash("No drawings selected.", "warning")
         return redirect(url_for("drawings.drawings"))
 
     action = (request.form.get("action") or "").strip()
+
+    if action == "download":
+        try:
+            zip_path, download_name, included, missing = build_media_zip(
+                selected_db,
+                "drawings",
+                [(did, _final_paths(selected_db, did)[0]) for did in ids],
+            )
+        except Exception as e:
+            flash(f"Download failed: {e}", "danger")
+            logger.warning(f"[{selected_db}] drawings bulk download failed: {e}")
+            return redirect(url_for("drawings.drawings"))
+
+        if missing:
+            logger.warning(f"[{selected_db}] drawings bulk download skipped missing files: {missing}")
+        logger.info(f"[{selected_db}] drawings bulk download: requested={len(ids)} included={included}")
+        response = send_file(zip_path, mimetype="application/zip", as_attachment=True, download_name=download_name)
+        response.call_on_close(lambda: cleanup_upload(zip_path))
+        return response
 
     if action == "delete":
         with get_terrain_connection(selected_db) as conn:

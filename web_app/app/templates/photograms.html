@@ -171,10 +171,53 @@
       <h4 class="mb-0">Photograms gallery</h4>
     </div>
 
+    <form method="post" action="{{ url_for('photograms.bulk_photograms') }}" id="bulkForm" class="mb-3">
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Select all</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">Clear</button>
+
+        <select class="form-select form-select-sm" name="action" style="width: 200px;" required>
+          <option value="" selected disabled>-- bulk action --</option>
+          <option value="add_links">Add links</option>
+          <option value="remove_links">Remove links</option>
+          <option value="download">Download selected</option>
+          <option value="delete">Delete selected</option>
+        </select>
+
+        <div class="search-select"
+             data-mode="multi"
+             data-endpoint="{{ url_for('photograms.api_search_sj') }}"
+             data-hidden-name="ref_sj"
+             data-placeholder="Bulk: SU"></div>
+
+        <div class="search-select"
+             data-mode="multi"
+             data-endpoint="{{ url_for('photograms.api_search_polygons') }}"
+             data-hidden-name="ref_polygon"
+             data-placeholder="Bulk: Polygon"></div>
+
+        <div class="search-select"
+             data-mode="multi"
+             data-endpoint="{{ url_for('photograms.api_search_sections') }}"
+             data-hidden-name="ref_section"
+             data-placeholder="Bulk: Section"></div>
+
+        <button type="submit" class="btn btn-sm btn-primary">Apply</button>
+      </div>
+      <div id="bulkSelectedContainer"></div>
+    </form>
+
     <div class="row g-3">
       {% for g in photograms %}
       <div class="col-sm-6 col-md-4 col-lg-3">
         <div class="card h-100 shadow-sm">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="form-check m-0">
+              <input class="form-check-input photogram-check" type="checkbox" value="{{ g.id_photogram }}">
+            </div>
+            <span class="small text-muted">{{ g.datum }}</span>
+          </div>
+
           <a class="photogram-thumb-link" href="{{ url_for('photograms.serve_photogram_file', id_photogram=g.id_photogram) }}" target="_blank">
             <img class="card-img-top photogram-thumb"
                  src="{{ url_for('photograms.serve_photogram_thumb', id_photogram=g.id_photogram) }}"

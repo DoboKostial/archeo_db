@@ -6,7 +6,10 @@ import os
 import uuid
 from typing import Any
 
-from flask import Blueprint, abort, render_template, request, redirect, url_for, flash, session, jsonify, send_file
+from flask import (
+    Blueprint, abort, render_template, request, redirect, url_for, flash,
+    session, jsonify, send_file
+)
 
 from config import Config
 from app.logger import logger
@@ -20,6 +23,7 @@ from app.utils import (
     sha256_file, validate_extension, validate_mime
 )
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
+from app.utils.media_bulk import build_media_zip
 
 from app.queries import (
     # base CRUD
@@ -455,7 +459,7 @@ def upload_sketches():
 
 
 # ---------------------------------------
-# BULK (links only)
+# BULK (links, download, delete)
 # ---------------------------------------
 @sketches_bp.post("/sketches/bulk")
 @require_selected_db
@@ -466,6 +470,62 @@ def bulk_sketches():
     ids = request.form.getlist("sketch_ids")
     if not ids:
         flash("No sketches selected.", "warning")
+        return redirect(url_for("sketches.sketches"))
+    ids = [sid for sid in ((sid or "").strip() for sid in ids) if sid]
+    if not ids:
+        flash("No sketches selected.", "warning")
+        return redirect(url_for("sketches.sketches"))
+
+    if action == "download":
+        try:
+            zip_path, download_name, included, missing = build_media_zip(
+                selected_db,
+                "sketches",
+                [(sid, _final_paths(selected_db, sid)[0]) for sid in ids],
+            )
+        except Exception as e:
+            flash(f"Download failed: {e}", "danger")
+            logger.warning(f"[{selected_db}] sketches bulk download failed: {e}")
+            return redirect(url_for("sketches.sketches"))
+
+        if missing:
+            logger.warning(f"[{selected_db}] sketches bulk download skipped missing files: {missing}")
+        logger.info(f"[{selected_db}] sketches bulk download: requested={len(ids)} included={included}")
+        response = send_file(zip_path, mimetype="application/zip", as_attachment=True, download_name=download_name)
+        response.call_on_close(lambda: cleanup_upload(zip_path))
+        return response
+
+    if action == "delete":
+        try:
+            paths_by_id = {sid: _final_paths(selected_db, sid) for sid in ids}
+        except Exception as e:
+            flash(f"Bulk delete failed: {e}", "danger")
+            return redirect(url_for("sketches.sketches"))
+
+        try:
+            with get_terrain_connection(selected_db) as conn:
+                with conn.cursor() as cur:
+                    for sid in ids:
+                        cur.execute(sketch_exists_sql(), (sid,))
+                        if not cur.fetchone():
+                            raise ValueError(f"Sketch not found: {sid}")
+                        cur.execute(delete_sketch_sql(), (sid,))
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"[{selected_db}] sketches bulk delete failed: {e}")
+            flash(f"Bulk delete failed: {e}", "danger")
+            return redirect(url_for("sketches.sketches"))
+
+        failed_paths: list[str] = []
+        for final_path, thumb_path in paths_by_id.values():
+            failed_paths.extend(delete_media_files_checked(final_path, thumb_path))
+
+        if failed_paths:
+            flash(f"Deleted {len(ids)} sketch(es) from DB, but some FS deletes failed (see logs).", "warning")
+            logger.warning(f"[{selected_db}] sketches bulk delete FS failed: {failed_paths}")
+        else:
+            flash(f"Deleted {len(ids)} sketch(es).", "success")
+            logger.info(f"[{selected_db}] sketches bulk delete: count={len(ids)}")
         return redirect(url_for("sketches.sketches"))
 
     sj_ids = request.form.getlist("ref_sj")

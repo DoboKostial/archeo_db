@@ -168,7 +168,13 @@
     renderBulkSelected();
   });
 
-  if (bulkForm) bulkForm.addEventListener("submit", () => renderBulkSelected());
+  if (bulkForm) bulkForm.addEventListener("submit", (ev) => {
+    renderBulkSelected();
+    const action = bulkForm.querySelector('[name="action"]')?.value || "";
+    if (action === "delete" && !window.confirm("Delete selected photos? This cannot be undone.")) {
+      ev.preventDefault();
+    }
+  });
 
   // ---------------------------
   // Edit / Delete modals
