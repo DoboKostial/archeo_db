@@ -139,6 +139,12 @@ class CreateDbTemplateTests(unittest.TestCase):
             self.auth_sql,
         )
 
+    def test_auth_template_grants_mobile_password_login_view(self) -> None:
+        self.assertIn(
+            "GRANT SELECT ON public.v_app_login_users TO app_mobile_db",
+            self.auth_sql,
+        )
+
     def test_find_count_is_optional_when_not_counted_in_field(self) -> None:
         finds_block = _table_block(self.template_sql, "tab_finds")
 

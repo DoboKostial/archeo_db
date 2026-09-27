@@ -230,6 +230,7 @@ RESET ROLE;
 
 -- readonly auth access for mobile / GIS / future clients
 GRANT SELECT ON public.v_app_login_users TO grp_app_auth_ro;
+GRANT SELECT ON public.v_app_login_users TO app_mobile_db;
 
 -- full auth management for web / desktop
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.app_users TO grp_app_auth_rw;
