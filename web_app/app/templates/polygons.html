@@ -2,6 +2,35 @@
 {% extends "base.html" %}
 {% block title %}Polygons{% endblock %}
 
+{% macro polygon_doc_link(kind, value) -%}
+  {%- if kind == "photos" -%}
+    <a href="{{ url_for('photos.serve_photo_file', id_photo=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "photograms" -%}
+    <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "sketches" -%}
+    <a href="{{ url_for('sketches.serve_sketch_file', id_sketch=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- else -%}
+    <span>{{ value }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro polygon_doc_group(label, kind, values) -%}
+  <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
+    {{ label }} (
+    {%- if values -%}
+      {%- for value in values[:3] -%}
+        <span class="text-break">{{ polygon_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
+      {%- endfor -%}
+      {%- if values|length > 3 -%}
+        <span class="text-muted"> +{{ values|length - 3 }}</span>
+      {%- endif -%}
+    {%- else -%}
+      0
+    {%- endif -%}
+    )
+  </span>
+{%- endmacro %}
+
 {% block content %}
 <div class="alert alert-info" role="alert">
   You are working with database <strong>{{ selected_db }}</strong>.
@@ -272,14 +301,15 @@
           <table id="polygonsTable" class="table table-sm table-bordered align-middle mb-0 w-100" data-page-size="10">
             <thead class="table-light">
               <tr>
-                <th style="width:70px;">ID</th>
-                <th>Name</th>
+                <th class="text-end" style="width:44px;">ID</th>
+                <th style="min-width:130px;">Name</th>
                 <th style="width:120px;">Parent</th>
                 <th style="width:250px;">Allocation reason</th>
                 <th class="text-center" style="width:80px;">TOP</th>
                 <th class="text-center" style="width:80px;">BOTTOM</th>
-                <th class="text-end" style="width:100px;">POINTS NR.</th>
+                <th class="text-end" style="width:72px;">POINTS NR.</th>
                 <th class="text-end" style="width:120px;">SRID / EPSG</th>
+                <th style="width:260px;">Is documented by:</th>
                 <th class="text-end" style="width:150px;">ACTIONS</th>
               </tr>
             </thead>
@@ -293,9 +323,10 @@
                 "top_ranges": p.top_ranges,
                 "bottom_ranges": p.bottom_ranges
               } %}
+              {% set docs = p.documented_by %}
               <tr>
-                <td>{{ p.id }}</td>
-                <td class="text-break">{{ p.name }}</td>
+                <td class="text-end">{{ p.id }}</td>
+                <td class="text-nowrap">{{ p.name }}</td>
 
                 <td class="text-break">
                   {% if p.parent %}
@@ -333,6 +364,16 @@
                   {% else %}
                     <span class="text-muted">—</span>
                   {% endif %}
+                </td>
+
+                <td class="small">
+                  <div>
+                    {{ polygon_doc_group("Photos", "photos", docs.photos) }}
+                    {{ polygon_doc_group("Photograms", "photograms", docs.photograms) }}
+                  </div>
+                  <div>
+                    {{ polygon_doc_group("Sketches", "sketches", docs.sketches) }}
+                  </div>
                 </td>
 
                 <td class="text-end">

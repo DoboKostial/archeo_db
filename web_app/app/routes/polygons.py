@@ -62,6 +62,21 @@ def _json_list(value):
     return []
 
 
+def _documented_by_to_dict(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+    return {
+        "photos": [str(v) for v in (value.get("photos") or [])],
+        "photograms": [str(v) for v in (value.get("photograms") or [])],
+        "sketches": [str(v) for v in (value.get("sketches") or [])],
+    }
+
+
 # ---------- LIST + FORM PAGE ----------
 @polygons_bp.route('/polygons', methods=['GET'])
 @require_selected_db
@@ -91,6 +106,7 @@ def polygons():
                     "notes": row[8] or "",
                     "top_ranges": _json_list(row[9]),
                     "bottom_ranges": _json_list(row[10]),
+                    "documented_by": _documented_by_to_dict(row[11] if len(row) > 11 else {}),
                 }
                 for row in cur.fetchall()
             ]

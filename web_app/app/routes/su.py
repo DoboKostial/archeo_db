@@ -411,7 +411,7 @@ def add_su():
                 else:
                     raise ValueError("Invalid type of stratigraphic unit.")
 
-                # NEW: link SU to polygons (M:N)
+                # link SU to polygons (M:N)
                 polygon_names = request.form.getlist("polygon_names")
                 polygon_names = [(p or "").strip() for p in polygon_names if (p or "").strip()]
                 if polygon_names:
@@ -423,7 +423,7 @@ def add_su():
                             raise ValueError(f'Polygon "{poly_name}" does not exist.')
                         cur.execute(sql_link, (id_sj, poly_name))
 
-                # Stratigraphic relations (store exactly as user says)
+                # Stratigraphic relations
                 # above_* means: current SU is above related SU -> relation '>'
                 # below_* means: current SU is below related SU -> relation '<'
                 relation_inputs = [

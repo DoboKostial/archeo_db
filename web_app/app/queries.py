@@ -1024,7 +1024,37 @@ def get_polygons_list():
                 WHERE bb.ref_polygon = p.polygon_name
               ),
               '[]'::jsonb
-            )                                           AS bottom_ranges
+            )                                           AS bottom_ranges,
+
+            jsonb_build_object(
+              'photos',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photo ORDER BY x.ref_photo)
+                    FROM tabaid_polygon_photos x
+                    WHERE x.ref_polygon = p.polygon_name
+                  ),
+                  '[]'::jsonb
+                ),
+              'photograms',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photogram ORDER BY x.ref_photogram)
+                    FROM tabaid_polygon_photograms x
+                    WHERE x.ref_polygon = p.polygon_name
+                  ),
+                  '[]'::jsonb
+                ),
+              'sketches',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_sketch ORDER BY x.ref_sketch)
+                    FROM tabaid_polygon_sketches x
+                    WHERE x.ref_polygon = p.polygon_name
+                  ),
+                  '[]'::jsonb
+                )
+            )                                           AS documented_by
 
         FROM tab_polygons p
         ORDER BY p.polygon_name;
