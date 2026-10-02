@@ -1,6 +1,37 @@
 {% extends 'base.html' %}
 {% block title %}Stratigraphic units{% endblock %}
 
+{% macro su_doc_link(kind, value) -%}
+  {%- if kind == "photos" -%}
+    <a href="{{ url_for('photos.serve_photo_file', id_photo=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "photograms" -%}
+    <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "drawings" -%}
+    <a href="{{ url_for('drawings.serve_drawing', id_drawing=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "sketches" -%}
+    <a href="{{ url_for('sketches.serve_sketch_file', id_sketch=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- else -%}
+    <span>{{ value }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro su_doc_group(label, kind, values) -%}
+  <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
+    {{ label }} (
+    {%- if values -%}
+      {%- for value in values[:3] -%}
+        <span class="text-break">{{ su_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
+      {%- endfor -%}
+      {%- if values|length > 3 -%}
+        <span class="text-muted"> +{{ values|length - 3 }}</span>
+      {%- endif -%}
+    {%- else -%}
+      0
+    {%- endif -%}
+    )
+  </span>
+{%- endmacro %}
+
 {% block content %}
 <div class="alert alert-info" role="alert">
   You are working on DB <strong>{{ selected_db }}</strong>.
@@ -516,39 +547,11 @@
   <fieldset class="border p-3 rounded-3 list-panel mt-4">
     <legend class="w-auto px-2">SUs list</legend>
 
-    <div class="row g-3 mb-3">
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body py-3">
-            <div class="text-muted small">Total</div>
-            <div class="fs-4"><strong>{{ sj_count_total }}</strong></div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body py-3">
-            <div class="text-muted small">Deposits</div>
-            <div class="fs-4"><strong>{{ sj_count_deposit }}</strong></div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body py-3">
-            <div class="text-muted small">Negatives</div>
-            <div class="fs-4"><strong>{{ sj_count_negativ }}</strong></div>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3">
-        <div class="card">
-          <div class="card-body py-3">
-            <div class="text-muted small">Structures</div>
-            <div class="fs-4"><strong>{{ sj_count_structure }}</strong></div>
-          </div>
-        </div>
-      </div>
+    <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
+      <span><span class="text-muted">Total</span> <strong class="fs-6">{{ sj_count_total }}</strong></span>
+      <span><span class="text-muted">Deposits</span> <strong class="fs-6">{{ sj_count_deposit }}</strong></span>
+      <span><span class="text-muted">Negatives</span> <strong class="fs-6">{{ sj_count_negativ }}</strong></span>
+      <span><span class="text-muted">Structures</span> <strong class="fs-6">{{ sj_count_structure }}</strong></span>
     </div>
 
     <h6 class="mb-2">Stored SUs</h6>
@@ -563,17 +566,29 @@
               <th>Description</th>
               <th>Recorded</th>
               <th>Author</th>
+              <th>Is documented by:</th>
               <th class="text-end">Action</th>
             </tr>
           </thead>
           <tbody id="suTableBody">
             {% for su in sus %}
+              {% set docs = su.documented_by %}
               <tr>
                 <td class="text-end"><strong>{{ su.id }}</strong></td>
                 <td>{{ su.typ or '—' }}</td>
                 <td title="{{ su.desc }}">{{ (su.desc[:120] ~ ('…' if su.desc|length > 120 else '')) if su.desc else '—' }}</td>
                 <td>{{ su.recorded if su.recorded else '—' }}</td>
                 <td>{{ su.author if su.author else '—' }}</td>
+                <td class="small">
+                  <div>
+                    {{ su_doc_group("Photos", "photos", docs.photos) }}
+                    {{ su_doc_group("Photograms", "photograms", docs.photograms) }}
+                  </div>
+                  <div>
+                    {{ su_doc_group("Drawings", "drawings", docs.drawings) }}
+                    {{ su_doc_group("Sketches", "sketches", docs.sketches) }}
+                  </div>
+                </td>
                 <td class="text-end">
                   <div class="d-inline-flex gap-1">
                     <button type="button"

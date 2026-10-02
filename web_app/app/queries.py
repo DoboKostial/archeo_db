@@ -447,7 +447,46 @@ def list_su_table_sql():
                 ) q
               ),
               ARRAY[]::int[]
-            ) AS equal_ids
+            ) AS equal_ids,
+
+            jsonb_build_object(
+              'photos',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photo ORDER BY x.ref_photo)
+                    FROM tabaid_photo_sj x
+                    WHERE x.ref_sj = s.id_sj
+                  ),
+                  '[]'::jsonb
+                ),
+              'photograms',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photogram ORDER BY x.ref_photogram)
+                    FROM tabaid_photogram_sj x
+                    WHERE x.ref_sj = s.id_sj
+                  ),
+                  '[]'::jsonb
+                ),
+              'sketches',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_sketch ORDER BY x.ref_sketch)
+                    FROM tabaid_sj_sketch x
+                    WHERE x.ref_sj = s.id_sj
+                  ),
+                  '[]'::jsonb
+                ),
+              'drawings',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_drawing ORDER BY x.ref_drawing)
+                    FROM tabaid_sj_drawings x
+                    WHERE x.ref_sj = s.id_sj
+                  ),
+                  '[]'::jsonb
+                )
+            ) AS documented_by
         FROM tab_sj s
         LEFT JOIN tab_sj_deposit d ON d.id_deposit = s.id_sj
         LEFT JOIN tab_sj_negativ n ON n.id_negativ = s.id_sj

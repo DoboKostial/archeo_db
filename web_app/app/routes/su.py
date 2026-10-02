@@ -145,6 +145,22 @@ def _su_id_list(value, current_id):
     return ids
 
 
+def _documented_by_to_dict(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+    return {
+        "photos": [str(v) for v in (value.get("photos") or [])],
+        "photograms": [str(v) for v in (value.get("photograms") or [])],
+        "sketches": [str(v) for v in (value.get("sketches") or [])],
+        "drawings": [str(v) for v in (value.get("drawings") or [])],
+    }
+
+
 def _su_row_to_dict(row):
     recorded = row[4].isoformat() if row[4] else ""
     return {
@@ -179,6 +195,7 @@ def _su_row_to_dict(row):
         "above_ids": [int(v) for v in (row[28] or [])],
         "below_ids": [int(v) for v in (row[29] or [])],
         "equal_ids": [int(v) for v in (row[30] or [])],
+        "documented_by": _documented_by_to_dict(row[31] if len(row) > 31 else {}),
     }
 
 
