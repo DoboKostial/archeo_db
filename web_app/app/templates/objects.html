@@ -117,7 +117,7 @@
 
     <!-- RIGHT: Existing objects table -->
     <div class="col-12 col-xxl-6">
-      <div class="card">
+      <div class="card list-panel">
         <div class="card-header d-flex align-items-center justify-content-between">
           <h5 class="mb-0">Existing objects</h5>
         </div>
@@ -142,7 +142,9 @@
                       <td>{{ obj[2] if obj[2] else "—" }}</td>
                       <td>
                         {% if obj[4] %}
-                          <span class="text-muted">{{ obj[4] | join(", ") }}</span>
+                          {% for sj_id in obj[4] %}
+                            <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ", " if not loop.last }}
+                          {% endfor %}
                         {% else %}
                           <em class="text-muted">none</em>
                         {% endif %}
@@ -266,7 +268,7 @@
           <div class="col-md-4">
             <label class="form-label">Type</label>
             <select class="form-select" id="edit_object_typ" required>
-              <option value="">-- vyber typ --</option>
+              <option value="">-- choose a type --</option>
               {% for typ in object_types %}
                 <option value="{{ typ }}">{{ typ }}</option>
               {% endfor %}
@@ -287,7 +289,7 @@
             <label class="form-label">SUs</label>
             <div id="edit_sj_container"></div>
             <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="edit_add_sj">+ Add SU</button>
-            <div class="form-text">Minimálně 2 SJ.</div>
+            <div class="form-text">At least 2 SUs.</div>
           </div>
         </div>
 
@@ -370,7 +372,7 @@
                 <option value="W">W</option>
                 <option value="NW">NW</option>
               </select>
-              <div class="form-text">Použijeme jednoduchý směr (text).</div>
+              <div class="form-text">We will use a simple direction (text).</div>
             </div>
 
             <div class="col-md-6">

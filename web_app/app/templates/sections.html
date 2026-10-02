@@ -2,6 +2,37 @@
 {% extends "base.html" %}
 {% block title %}Sections{% endblock %}
 
+{% macro section_doc_link(kind, value) -%}
+  {%- if kind == "photos" -%}
+    <a href="{{ url_for('photos.serve_photo_file', id_photo=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "photograms" -%}
+    <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "drawings" -%}
+    <a href="{{ url_for('drawings.serve_drawing', id_drawing=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- elif kind == "sketches" -%}
+    <a href="{{ url_for('sketches.serve_sketch_file', id_sketch=value) }}" target="_blank" rel="noopener">{{ value }}</a>
+  {%- else -%}
+    <span>{{ value }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro section_doc_group(label, kind, values) -%}
+  <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
+    {{ label }} (
+    {%- if values -%}
+      {%- for value in values[:3] -%}
+        <span class="text-break">{{ section_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
+      {%- endfor -%}
+      {%- if values|length > 3 -%}
+        <span class="text-muted"> +{{ values|length - 3 }}</span>
+      {%- endif -%}
+    {%- else -%}
+      0
+    {%- endif -%}
+    )
+  </span>
+{%- endmacro %}
+
 {% block content %}
 <div class="alert alert-info" role="alert">
   You are working with database <strong>{{ selected_db }}</strong>.
@@ -168,7 +199,8 @@
                   <th>Description</th>
                   <th class="text-end" style="width:90px;">SRID</th>
                   <th class="text-end" style="width:150px;">POINT RANGES</th>
-                  <th class="text-end" style="width:200px;">NUMBER OF SUs CUT</th>
+                  <th style="width:150px;">SUs cut</th>
+                  <th style="width:280px;">Is documented by:</th>
                   <th class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
@@ -181,13 +213,32 @@
                   "ranges": s.ranges_edit,
                   "sj_ids": s.sj_ids
                 } %}
+                {% set docs = s.documented_by %}
                 <tr>
                   <td>{{ s.id }}</td>
                   <td>{{ s.type }}</td>
                   <td class="text-break">{{ s.description }}</td>
                   <td class="text-end">{{ s.srid }}</td>
                   <td class="text-break">{{ s.ranges }}</td>
-                  <td class="text-end">{{ s.sj_nr }}</td>
+                  <td>
+                    {% if s.sj_ids %}
+                      {% for sj_id in s.sj_ids %}
+                        <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ", " if not loop.last }}
+                      {% endfor %}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="small">
+                    <div>
+                      {{ section_doc_group("Photos", "photos", docs.photos) }}
+                      {{ section_doc_group("Photograms", "photograms", docs.photograms) }}
+                    </div>
+                    <div>
+                      {{ section_doc_group("Drawings", "drawings", docs.drawings) }}
+                      {{ section_doc_group("Sketches", "sketches", docs.sketches) }}
+                    </div>
+                  </td>
 
                   <td class="text-end">
                     <div class="d-flex justify-content-end gap-2">

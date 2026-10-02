@@ -729,7 +729,10 @@ def q_list_objects_with_sjs(conn):
                 o.object_typ,
                 o.superior_object,
                 o.notes,
-                ARRAY_AGG(s.id_sj ORDER BY s.id_sj) AS sj_ids
+                COALESCE(
+                    ARRAY_AGG(s.id_sj ORDER BY s.id_sj) FILTER (WHERE s.id_sj IS NOT NULL),
+                    ARRAY[]::int[]
+                ) AS sj_ids
             FROM tab_object o
             LEFT JOIN tab_sj s ON s.ref_object = o.id_object
             GROUP BY o.id_object, o.object_typ, o.superior_object, o.notes
@@ -1521,6 +1524,7 @@ def get_sections_list_sql():
       - ranges_txt: e.g. "1-4, 7-9, 12-13"
       - sj_nr: count of linked SUs
       - ranges_from/ranges_to and sj_ids are used to pre-fill the edit modal
+      - documented_by: linked graphic documentation ids
     """
     return """
         WITH r AS (
@@ -1562,7 +1566,45 @@ def get_sections_list_sql():
             COALESCE(sj.sj_nr, 0) AS sj_nr,
             COALESCE(r.ranges_from, ARRAY[]::int4[]) AS ranges_from,
             COALESCE(r.ranges_to, ARRAY[]::int4[]) AS ranges_to,
-            COALESCE(sj.sj_ids, ARRAY[]::int4[]) AS sj_ids
+            COALESCE(sj.sj_ids, ARRAY[]::int4[]) AS sj_ids,
+            jsonb_build_object(
+              'photos',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photo ORDER BY x.ref_photo)
+                    FROM tabaid_section_photos x
+                    WHERE x.ref_section = s.id_section
+                  ),
+                  '[]'::jsonb
+                ),
+              'photograms',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_photogram ORDER BY x.ref_photogram)
+                    FROM tabaid_section_photograms x
+                    WHERE x.ref_section = s.id_section
+                  ),
+                  '[]'::jsonb
+                ),
+              'drawings',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_drawing ORDER BY x.ref_drawing)
+                    FROM tabaid_section_drawings x
+                    WHERE x.ref_section = s.id_section
+                  ),
+                  '[]'::jsonb
+                ),
+              'sketches',
+                COALESCE(
+                  (
+                    SELECT jsonb_agg(x.ref_sketch ORDER BY x.ref_sketch)
+                    FROM tabaid_section_sketches x
+                    WHERE x.ref_section = s.id_section
+                  ),
+                  '[]'::jsonb
+                )
+            ) AS documented_by
         FROM tab_section s
         LEFT JOIN r  ON r.id_section  = s.id_section
         LEFT JOIN sj ON sj.id_section = s.id_section

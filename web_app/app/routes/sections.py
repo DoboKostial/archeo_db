@@ -83,6 +83,22 @@ def _parse_int_list(values):
     return out
 
 
+def _documented_by_to_dict(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+    return {
+        "photos": [str(v) for v in (value.get("photos") or [])],
+        "photograms": [str(v) for v in (value.get("photograms") or [])],
+        "drawings": [str(v) for v in (value.get("drawings") or [])],
+        "sketches": [str(v) for v in (value.get("sketches") or [])],
+    }
+
+
 def _require_fields(media_type: str, form) -> None:
     """
     Validates required form fields per media type
@@ -189,6 +205,7 @@ def sections():
                             for pts_from, pts_to in zip(ranges_from, ranges_to)
                         ],
                         "sj_ids": r[8] if len(r) > 8 and r[8] else [],
+                        "documented_by": _documented_by_to_dict(r[9] if len(r) > 9 else {}),
                     }
                 )
 
