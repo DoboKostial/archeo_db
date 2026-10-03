@@ -152,7 +152,7 @@ def count_app_users_sql():
 
 def list_app_users_sql():
     return """
-        SELECT name, mail, group_role, enabled, last_login
+        SELECT name, mail, group_role, enabled, last_login, gis_enabled
         FROM app_users
         ORDER BY name
         LIMIT %s OFFSET %s;
@@ -174,6 +174,23 @@ def update_app_user_profile_sql():
             group_role = %s
         WHERE mail = %s;
     """
+
+
+def set_user_gis_access_sql():
+    return """
+        UPDATE app_users
+        SET gis_enabled = %s
+        WHERE mail = %s
+        RETURNING gis_enabled;
+    """
+
+
+def get_user_gis_access_sql():
+    return "SELECT gis_enabled FROM app_users WHERE mail = %s AND enabled = TRUE;"
+
+
+def set_user_gis_password_sql():
+    return "SELECT gis_admin.set_password(%s, %s);"
 
 
 def upsert_personalia_user_sql():

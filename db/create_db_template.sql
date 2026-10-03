@@ -63,6 +63,7 @@ GRANT CONNECT ON DATABASE terrain_db_template TO app_desktop_db;
 -- terrain privilege groups may use schema
 GRANT USAGE ON SCHEMA public TO grp_app_terrain_ro;
 GRANT USAGE ON SCHEMA public TO grp_app_terrain_rw;
+GRANT USAGE ON SCHEMA public TO gis_ro, gis_rw;
 
 -- owner role must be able to create objects in public schema
 GRANT USAGE, CREATE ON SCHEMA public TO own_terrain_db;
@@ -1590,6 +1591,7 @@ $function$
 -- ---------------------------------------------------------------------
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO grp_app_terrain_ro;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO grp_app_terrain_rw;
+GRANT SELECT ON tab_geopts, tab_polygons, tab_section, tab_sj, tab_photos TO gis_ro, gis_rw;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_ro;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_rw;

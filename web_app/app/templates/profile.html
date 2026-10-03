@@ -37,6 +37,32 @@
         </div>
     </div>
 
+    {% if gis_enabled %}
+    <div class="card mb-4">
+        <div class="card-header"><h5 class="mb-0">GIS access</h5></div>
+        <div class="card-body">
+            <p>PostgreSQL login: <strong>{{ user_email }}</strong></p>
+            <form id="gisPasswordForm">
+                <div class="mb-3">
+                    <label for="gisAppPassword" class="form-label">Current application password</label>
+                    <input type="password" class="form-control" id="gisAppPassword" autocomplete="current-password" required>
+                </div>
+                <div class="mb-3">
+                    <label for="gisNewPassword" class="form-label">New GIS password</label>
+                    <input type="password" class="form-control" id="gisNewPassword" minlength="12" autocomplete="new-password" required>
+                </div>
+                <div class="mb-3">
+                    <label for="gisConfirmPassword" class="form-label">Repeat new GIS password</label>
+                    <input type="password" class="form-control" id="gisConfirmPassword" minlength="12" autocomplete="new-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Set GIS password</button>
+            </form>
+            <p id="gisFormMessage" class="text-success mt-3"></p>
+            <p id="gisFormError" class="text-danger"></p>
+        </div>
+    </div>
+    {% endif %}
+
     <blockquote class="blockquote text-muted">
         <p class="mb-0"><em>{{ citation }}</em></p>
     </blockquote>
@@ -72,6 +98,30 @@ document.getElementById('passwordForm').addEventListener('submit', async functio
         }
     } catch (err) {
         document.getElementById('formError').innerText = 'Error while changing password.';
+    }
+});
+
+const gisPasswordForm = document.getElementById('gisPasswordForm');
+if (gisPasswordForm) gisPasswordForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const payload = {
+        app_password: document.getElementById('gisAppPassword').value,
+        new_password: document.getElementById('gisNewPassword').value,
+        confirm_password: document.getElementById('gisConfirmPassword').value
+    };
+    try {
+        const response = await fetch("{{ url_for('auth.change_gis_password') }}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        document.getElementById('gisFormMessage').innerText = response.ok ? data.message : '';
+        document.getElementById('gisFormError').innerText = response.ok ? '' : (data.error || 'Request failed.');
+        if (response.ok) gisPasswordForm.reset();
+    } catch (err) {
+        document.getElementById('gisFormError').innerText = 'Error while changing GIS password.';
     }
 });
 </script>

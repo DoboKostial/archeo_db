@@ -125,3 +125,65 @@ def test_non_archeolog_cannot_edit_users(client, monkeypatch):
 
 def test_admin_user_roles_match_existing_role_vocabulary():
     assert admin_routes.USER_ROLES == ("archeolog", "documentator", "analyst")
+
+
+class _GisAccessConnection:
+    def __init__(self):
+        self.executions = []
+        self.committed = False
+        self.closed = False
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, query, params=None):
+        self.executions.append((query, params))
+
+    def fetchone(self):
+        return (True,)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
+def test_archeolog_can_grant_gis_access(client, monkeypatch):
+    _set_current_role(monkeypatch, "archeolog")
+    conn = _GisAccessConnection()
+    monkeypatch.setattr(admin_routes, "get_auth_connection", lambda: conn)
+
+    response = client.post(
+        "/admin/gis-access",
+        data={"mail": "user@example.invalid", "action": "grant"},
+    )
+
+    assert response.status_code == 302
+    assert conn.executions[0][1] == (True, "user@example.invalid")
+    assert conn.committed and conn.closed
+
+
+def test_non_archeolog_cannot_change_gis_access(client, monkeypatch):
+    _set_current_role(monkeypatch, "analyst")
+    monkeypatch.setattr(
+        admin_routes, "get_auth_connection",
+        lambda: (_ for _ in ()).throw(AssertionError("Must not open DB connection")),
+    )
+
+    response = client.post(
+        "/admin/gis-access",
+        data={"mail": "user@example.invalid", "action": "grant"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/index")

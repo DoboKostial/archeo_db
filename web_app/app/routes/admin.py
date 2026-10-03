@@ -17,6 +17,7 @@ from app.queries import (
     list_app_users_sql,
     get_app_user_for_edit_sql,
     update_app_user_profile_sql,
+    set_user_gis_access_sql,
     srid_search_exact_sql,
     srid_search_text_sql,
 )
@@ -154,7 +155,7 @@ def add_user():
         flash("Missing data in the form.", "danger")
         return redirect('/admin')
 
-    if len(name) > 150 or len(mail) > 80:
+    if len(name) > 150 or len(mail.encode("utf-8")) > 63:
         conn.close()
         flash("Name or email is too long.", "danger")
         return redirect('/admin')
@@ -211,7 +212,7 @@ def edit_user():
     if not user_mail or not name or not group_role:
         flash("Missing data in the user edit form.", "danger")
         return redirect(url_for('admin.admin'))
-    if len(user_mail) > 80 or len(name) > 150:
+    if len(user_mail.encode("utf-8")) > 63 or len(name) > 150:
         flash("Name or email is too long.", "danger")
         return redirect(url_for('admin.admin'))
     if group_role not in USER_ROLES:
@@ -248,6 +249,35 @@ def edit_user():
     return redirect(url_for('admin.admin'))
 
 
+@admin_bp.post('/admin/gis-access')
+@archeolog_required
+def set_gis_access():
+    mail = (request.form.get('mail') or '').strip()
+    action = request.form.get('action')
+    if not mail or action not in {'grant', 'revoke'}:
+        flash("Invalid GIS access request.", "danger")
+        return redirect(url_for('admin.admin'))
+
+    conn = get_auth_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(set_user_gis_access_sql(), (action == 'grant', mail))
+            if cur.fetchone() is None:
+                conn.rollback()
+                flash("User not found.", "warning")
+                return redirect(url_for('admin.admin'))
+        conn.commit()
+        logger.info("GIS access %s for %s by %s", action, mail, g.user_email)
+        flash(f"GIS access {'granted' if action == 'grant' else 'revoked'} for {mail}.", "success")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to change GIS access for %s", mail)
+        flash("Could not change GIS access.", "danger")
+    finally:
+        conn.close()
+    return redirect(url_for('admin.admin'))
+
+
 @admin_bp.route('/disable-user', methods=['POST'])
 @archeolog_required
 def disable_user():
@@ -266,6 +296,7 @@ def disable_user():
         logger.info(f"User {current_user} deactivated user {user_to_disable}")
         flash(f"User {user_to_disable} was disabled.", "success")
     except Exception as e:
+        conn.rollback()
         logger.error(f"An error while deactivation of user {user_to_disable}: {e}")
         flash("Error while disabling user", "danger")
     finally:
@@ -288,16 +319,21 @@ def enable_user():
         flash("Error: no user was selected.", "warning")
         return redirect('/admin')
 
-    cur.execute("""
-        UPDATE app_users
-        SET enabled = true
-        WHERE mail = %s
-    """, (mail_to_enable,))
-    conn.commit()
-
-    logger.info(f"User {user_email} activated user {mail_to_enable}")
-    conn.close()
-    flash(f"User {mail_to_enable} was enabled.", "success")
+    try:
+        cur.execute("""
+            UPDATE app_users
+            SET enabled = true
+            WHERE mail = %s
+        """, (mail_to_enable,))
+        conn.commit()
+        logger.info(f"User {user_email} activated user {mail_to_enable}")
+        flash(f"User {mail_to_enable} was enabled.", "success")
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to activate user %s", mail_to_enable)
+        flash("Could not activate user.", "danger")
+    finally:
+        conn.close()
     return redirect('/admin')
 
 
@@ -445,6 +481,10 @@ def create_database():
         cur = conn.cursor()
         cur.execute(
             sql.SQL("CREATE DATABASE {} WITH TEMPLATE terrain_db_template")
+            .format(sql.Identifier(dbname))
+        )
+        cur.execute(
+            sql.SQL("GRANT CONNECT ON DATABASE {} TO gis_ro, gis_rw")
             .format(sql.Identifier(dbname))
         )
         cur.close()

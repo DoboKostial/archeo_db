@@ -9,17 +9,19 @@
       <th>Email</th>
       <th>Role</th>
       <th>Status</th>
+      <th>GIS access</th>
       <th>Last login</th>
       <th>Action</th>
     </tr>
   </thead>
   <tbody>
-    {% for name, mail, role, enabled, last_login in users %}
+    {% for name, mail, role, enabled, last_login, gis_enabled in users %}
       <tr>
         <td>{{ name }}</td>
         <td>{{ mail }}</td>
         <td>{{ role }}</td>
         <td>{{ "Active" if enabled else "Disabled" }}</td>
+        <td>{{ "Enabled" if gis_enabled else "Disabled" }}</td>
         <td>{{ last_login.strftime('%Y-%m-%d') if last_login else "—" }}</td>
         <td>
           <div class="d-flex flex-wrap gap-2">
@@ -29,6 +31,13 @@
             data-bs-toggle="modal"
             data-bs-target="#editUserModal{{ loop.index }}"
           >Edit</button>
+          <form method="POST" action="{{ url_for('admin.set_gis_access') }}" class="d-inline">
+            <input type="hidden" name="mail" value="{{ mail }}">
+            <input type="hidden" name="action" value="{{ 'revoke' if gis_enabled else 'grant' }}">
+            <button type="submit" class="btn btn-sm btn-outline-info">
+              {{ 'Revoke GIS access' if gis_enabled else 'Grant GIS access' }}
+            </button>
+          </form>
           {% if enabled %}
             <form method="POST" action="{{ url_for('admin.disable_user') }}" class="d-inline">
               <input type="hidden" name="mail" value="{{ mail }}">
@@ -48,7 +57,7 @@
   </tbody>
 </table>
 
-{% for name, mail, role, enabled, last_login in users %}
+{% for name, mail, role, enabled, last_login, gis_enabled in users %}
   <div class="modal fade" id="editUserModal{{ loop.index }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -141,7 +150,7 @@
   </div>
   <div class="mb-3">
     <label for="mail" class="form-label">Email <span class="text-danger">*</span></label>
-    <input type="email" class="form-control" id="mail" name="mail" maxlength="80" required>
+    <input type="email" class="form-control" id="mail" name="mail" maxlength="63" required>
   </div>
   <div class="mb-3">
     <label for="group_role" class="form-label">Role <span class="text-danger">*</span></label>

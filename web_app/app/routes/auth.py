@@ -6,7 +6,7 @@ from time import monotonic
 from urllib.parse import unquote, urlsplit
 
 import jwt
-from flask import Blueprint, current_app, request, render_template, jsonify, redirect, url_for, make_response, flash
+from flask import Blueprint, current_app, request, render_template, jsonify, redirect, url_for, make_response, flash, g
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.logger import logger
@@ -22,6 +22,8 @@ from app.queries import (
     get_full_user_data,
     get_random_citation,
     get_password_reset_state_for_update,
+    get_user_gis_access_sql,
+    set_user_gis_password_sql,
 )
 from app.utils.auth import send_password_reset_email, send_password_change_email
 from app.utils.tokens import (
@@ -396,8 +398,6 @@ def logout():
 @auth_bp.route("/profile", methods=["GET", "POST"])
 def profile():
     # No manual token reading here; the gatekeeper guarantees authentication
-    from flask import g
-
     user_email = getattr(g, "user_email", "")
     user_role = getattr(g, "user_role", "")
     user_name_from_token = getattr(g, "user_name", "")
@@ -434,6 +434,8 @@ def profile():
             return redirect(url_for("auth.login"))
 
         user_name, mail, last_login = user_data
+        cur.execute(get_user_gis_access_sql(), (user_email,))
+        gis_row = cur.fetchone()
         citation = get_random_citation(conn)
 
         last_login_str = last_login.strftime("%Y-%m-%d") if last_login else "N/A"
@@ -446,6 +448,7 @@ def profile():
             last_login=last_login_str,
             citation=citation,
             user_role=user_role,
+            gis_enabled=bool(gis_row and gis_row[0]),
         )
 
     finally:
@@ -457,3 +460,41 @@ def profile():
             conn.close()
         except Exception:
             pass
+
+
+@auth_bp.post("/profile/gis-password")
+def change_gis_password():
+    user_email = g.user_email
+    if _rate_limited("gis-password", user_email, 5, 300):
+        return jsonify({"error": "Too many attempts. Try again later."}), 429
+
+    data = request.get_json(silent=True) or {}
+    app_password = data.get("app_password") or ""
+    new_password = data.get("new_password") or ""
+    confirm_password = data.get("confirm_password")
+    password_error = _password_error(new_password)
+    if new_password != confirm_password or password_error:
+        error = "Passwords do not match." if new_password != confirm_password else password_error
+        return jsonify({"error": error}), 400
+
+    conn = get_auth_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(get_user_gis_access_sql(), (user_email,))
+            gis_row = cur.fetchone()
+            if not gis_row or not gis_row[0]:
+                return jsonify({"error": "GIS access is not enabled."}), 403
+            app_hash = get_user_password_hash(conn, user_email)
+            if not app_hash or not check_password_hash(app_hash, app_password):
+                return jsonify({"error": "Current application password is incorrect."}), 403
+            cur.execute(set_user_gis_password_sql(), (user_email, new_password))
+        conn.commit()
+        _clear_rate_limit("gis-password", user_email)
+        logger.info("GIS password changed for %s", user_email)
+        return jsonify({"message": "GIS password changed."})
+    except Exception:
+        conn.rollback()
+        logger.exception("GIS password change failed for %s", user_email)
+        return jsonify({"error": "Could not change GIS password."}), 503
+    finally:
+        conn.close()

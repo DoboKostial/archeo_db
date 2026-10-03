@@ -24,6 +24,10 @@ ArcheoDB
 │   │   └── read-only access to terrain DBs
 │   └── grp_app_terrain_rw
 │       └── read-write access to terrain DBs
+│   ├── gis_ro / gis_rw
+│   │   └── personal GIS login privileges on designated spatial tables
+│   └── gis_role_manager
+│       └── owns restricted GIS account-management functions
 │
 └── Technical stack roles (LOGIN)
     ├── app_terrain_db
@@ -51,9 +55,11 @@ ArcheoDB
 Notes
 =====
 - Human users live only in auth_db.public.app_users
-- Mobile/GIS may read auth data, but may not manage users
+- Mobile and the technical GIS stack may read auth data, but may not manage users
 - Mobile/GIS do not access terrain_db_template
 - grp_app_terrain_ro is prepared for future read-only stacks / analysts
+- Personal GIS logins use the app user's email as the PostgreSQL role name
+- db/migrations/auth/20261004_gis_access.sql installs the restricted role functions
 */
 
 -- ---------------------------------------------------------------------
@@ -69,6 +75,12 @@ CREATE ROLE grp_app_auth_ro NOLOGIN;
 CREATE ROLE grp_app_auth_rw NOLOGIN;
 CREATE ROLE grp_app_terrain_ro NOLOGIN;
 CREATE ROLE grp_app_terrain_rw NOLOGIN;
+CREATE ROLE gis_ro NOLOGIN;
+CREATE ROLE gis_rw NOLOGIN;
+CREATE ROLE gis_role_manager NOLOGIN CREATEROLE;
+
+GRANT gis_ro, gis_rw TO gis_role_manager WITH ADMIN OPTION;
+GRANT pg_signal_backend TO gis_role_manager;
 
 -- ---------------------------------------------------------------------
 -- 3. Technical stack roles
@@ -140,13 +152,15 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 GRANT EXECUTE ON FUNCTIONS TO grp_app_auth_rw;
 
 CREATE TABLE public.app_users (
-    mail varchar(80) NOT NULL,
+    mail varchar(63) NOT NULL,
     name varchar(150) NOT NULL,
     password_hash varchar(250) NOT NULL,
     group_role varchar(40) NOT NULL,
     last_login date NULL,
     enabled bool DEFAULT true NOT NULL,
-    CONSTRAINT app_users_pkey PRIMARY KEY (mail)
+    gis_enabled bool DEFAULT false NOT NULL,
+    CONSTRAINT app_users_pkey PRIMARY KEY (mail),
+    CONSTRAINT app_users_mail_bytes_check CHECK (octet_length(mail) <= 63)
 );
 
 -- readonly stacks read through this view
