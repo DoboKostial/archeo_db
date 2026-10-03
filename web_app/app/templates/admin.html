@@ -2,6 +2,9 @@
 {% block content %}
 
 <h4>User management</h4>
+{% if not gis_available %}
+<div class="alert alert-warning">GIS access is unavailable until the auth database migration is applied.</div>
+{% endif %}
 <table class="table table-striped">
   <thead>
     <tr>
@@ -21,7 +24,7 @@
         <td>{{ mail }}</td>
         <td>{{ role }}</td>
         <td>{{ "Active" if enabled else "Disabled" }}</td>
-        <td>{{ "Enabled" if gis_enabled else "Disabled" }}</td>
+        <td>{{ ("Enabled" if gis_enabled else "Disabled") if gis_available else "Not configured" }}</td>
         <td>{{ last_login.strftime('%Y-%m-%d') if last_login else "—" }}</td>
         <td>
           <div class="d-flex flex-wrap gap-2">
@@ -31,6 +34,7 @@
             data-bs-toggle="modal"
             data-bs-target="#editUserModal{{ loop.index }}"
           >Edit</button>
+          {% if gis_available %}
           <form method="POST" action="{{ url_for('admin.set_gis_access') }}" class="d-inline">
             <input type="hidden" name="mail" value="{{ mail }}">
             <input type="hidden" name="action" value="{{ 'revoke' if gis_enabled else 'grant' }}">
@@ -38,6 +42,7 @@
               {{ 'Revoke GIS access' if gis_enabled else 'Grant GIS access' }}
             </button>
           </form>
+          {% endif %}
           {% if enabled %}
             <form method="POST" action="{{ url_for('admin.disable_user') }}" class="d-inline">
               <input type="hidden" name="mail" value="{{ mail }}">

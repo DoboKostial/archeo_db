@@ -1,5 +1,6 @@
 import app as app_package
 from app.routes import admin as admin_routes
+from app.queries import list_app_users_sql
 
 
 class _EditUserConnection:
@@ -128,10 +129,11 @@ def test_admin_user_roles_match_existing_role_vocabulary():
 
 
 class _GisAccessConnection:
-    def __init__(self):
+    def __init__(self, gis_ready=True):
         self.executions = []
         self.committed = False
         self.closed = False
+        self.gis_ready = gis_ready
 
     def cursor(self):
         return self
@@ -146,7 +148,14 @@ class _GisAccessConnection:
         self.executions.append((query, params))
 
     def fetchone(self):
+        if "to_regprocedure" in self.executions[-1][0]:
+            return (self.gis_ready,)
         return (True,)
+
+    def fetchall(self):
+        if "FALSE AS gis_enabled" in self.executions[-1][0]:
+            return [("Legacy User", "legacy@example.invalid", "analyst", True, None, False)]
+        return []
 
     def commit(self):
         self.committed = True
@@ -169,7 +178,7 @@ def test_archeolog_can_grant_gis_access(client, monkeypatch):
     )
 
     assert response.status_code == 302
-    assert conn.executions[0][1] == (True, "user@example.invalid")
+    assert conn.executions[-1][1] == (True, "user@example.invalid")
     assert conn.committed and conn.closed
 
 
@@ -187,3 +196,39 @@ def test_non_archeolog_cannot_change_gis_access(client, monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/index")
+
+
+def test_admin_user_list_uses_legacy_columns_before_gis_migration():
+    query = list_app_users_sql(False)
+    assert "FALSE AS gis_enabled" in query
+    assert "last_login, gis_enabled" not in query
+
+
+def test_gis_access_cannot_be_granted_before_migration(client, monkeypatch):
+    _set_current_role(monkeypatch, "archeolog")
+    conn = _GisAccessConnection(gis_ready=False)
+    monkeypatch.setattr(admin_routes, "get_auth_connection", lambda: conn)
+
+    response = client.post(
+        "/admin/gis-access",
+        data={"mail": "user@example.invalid", "action": "grant"},
+    )
+
+    assert response.status_code == 302
+    assert len(conn.executions) == 1
+    assert not conn.committed
+    assert conn.closed
+
+
+def test_admin_page_renders_before_gis_migration(client, monkeypatch):
+    _set_current_role(monkeypatch, "archeolog")
+    conn = _GisAccessConnection(gis_ready=False)
+    monkeypatch.setattr(admin_routes, "get_auth_connection", lambda: conn)
+    monkeypatch.setattr(admin_routes, "get_terrain_db_list", lambda _conn: [])
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert b"Legacy User" in response.data
+    assert b"GIS access is unavailable" in response.data
+    assert b"Grant GIS access" not in response.data

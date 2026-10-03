@@ -14,6 +14,7 @@ from app.queries import (
     get_terrain_db_list,
     get_terrain_db_sizes,
     count_app_users_sql,
+    gis_access_ready_sql,
     list_app_users_sql,
     get_app_user_for_edit_sql,
     update_app_user_profile_sql,
@@ -96,13 +97,16 @@ def admin():
     per_page = 5
     offset = (page - 1) * per_page
 
+    cur.execute(gis_access_ready_sql())
+    gis_available = bool(cur.fetchone()[0])
+
     # the number of all users
     cur.execute(count_app_users_sql())
     total_users = cur.fetchone()[0]
     total_pages = (total_users + per_page - 1) // per_page
 
     # fetch users with limit (offset)
-    cur.execute(list_app_users_sql(), (per_page, offset))
+    cur.execute(list_app_users_sql(gis_available), (per_page, offset))
     users = cur.fetchall()
 
     # fetching all terrain DBs (names)
@@ -134,6 +138,7 @@ def admin():
         total_pages=total_pages,
         terrain_dbs=terrain_dbs,
         user_roles=USER_ROLES,
+        gis_available=gis_available,
     )
 
 
@@ -261,6 +266,10 @@ def set_gis_access():
     conn = get_auth_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute(gis_access_ready_sql())
+            if not cur.fetchone()[0]:
+                flash("GIS access is unavailable until the auth database migration is applied.", "warning")
+                return redirect(url_for('admin.admin'))
             cur.execute(set_user_gis_access_sql(), (action == 'grant', mail))
             if cur.fetchone() is None:
                 conn.rollback()

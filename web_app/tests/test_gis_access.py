@@ -4,8 +4,9 @@ from app.routes import auth as auth_routes
 
 
 class _AuthConnection:
-    def __init__(self, gis_enabled=True):
+    def __init__(self, gis_enabled=True, gis_ready=True):
         self.gis_enabled = gis_enabled
+        self.gis_ready = gis_ready
         self.executions = []
         self.committed = False
         self.closed = False
@@ -23,6 +24,8 @@ class _AuthConnection:
         self.executions.append((query, params))
 
     def fetchone(self):
+        if "to_regprocedure" in self.executions[-1][0]:
+            return (self.gis_ready,)
         return (self.gis_enabled,)
 
     def commit(self):
@@ -55,7 +58,7 @@ def test_gis_password_change_requires_current_app_password(client, monkeypatch):
     )
 
     assert response.status_code == 403
-    assert len(conn.executions) == 1
+    assert len(conn.executions) == 2
     assert not conn.committed
 
 
@@ -81,3 +84,23 @@ def test_gis_password_change_calls_db_function_for_current_user(client, monkeypa
     assert response.status_code == 200
     assert conn.executions[-1][1] == ("security-test@example.invalid", "NewGisPassword123")
     assert conn.committed and conn.closed
+
+
+def test_gis_password_change_waits_for_auth_migration(client, monkeypatch):
+    auth_routes._RATE_LIMIT_BUCKETS.clear()
+    conn = _AuthConnection(gis_ready=False)
+    monkeypatch.setattr(auth_routes, "get_auth_connection", lambda: conn)
+
+    response = client.post(
+        "/profile/gis-password",
+        json={
+            "app_password": "CurrentApp123",
+            "new_password": "NewGisPassword123",
+            "confirm_password": "NewGisPassword123",
+        },
+    )
+
+    assert response.status_code == 503
+    assert len(conn.executions) == 1
+    assert not conn.committed
+    assert conn.closed

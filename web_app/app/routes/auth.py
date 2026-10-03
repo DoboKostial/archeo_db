@@ -22,6 +22,7 @@ from app.queries import (
     get_full_user_data,
     get_random_citation,
     get_password_reset_state_for_update,
+    gis_access_ready_sql,
     get_user_gis_access_sql,
     set_user_gis_password_sql,
 )
@@ -434,8 +435,13 @@ def profile():
             return redirect(url_for("auth.login"))
 
         user_name, mail, last_login = user_data
-        cur.execute(get_user_gis_access_sql(), (user_email,))
-        gis_row = cur.fetchone()
+        cur.execute(gis_access_ready_sql())
+        gis_available = bool(cur.fetchone()[0])
+        gis_enabled = False
+        if gis_available:
+            cur.execute(get_user_gis_access_sql(), (user_email,))
+            gis_row = cur.fetchone()
+            gis_enabled = bool(gis_row and gis_row[0])
         citation = get_random_citation(conn)
 
         last_login_str = last_login.strftime("%Y-%m-%d") if last_login else "N/A"
@@ -448,7 +454,7 @@ def profile():
             last_login=last_login_str,
             citation=citation,
             user_role=user_role,
-            gis_enabled=bool(gis_row and gis_row[0]),
+            gis_enabled=gis_enabled,
         )
 
     finally:
@@ -480,6 +486,9 @@ def change_gis_password():
     conn = get_auth_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute(gis_access_ready_sql())
+            if not cur.fetchone()[0]:
+                return jsonify({"error": "GIS access is unavailable until the auth database migration is applied."}), 503
             cur.execute(get_user_gis_access_sql(), (user_email,))
             gis_row = cur.fetchone()
             if not gis_row or not gis_row[0]:

@@ -150,9 +150,20 @@ def count_app_users_sql():
     return "SELECT COUNT(*) FROM app_users;"
 
 
-def list_app_users_sql():
+def gis_access_ready_sql():
     return """
-        SELECT name, mail, group_role, enabled, last_login, gis_enabled
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'app_users'
+              AND column_name = 'gis_enabled'
+        ) AND to_regprocedure('gis_admin.set_password(text, text)') IS NOT NULL;
+    """
+
+
+def list_app_users_sql(gis_available=True):
+    gis_column = "gis_enabled" if gis_available else "FALSE AS gis_enabled"
+    return f"""
+        SELECT name, mail, group_role, enabled, last_login, {gis_column}
         FROM app_users
         ORDER BY name
         LIMIT %s OFFSET %s;
