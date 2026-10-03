@@ -35,7 +35,7 @@ Terrain DB access model
 - terrain_db_template is visible only to web and desktop stacks
 - concrete terrain DBs created from template should later grant:
     GRANT CONNECT ON DATABASE <terrain_db_name>
-    TO grp_app_terrain_ro, grp_app_terrain_rw;
+    TO grp_app_terrain_ro, grp_app_terrain_rw, gis_ro, gis_rw;
 - readonly role grp_app_terrain_ro is prepared for future analysts/RO clients
 */
 
@@ -1619,6 +1619,7 @@ CREATE DATABASE some_terrain_db
 REVOKE ALL ON DATABASE some_terrain_db FROM PUBLIC;
 GRANT CONNECT ON DATABASE some_terrain_db TO grp_app_terrain_ro;
 GRANT CONNECT ON DATABASE some_terrain_db TO grp_app_terrain_rw;
+GRANT CONNECT ON DATABASE some_terrain_db TO gis_ro, gis_rw;
 
 Important:
 - mobile/GIS connect only to SPECIFIC terrain DBs
