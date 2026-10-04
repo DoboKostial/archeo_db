@@ -13,6 +13,8 @@ from app.queries import (
     # stats
     stats_polygons_by_row_sql,
     stats_su_by_type_sql,
+    stats_su_by_excav_extent_sql,
+    stats_su_by_excav_completeness_sql,
     stats_objects_by_type_sql,
     stats_objects_by_su_count_bucket_sql,
     stats_sections_by_type_sql,
@@ -89,6 +91,19 @@ def analyze_stats_json():
             # 2) SU by type
             cur.execute(stats_su_by_type_sql())
             _rows_to_pie(cur.fetchall(), "Stratigraphic units by type")
+
+            cur.execute(stats_su_by_excav_extent_sql())
+            _rows_to_pie(cur.fetchall(), "Stratigraphic units by excavation extent")
+
+            cur.execute(stats_su_by_excav_completeness_sql())
+            fully_excavated, not_fully_excavated = cur.fetchone()
+            charts.append(
+                _as_pie(
+                    ["Fully excavated (100%)", "Not fully excavated (<100%)"],
+                    [_i0(fully_excavated), _i0(not_fully_excavated)],
+                    "SU excavation completeness",
+                )
+            )
 
             # 3) Objects by type
             cur.execute(stats_objects_by_type_sql())

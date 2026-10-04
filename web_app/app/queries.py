@@ -3445,6 +3445,29 @@ def stats_su_by_type_sql():
     """
 
 
+def stats_su_by_excav_extent_sql():
+    return """
+        SELECT
+          CASE
+            WHEN excav_extent IS NULL THEN 'Unknown'
+            ELSE excav_extent::text || '%'
+          END AS label,
+          COUNT(*)::int
+        FROM tab_sj
+        GROUP BY excav_extent
+        ORDER BY excav_extent DESC NULLS LAST;
+    """
+
+
+def stats_su_by_excav_completeness_sql():
+    return """
+        SELECT
+          COUNT(*) FILTER (WHERE excav_extent = 100)::int AS fully_excavated,
+          COUNT(*) FILTER (WHERE excav_extent < 100)::int AS not_fully_excavated
+        FROM tab_sj;
+    """
+
+
 def stats_objects_by_type_sql():
     return """
         SELECT COALESCE(NULLIF(object_typ,''), 'unknown') AS object_typ, COUNT(*)::int
