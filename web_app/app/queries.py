@@ -3445,6 +3445,17 @@ def stats_su_by_type_sql():
     """
 
 
+def stats_su_by_documentation_sql():
+    return """
+        SELECT
+          COUNT(*) FILTER (WHERE docu_plan IS TRUE AND docu_vertical IS TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS TRUE AND docu_vertical IS NOT TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS NOT TRUE AND docu_vertical IS TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS NOT TRUE AND docu_vertical IS NOT TRUE)::int
+        FROM tab_sj;
+    """
+
+
 def stats_su_by_excav_extent_sql():
     return """
         SELECT
@@ -3770,6 +3781,24 @@ def rule_su_without_any_documentation_sql():
           AND NOT EXISTS (SELECT 1 FROM tabaid_sj_drawings d WHERE d.ref_sj = s.id_sj)
           AND NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch k WHERE k.ref_sj = s.id_sj)
         ORDER BY s.id_sj;
+    """
+
+
+def rule_su_unknown_excav_extent_sql():
+    return """
+        SELECT id_sj
+        FROM tab_sj
+        WHERE excav_extent IS NULL
+        ORDER BY id_sj;
+    """
+
+
+def rule_su_without_plan_or_vertical_sql():
+    return """
+        SELECT id_sj, COALESCE(docu_plan, false), COALESCE(docu_vertical, false)
+        FROM tab_sj
+        WHERE docu_plan IS NOT TRUE AND docu_vertical IS NOT TRUE
+        ORDER BY id_sj;
     """
 
 
