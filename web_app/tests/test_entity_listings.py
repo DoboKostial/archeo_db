@@ -112,7 +112,7 @@ def test_entity_listing_controls_limits_and_complete_links(client, monkeypatch, 
     html = response.get_data(as_text=True)
     parsed = _ListMarkup(html)
     expected_columns = ["id", "type", "superior", "sus"] if kind == "objects" else [
-        "id", "type", "description", "srid", "ranges", "sus", "documentation",
+        "id", "type", "description", "ranges", "sus", "documentation",
     ]
     assert parsed.columns == expected_columns
     assert html.count("data-column-search\n") == len(expected_columns)

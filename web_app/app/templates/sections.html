@@ -46,6 +46,32 @@
   </span>
 {%- endmacro %}
 
+{% macro cut_su_picker(select_id, size, heading_class="") -%}
+  <div data-cut-su-picker>
+    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+      <label for="{{ select_id }}" class="form-label mb-0 {{ heading_class }}">Select cut stratigraphic units</label>
+      <button type="button" class="polygon-column-button" data-su-search-button
+              title="Filter stratigraphic units" aria-label="Filter stratigraphic units"
+              aria-controls="{{ select_id }}Filter" aria-expanded="false" {% if not sj_ids %}disabled{% endif %}>
+        <span class="polygon-list-icon polygon-icon-search" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div id="{{ select_id }}Filter" class="mb-2" data-su-search-panel hidden>
+      <input id="{{ select_id }}Search" type="search" class="form-control form-control-sm" data-su-search
+             placeholder="SU ID" aria-label="Filter stratigraphic units by ID" aria-controls="{{ select_id }}"
+             autocomplete="off">
+    </div>
+    <select class="form-select" name="ref_sj[]" id="{{ select_id }}" multiple size="{{ size }}"
+            aria-describedby="{{ select_id }}Status">
+      {% for sj in sj_ids %}
+        <option value="{{ sj }}">{{ sj }}</option>
+      {% endfor %}
+    </select>
+    <div id="{{ select_id }}Status" class="form-text" data-su-search-status role="status"></div>
+    <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+  </div>
+{%- endmacro %}
+
 {% block content %}
 <div class="alert alert-info" role="alert">
   You are working with database <strong>{{ selected_db }}</strong>.
@@ -130,13 +156,7 @@
     <!-- Right: Bind SUs (moved here to save vertical space) -->
     <div class="col-md-5">
       <div class="p-3 rounded-3 border">
-        <h5 class="mb-2">Select cut stratigraphic units</h5>
-        <select class="form-select" name="ref_sj[]" multiple size="14">
-          {% for sj in sj_ids %}
-            <option value="{{ sj }}">{{ sj }}</option>
-          {% endfor %}
-        </select>
-        <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+        {{ cut_su_picker("sectionSjs", 14, "h5") }}
       </div>
     </div>
 
@@ -268,11 +288,10 @@
                 <tr>
                   <th scope="col" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ column_header("ID", "id", "sections") }}</th>
                   <th scope="col" style="width:140px;" data-column="type" aria-sort="none">{{ column_header("Type", "type", "sections") }}</th>
-                  <th scope="col" style="min-width:150px;" data-column="description" aria-sort="none">{{ column_header("Description", "description", "sections") }}</th>
-                  <th scope="col" class="text-end" style="width:90px;" data-column="srid" aria-sort="none">{{ column_header("SRID", "srid", "sections") }}</th>
+                  <th scope="col" style="min-width:180px;" data-column="description" aria-sort="none">{{ column_header("Description", "description", "sections") }}</th>
                   <th scope="col" class="text-end" style="width:150px;" data-column="ranges" aria-sort="none">{{ column_header("POINT RANGES", "ranges", "sections") }}</th>
-                  <th scope="col" style="min-width:130px;" data-column="sus" aria-sort="none">{{ column_header("SUs cut", "sus", "sections") }}</th>
-                  <th scope="col" style="min-width:250px;" data-column="documentation" aria-sort="none">{{ column_header("Is documented by:", "documentation", "sections") }}</th>
+                  <th scope="col" style="min-width:160px;" data-column="sus" aria-sort="none">{{ column_header("SUs cut", "sus", "sections") }}</th>
+                  <th scope="col" style="min-width:280px;" data-column="documentation" aria-sort="none">{{ column_header("Is documented by:", "documentation", "sections") }}</th>
                   <th scope="col" class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
@@ -290,7 +309,6 @@
                   <td>{{ s.id }}</td>
                   <td>{{ s.type }}</td>
                   <td class="text-break" data-search-value="{{ s.description or '' }}">{{ s.description or '—' }}</td>
-                  <td class="text-end" data-search-value="{{ s.srid if s.srid and s.srid != '—' else '' }}">{{ s.srid }}</td>
                   <td class="text-break" data-search-value="{{ s.ranges if s.ranges and s.ranges != '—' else '' }}">{{ s.ranges }}</td>
                   <td data-search-value="{{ s.sj_ids|join(', ') }}">{{ su_links(s.sj_ids, s.id, "sections", "Section") }}</td>
                   <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Drawings ({{ docs.drawings|join(', ') if docs.drawings else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
@@ -325,7 +343,7 @@
                 </tr>
                 {% endfor %}
                 <tr id="sectionsNoMatches" hidden>
-                  <td colspan="8" class="text-center text-muted py-3">No sections match the filters.</td>
+                  <td colspan="7" class="text-center text-muted py-3">No sections match the filters.</td>
                 </tr>
               </tbody>
             </table>
@@ -392,13 +410,7 @@
           </div>
 
           <div class="mt-3">
-            <label class="form-label">Select cut stratigraphic units</label>
-            <select class="form-select" name="ref_sj[]" id="editSectionSjs" multiple size="10">
-              {% for sj in sj_ids %}
-                <option value="{{ sj }}">{{ sj }}</option>
-              {% endfor %}
-            </select>
-            <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+            {{ cut_su_picker("editSectionSjs", 10) }}
           </div>
         </div>
 
@@ -496,6 +508,7 @@
         Array.from(sjSelect.options).forEach(option => {
           option.selected = selectedSjs.has(option.value);
         });
+        sjSelect.dispatchEvent(new Event('cut-su-reset'));
       });
 
       const requestedId = {{ open_edit_section_id|tojson }};
@@ -1063,7 +1076,76 @@
 
 <script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
 <script>
+  function initCutSuPickers() {
+    document.querySelectorAll('[data-cut-su-picker]').forEach(picker => {
+      const select = picker.querySelector('select');
+      const options = Array.from(select.options);
+      const button = picker.querySelector('[data-su-search-button]');
+      const panel = picker.querySelector('[data-su-search-panel]');
+      const input = picker.querySelector('[data-su-search]');
+      const status = picker.querySelector('[data-su-search-status]');
+      let selected = new Set(Array.from(select.selectedOptions, option => option.value));
+
+      function render() {
+        const query = input.value.trim().toLocaleLowerCase();
+        let visible = 0;
+        options.forEach(option => {
+          option.hidden = !option.textContent.toLocaleLowerCase().includes(query);
+          if (!option.hidden) visible += 1;
+        });
+        button.classList.toggle('is-active', Boolean(query));
+        status.textContent = options.length
+          ? `${visible ? `Showing ${visible} of ${options.length}` : 'No SUs match the filter.'} | Selected: ${selected.size}`
+          : 'No SUs available.';
+      }
+
+      function closeSearch() {
+        input.value = '';
+        panel.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+        render();
+      }
+
+      button.addEventListener('click', () => {
+        if (panel.hidden) {
+          panel.hidden = false;
+          button.setAttribute('aria-expanded', 'true');
+          input.focus();
+        } else {
+          closeSearch();
+        }
+      });
+      input.addEventListener('input', render);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') event.preventDefault();
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSearch();
+          button.focus();
+        }
+      });
+      select.addEventListener('change', () => {
+        // Native multi-select clicks may clear hidden selections; only update visible options.
+        options.forEach(option => {
+          if (option.hidden) return;
+          if (option.selected) selected.add(option.value);
+          else selected.delete(option.value);
+        });
+        options.forEach(option => option.selected = selected.has(option.value));
+        render();
+      });
+      const reset = () => {
+        selected = new Set(Array.from(select.selectedOptions, option => option.value));
+        closeSearch();
+      };
+      select.addEventListener('cut-su-reset', reset);
+      select.form.addEventListener('reset', () => setTimeout(reset, 0));
+      render();
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    initCutSuPickers();
     ArcheoDBInitListTable('sections');
     ArcheoDBInitListItemsModal('sectionsItemsModal');
   });

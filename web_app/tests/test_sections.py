@@ -1,3 +1,8 @@
+from html.parser import HTMLParser
+
+import pytest
+from flask import render_template
+
 from app.routes import sections as section_routes
 
 
@@ -70,6 +75,11 @@ def test_sections_page_renders_edit_controls_and_prefill_payload(client, monkeyp
     assert 'id="editSectionModal"' in html
     assert 'id="edit-ranges-container"' in html
     assert 'id="editSectionSjs"' in html
+    assert 'id="sectionSjs"' in html
+    assert html.count("data-su-search-button\n") == 2
+    assert html.count("data-su-search-status") == 3
+    assert 'data-column="srid"' not in html
+    assert 'colspan="7"' in html
     assert "Map view" in html
     assert 'data-bs-target="#modalSectionsMapView"' in html
     assert 'id="sectionsMapView"' in html
@@ -102,3 +112,48 @@ def test_sections_geojson_returns_leaflet_ready_lines(client, monkeypatch):
             }
         ]
     }
+
+
+class _SuPickerMarkup(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.select = None
+        self.selects = {}
+        self.inputs = []
+        self.ids = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attributes):
+        attrs = dict(attributes)
+        if "id" in attrs:
+            self.ids.append(attrs["id"])
+        if tag == "select" and attrs.get("id") in ("sectionSjs", "editSectionSjs"):
+            self.select = attrs["id"]
+            self.selects[self.select] = {"attrs": attrs, "values": []}
+        elif tag == "option" and self.select:
+            self.selects[self.select]["values"].append(attrs["value"])
+        elif tag == "input" and "data-su-search" in attrs:
+            self.inputs.append(attrs)
+
+    def handle_endtag(self, tag):
+        if tag == "select":
+            self.select = None
+
+
+@pytest.mark.parametrize("sj_ids", [[], [1, 2, 10, 12, 101]])
+def test_section_su_pickers_keep_complete_named_selects_and_unique_controls(app, sj_ids):
+    with app.test_request_context():
+        html = render_template("sections.html", selected_db="02_test", sections=[], sj_ids=sj_ids,
+                               authors=[], open_edit_section_id=None)
+    parsed = _SuPickerMarkup(html)
+    assert len(parsed.ids) == len(set(parsed.ids))
+    assert len(parsed.inputs) == 2
+    assert all("name" not in attrs for attrs in parsed.inputs)
+    for select_id, size in (("sectionSjs", "14"), ("editSectionSjs", "10")):
+        picker = parsed.selects[select_id]
+        assert picker["attrs"]["name"] == "ref_sj[]"
+        assert "multiple" in picker["attrs"]
+        assert picker["attrs"]["size"] == size
+        assert picker["values"] == [str(sj_id) for sj_id in sj_ids]
+        assert picker["attrs"]["aria-describedby"] == f"{select_id}Status"
+        assert f'aria-controls="{select_id}Filter" aria-expanded="false"' in html
