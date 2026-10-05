@@ -47,6 +47,7 @@ from app.queries import (
     q_get_object_with_sjs,
     q_get_object_inhum_grave,
     list_polygon_names_sql,
+    polygons_hierarchy_sql,
     list_su_table_sql,
     list_su_for_media_select_sql,
     insert_sj_polygon_link_sql,
@@ -199,6 +200,22 @@ def _su_row_to_dict(row):
     }
 
 
+def _su_polygon_memberships(direct_names, parents):
+    direct_names = list(dict.fromkeys(direct_names))
+    memberships = [{"name": name, "inherited": False} for name in direct_names]
+    seen = set(direct_names)
+    for name in direct_names:
+        path = {name}
+        parent = parents.get(name)
+        while parent and parent not in path:
+            path.add(parent)
+            if parent not in seen:
+                memberships.append({"name": parent, "inherited": True})
+                seen.add(parent)
+            parent = parents.get(parent)
+    return memberships
+
+
 def _save_su_subtype(cur, sj_id, sj_typ, form):
     cur.execute(delete_su_deposit_sql(), (sj_id,))
     cur.execute(delete_su_negativ_sql(), (sj_id,))
@@ -276,9 +293,10 @@ def add_su():
         cur.execute("SELECT mail FROM gloss_personalia ORDER BY mail;")
         authors = [row[0] for row in cur.fetchall()]
 
-        # Polygons list for in-page filtering
-        cur.execute(list_polygon_names_sql())
-        polygons = [r[0] for r in cur.fetchall()]
+        # Keep explicit SU links separate from inherited polygon memberships.
+        cur.execute(polygons_hierarchy_sql())
+        polygon_parents = dict(cur.fetchall())
+        polygons = list(polygon_parents)
 
         # SU list for Attach graphic documentation
         cur.execute(list_su_for_media_select_sql())
@@ -289,6 +307,8 @@ def add_su():
         # Full SU list; the template paginates it client-side.
         cur.execute(list_su_table_sql())
         sus = [_su_row_to_dict(r) for r in cur.fetchall()]
+        for su in sus:
+            su["polygon_memberships"] = _su_polygon_memberships(su["polygon_names"], polygon_parents)
 
         # Overview counts
         cur.execute(count_total_sj())

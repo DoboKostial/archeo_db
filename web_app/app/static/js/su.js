@@ -427,71 +427,11 @@
   }
 
   // ------------------------------------------------------------
-  // 5) SUs table pagination
+  // 5) SUs list controls
   // ------------------------------------------------------------
-  function initSuPagination() {
-    const table = qs("suTable");
-    const tbody = qs("suTableBody");
-    const pager = qs("suPagination");
-    const pagerWrap = qs("suPaginationWrap");
-    const summary = qs("suPaginationSummary");
-
-    if (!table || !tbody || !pager || !pagerWrap || !summary) return;
-
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const pageSize = Number.parseInt(table.dataset.pageSize || "10", 10);
-    const pageCount = Math.ceil(rows.length / pageSize);
-    let currentPage = 1;
-
-    function addPageItem(label, page, options = {}) {
-      const li = document.createElement("li");
-      li.className = "page-item";
-      if (options.active) li.classList.add("active");
-      if (options.disabled) li.classList.add("disabled");
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "page-link";
-      btn.textContent = label;
-      btn.disabled = Boolean(options.disabled);
-      btn.addEventListener("click", () => {
-        if (options.disabled) return;
-        currentPage = page;
-        renderPage();
-      });
-
-      li.appendChild(btn);
-      pager.appendChild(li);
-    }
-
-    function renderPage() {
-      pager.innerHTML = "";
-
-      if (pageCount <= 1) {
-        pagerWrap.style.display = "none";
-        rows.forEach((row) => { row.hidden = false; });
-        return;
-      }
-
-      pagerWrap.style.display = "";
-
-      addPageItem("‹", Math.max(1, currentPage - 1), { disabled: currentPage === 1 });
-      for (let page = 1; page <= pageCount; page += 1) {
-        addPageItem(String(page), page, { active: page === currentPage });
-      }
-      addPageItem("›", Math.min(pageCount, currentPage + 1), { disabled: currentPage === pageCount });
-
-      const start = (currentPage - 1) * pageSize;
-      const end = Math.min(start + pageSize, rows.length);
-
-      rows.forEach((row, index) => {
-        row.hidden = index < start || index >= end;
-      });
-
-      summary.textContent = `Showing ${start + 1}-${end} of ${rows.length}`;
-    }
-
-    renderPage();
+  function initSuList() {
+    ArcheoDBInitListTable("su");
+    ArcheoDBInitListItemsModal("suItemsModal");
   }
 
   // ------------------------------------------------------------
@@ -625,7 +565,7 @@
     initColorPickers();
     initAttachMedia();
     initDeleteModal();
-    initSuPagination();
+    initSuList();
     initEditModal();
   });
 })();

@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Stratigraphic units{% endblock %}
+{% from "macros/list_table.html" import column_header as su_column_header, items_modal %}
 
 {% macro su_doc_link(kind, value) -%}
   {%- if kind == "photos" -%}
@@ -15,16 +16,39 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro su_doc_group(label, kind, values) -%}
+{% macro su_polygon_link(polygon) -%}
+  <a href="{{ url_for('polygons.polygons', edit_polygon=polygon.name) }}">{{ polygon.name }}</a>
+  {%- if polygon.inherited %} <span class="text-muted">(inherited)</span>{% endif -%}
+{%- endmacro %}
+
+{% macro su_list_overflow(label, kind, values, su) -%}
+  {%- if values|length > 3 %}
+    <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
+            data-bs-toggle="modal" data-bs-target="#suItemsModal"
+            data-items-template="su-items-{{ su.id }}-{{ kind }}"
+            data-items-title="{{ label }}: SU {{ su.id }} ({{ values|length }})"
+            title="Show all {{ label }} for SU {{ su.id }}"
+            aria-label="Show all {{ label }} for SU {{ su.id }}">+{{ values|length - 3 }}</button>
+    <template id="su-items-{{ su.id }}-{{ kind }}">
+      <ul class="list-unstyled mb-0">
+        {% for value in values %}
+          <li class="mb-2 text-break">
+            {{ su_polygon_link(value) if kind == "polygons" else su_doc_link(kind, value) }}
+          </li>
+        {% endfor %}
+      </ul>
+    </template>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro su_doc_group(label, kind, values, su) -%}
   <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
     {{ label }} (
     {%- if values -%}
       {%- for value in values[:3] -%}
         <span class="text-break">{{ su_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
       {%- endfor -%}
-      {%- if values|length > 3 -%}
-        <span class="text-muted"> +{{ values|length - 3 }}</span>
-      {%- endif -%}
+      {{ su_list_overflow(label, kind, values, su) }}
     {%- else -%}
       0
     {%- endif -%}
@@ -544,7 +568,7 @@
   <!-- ===========================================================
        2) SUS LIST (counts + table actions)
        =========================================================== -->
-  <fieldset class="border p-3 rounded-3 list-panel mt-4">
+  <fieldset class="border p-3 rounded-3 list-panel su-list-panel mt-4">
     <legend class="w-auto px-2">SUs list</legend>
 
     <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
@@ -554,39 +578,56 @@
       <span><span class="text-muted">Structures</span> <strong class="fs-6">{{ sj_count_structure }}</strong></span>
     </div>
 
-    <h6 class="mb-2">Stored SUs</h6>
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <h6 class="mb-0">Stored SUs</h6>
+      {% if sus %}
+        <button type="button" id="suResetTable" class="polygon-column-button"
+                title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+          <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+        </button>
+      {% endif %}
+    </div>
 
     {% if sus and sus|length > 0 %}
       <div class="table-responsive">
         <table id="suTable" class="table table-sm table-striped align-middle" data-page-size="10">
           <thead>
             <tr>
-              <th class="text-end">ID</th>
-              <th>Type</th>
-              <th>Description</th>
-              <th>Recorded</th>
-              <th>Author</th>
-              <th>Is documented by:</th>
-              <th class="text-end">Action</th>
+              <th scope="col" class="text-end" data-column="id" data-sort-type="number" aria-sort="none">{{ su_column_header("ID", "id", "su") }}</th>
+              <th scope="col" data-column="type" aria-sort="none">{{ su_column_header("Type", "type", "su") }}</th>
+              <th scope="col" style="min-width:180px;" data-column="description" aria-sort="none">{{ su_column_header("Description", "description", "su") }}</th>
+              <th scope="col" data-column="recorded" aria-sort="none">{{ su_column_header("Recorded", "recorded", "su") }}</th>
+              <th scope="col" style="min-width:160px;" data-column="author" aria-sort="none">{{ su_column_header("Author", "author", "su") }}</th>
+              <th scope="col" style="min-width:140px;" data-column="polygon" aria-sort="none">{{ su_column_header("Polygon", "polygon", "su") }}</th>
+              <th scope="col" style="min-width:250px;" data-column="documentation" aria-sort="none">{{ su_column_header("Is documented by:", "documentation", "su") }}</th>
+              <th scope="col" class="text-end">Action</th>
             </tr>
           </thead>
           <tbody id="suTableBody">
             {% for su in sus %}
               {% set docs = su.documented_by %}
-              <tr>
+              <tr data-list-row>
                 <td class="text-end"><strong>{{ su.id }}</strong></td>
-                <td>{{ su.typ or '—' }}</td>
-                <td title="{{ su.desc }}">{{ (su.desc[:120] ~ ('…' if su.desc|length > 120 else '')) if su.desc else '—' }}</td>
-                <td>{{ su.recorded if su.recorded else '—' }}</td>
-                <td>{{ su.author if su.author else '—' }}</td>
-                <td class="small">
+                <td data-search-value="{{ su.typ }}">{{ su.typ or '—' }}</td>
+                <td title="{{ su.desc }}" data-search-value="{{ su.desc }}">{{ (su.desc[:120] ~ ('…' if su.desc|length > 120 else '')) if su.desc else '—' }}</td>
+                <td class="text-nowrap" data-search-value="{{ su.recorded }}">{{ su.recorded if su.recorded else '—' }}</td>
+                <td class="text-break" data-search-value="{{ su.author }}">{{ su.author if su.author else '—' }}</td>
+                <td class="small text-break" data-search-value="{% for polygon in su.polygon_memberships %}{{ polygon.name }}{{ ' (inherited)' if polygon.inherited }}{{ ', ' if not loop.last }}{% endfor %}">
+                  {% if su.polygon_memberships %}
+                    {% for polygon in su.polygon_memberships[:3] %}
+                      {{ su_polygon_link(polygon) }}{{ ', ' if not loop.last }}
+                    {% endfor %}
+                    {{ su_list_overflow("Polygons", "polygons", su.polygon_memberships, su) }}
+                  {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Drawings ({{ docs.drawings|join(', ') if docs.drawings else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
                   <div>
-                    {{ su_doc_group("Photos", "photos", docs.photos) }}
-                    {{ su_doc_group("Photograms", "photograms", docs.photograms) }}
+                    {{ su_doc_group("Photos", "photos", docs.photos, su) }}
+                    {{ su_doc_group("Photograms", "photograms", docs.photograms, su) }}
                   </div>
                   <div>
-                    {{ su_doc_group("Drawings", "drawings", docs.drawings) }}
-                    {{ su_doc_group("Sketches", "sketches", docs.sketches) }}
+                    {{ su_doc_group("Drawings", "drawings", docs.drawings, su) }}
+                    {{ su_doc_group("Sketches", "sketches", docs.sketches, su) }}
                   </div>
                 </td>
                 <td class="text-end">
@@ -609,6 +650,9 @@
                 </td>
               </tr>
             {% endfor %}
+            <tr id="suNoMatches" hidden>
+              <td colspan="8" class="text-center text-muted py-3">No SUs match the filters.</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -624,6 +668,7 @@
     {% endif %}
   </fieldset>
 
+  {{ items_modal('suItemsModal') }}
 
   <!-- ===========================================================
        3) ATTACH GRAPHIC DOCUMENTATION (selected existing SU)
@@ -1196,5 +1241,6 @@
 <script>
   window.ArcheoDBOpenEditSuId = {{ open_edit_su_id|tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/su.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/su.js', v='su-list-1') }}"></script>
 {% endblock %}

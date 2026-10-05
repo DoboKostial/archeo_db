@@ -1,6 +1,7 @@
 {# web_app/app/templates/objects.html #}
 {% extends "base.html" %}
 {% block title %}Object definition{% endblock %}
+{% from "macros/list_table.html" import column_header, su_links, items_modal %}
 
 {% block content %}
 <div class="alert alert-info" role="alert">
@@ -117,9 +118,15 @@
 
     <!-- RIGHT: Existing objects table -->
     <div class="col-12 col-xxl-6">
-      <div class="card list-panel">
-        <div class="card-header d-flex align-items-center justify-content-between">
+      <div class="card list-panel objects-list-panel">
+        <div class="card-header d-flex align-items-center gap-2">
           <h5 class="mb-0">Existing objects</h5>
+          {% if objects %}
+            <button type="button" id="objectsResetTable" class="polygon-column-button"
+                    title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+              <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+            </button>
+          {% endif %}
         </div>
         <div class="card-body">
           {% if objects %}
@@ -127,42 +134,39 @@
               <table id="objectsTable" class="table table-striped align-middle" data-page-size="10">
                 <thead>
                   <tr>
-                    <th>ID</th>
-                    <th>Type</th>
-                    <th>Superior</th>
-                    <th>SUs</th>
-                    <th class="text-end">Actions</th>
+                    <th scope="col" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ column_header("ID", "id", "objects") }}</th>
+                    <th scope="col" style="min-width:100px;" data-column="type" aria-sort="none">{{ column_header("Type", "type", "objects") }}</th>
+                    <th scope="col" data-column="superior" data-sort-type="number" aria-sort="none">{{ column_header("Superior", "superior", "objects") }}</th>
+                    <th scope="col" style="min-width:130px;" data-column="sus" aria-sort="none">{{ column_header("SUs", "sus", "objects") }}</th>
+                    <th scope="col" class="text-end">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="objectsTableBody">
                   {% for obj in objects %}
-                    <tr>
+                    <tr data-list-row>
                       <td><strong>{{ obj[0] }}</strong></td>
                       <td>{{ obj[1] }}</td>
-                      <td>{{ obj[2] if obj[2] else "—" }}</td>
-                      <td>
-                        {% if obj[4] %}
-                          {% for sj_id in obj[4] %}
-                            <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ", " if not loop.last }}
-                          {% endfor %}
-                        {% else %}
-                          <em class="text-muted">none</em>
-                        {% endif %}
-                      </td>
+                      <td data-search-value="{{ obj[2] if obj[2] is not none else '' }}">{{ obj[2] if obj[2] else "—" }}</td>
+                      <td data-search-value="{{ (obj[4] or [])|join(', ') }}">{{ su_links(obj[4], obj[0], "objects", "Object") }}</td>
                       <td class="text-end">
-                        <button type="button" class="btn btn-sm btn-outline-primary btn-edit"
-                                data-object-id="{{ obj[0] }}"
-                                data-bs-toggle="modal" data-bs-target="#editObjectModal">
-                          Edit
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-delete"
-                                data-object-id="{{ obj[0] }}"
-                                data-bs-toggle="modal" data-bs-target="#deleteObjectModal">
-                          Delete
-                        </button>
+                        <div class="d-inline-flex gap-1">
+                          <button type="button" class="btn btn-sm btn-outline-primary btn-edit"
+                                  data-object-id="{{ obj[0] }}"
+                                  data-bs-toggle="modal" data-bs-target="#editObjectModal">
+                            Edit
+                          </button>
+                          <button type="button" class="btn btn-sm btn-outline-danger btn-delete"
+                                  data-object-id="{{ obj[0] }}"
+                                  data-bs-toggle="modal" data-bs-target="#deleteObjectModal">
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   {% endfor %}
+                  <tr id="objectsNoMatches" hidden>
+                    <td colspan="5" class="text-center text-muted py-3">No objects match the filters.</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -183,6 +187,7 @@
   </div>
 </div>
 
+{{ items_modal('objectsItemsModal') }}
 
 {# -------------------------
    Modals
@@ -484,7 +489,8 @@
   };
 </script>
 
-<script src="{{ url_for('static', filename='js/archeo_objects.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/archeo_objects.js', v='objects-list-1') }}"></script>
 <script src="{{ url_for('static', filename='js/archeo_objects_edit.js') }}"></script>
 
 

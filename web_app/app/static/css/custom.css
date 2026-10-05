@@ -335,7 +335,10 @@
   line-height: 1.35;
 }
 
-.polygons-list-panel th[data-column] {
+.polygons-list-panel th[data-column],
+.su-list-panel th[data-column],
+.objects-list-panel th[data-column],
+.sections-list-panel th[data-column] {
   vertical-align: top;
 }
 

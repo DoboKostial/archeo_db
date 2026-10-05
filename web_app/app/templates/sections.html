@@ -1,6 +1,7 @@
 {# app/templates/sections.html #}
 {% extends "base.html" %}
 {% block title %}Sections{% endblock %}
+{% from "macros/list_table.html" import column_header, su_links, items_modal %}
 
 {% macro section_doc_link(kind, value) -%}
   {%- if kind == "photos" -%}
@@ -16,15 +17,27 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro section_doc_group(label, kind, values) -%}
+{% macro section_doc_group(label, kind, values, section_id) -%}
   <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
     {{ label }} (
     {%- if values -%}
       {%- for value in values[:3] -%}
         <span class="text-break">{{ section_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
       {%- endfor -%}
-      {%- if values|length > 3 -%}
-        <span class="text-muted"> +{{ values|length - 3 }}</span>
+      {%- if values|length > 3 %}
+        <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
+                data-bs-toggle="modal" data-bs-target="#sectionsItemsModal"
+                data-items-template="sections-items-{{ section_id }}-{{ kind }}"
+                data-items-title="{{ label }}: Section {{ section_id }} ({{ values|length }})"
+                title="Show all {{ label }} for Section {{ section_id }}"
+                aria-label="Show all {{ label }} for Section {{ section_id }}">+{{ values|length - 3 }}</button>
+        <template id="sections-items-{{ section_id }}-{{ kind }}">
+          <ul class="list-unstyled mb-0">
+            {% for value in values %}
+              <li class="mb-2 text-break">{{ section_doc_link(kind, value) }}</li>
+            {% endfor %}
+          </ul>
+        </template>
       {%- endif -%}
     {%- else -%}
       0
@@ -162,11 +175,19 @@
   <!-- Row 2: Existing sections list + GLOBAL actions -->
   <div class="row g-3 mt-3">
     <div class="col-12">
-      <div class="p-3 rounded-3 border list-panel">
+      <div class="p-3 rounded-3 border list-panel sections-list-panel">
 
         <!-- Header + global buttons -->
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-          <h4 class="mb-0">Existing sections</h4>
+          <div class="d-flex align-items-center gap-2">
+            <h4 class="mb-0">Existing sections</h4>
+            {% if sections %}
+              <button type="button" id="sectionsResetTable" class="polygon-column-button"
+                      title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+                <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+              </button>
+            {% endif %}
+          </div>
 
           <div class="d-flex gap-2 flex-wrap">
             <form method="POST" action="{{ url_for('sections.rebuild_all_sections') }}" class="m-0">
@@ -191,20 +212,20 @@
 
         {% if sections and sections|length %}
           <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0 w-100">
+            <table id="sectionsTable" class="table table-sm table-bordered align-middle mb-0 w-100" data-page-size="10">
               <thead class="table-light">
                 <tr>
-                  <th style="width:90px;">ID</th>
-                  <th style="width:140px;">Type</th>
-                  <th>Description</th>
-                  <th class="text-end" style="width:90px;">SRID</th>
-                  <th class="text-end" style="width:150px;">POINT RANGES</th>
-                  <th style="width:150px;">SUs cut</th>
-                  <th style="width:280px;">Is documented by:</th>
-                  <th class="text-end" style="width:170px;">ACTIONS</th>
+                  <th scope="col" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ column_header("ID", "id", "sections") }}</th>
+                  <th scope="col" style="width:140px;" data-column="type" aria-sort="none">{{ column_header("Type", "type", "sections") }}</th>
+                  <th scope="col" style="min-width:150px;" data-column="description" aria-sort="none">{{ column_header("Description", "description", "sections") }}</th>
+                  <th scope="col" class="text-end" style="width:90px;" data-column="srid" aria-sort="none">{{ column_header("SRID", "srid", "sections") }}</th>
+                  <th scope="col" class="text-end" style="width:150px;" data-column="ranges" aria-sort="none">{{ column_header("POINT RANGES", "ranges", "sections") }}</th>
+                  <th scope="col" style="min-width:130px;" data-column="sus" aria-sort="none">{{ column_header("SUs cut", "sus", "sections") }}</th>
+                  <th scope="col" style="min-width:250px;" data-column="documentation" aria-sort="none">{{ column_header("Is documented by:", "documentation", "sections") }}</th>
+                  <th scope="col" class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="sectionsTableBody">
                 {% for s in sections %}
                 {% set edit_payload = {
                   "id": s.id,
@@ -214,29 +235,21 @@
                   "sj_ids": s.sj_ids
                 } %}
                 {% set docs = s.documented_by %}
-                <tr>
+                <tr data-list-row>
                   <td>{{ s.id }}</td>
                   <td>{{ s.type }}</td>
-                  <td class="text-break">{{ s.description }}</td>
-                  <td class="text-end">{{ s.srid }}</td>
-                  <td class="text-break">{{ s.ranges }}</td>
-                  <td>
-                    {% if s.sj_ids %}
-                      {% for sj_id in s.sj_ids %}
-                        <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ", " if not loop.last }}
-                      {% endfor %}
-                    {% else %}
-                      <span class="text-muted">—</span>
-                    {% endif %}
-                  </td>
-                  <td class="small">
+                  <td class="text-break" data-search-value="{{ s.description or '' }}">{{ s.description or '—' }}</td>
+                  <td class="text-end" data-search-value="{{ s.srid if s.srid and s.srid != '—' else '' }}">{{ s.srid }}</td>
+                  <td class="text-break" data-search-value="{{ s.ranges if s.ranges and s.ranges != '—' else '' }}">{{ s.ranges }}</td>
+                  <td data-search-value="{{ s.sj_ids|join(', ') }}">{{ su_links(s.sj_ids, s.id, "sections", "Section") }}</td>
+                  <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Drawings ({{ docs.drawings|join(', ') if docs.drawings else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
                     <div>
-                      {{ section_doc_group("Photos", "photos", docs.photos) }}
-                      {{ section_doc_group("Photograms", "photograms", docs.photograms) }}
+                      {{ section_doc_group("Photos", "photos", docs.photos, s.id) }}
+                      {{ section_doc_group("Photograms", "photograms", docs.photograms, s.id) }}
                     </div>
                     <div>
-                      {{ section_doc_group("Drawings", "drawings", docs.drawings) }}
-                      {{ section_doc_group("Sketches", "sketches", docs.sketches) }}
+                      {{ section_doc_group("Drawings", "drawings", docs.drawings, s.id) }}
+                      {{ section_doc_group("Sketches", "sketches", docs.sketches, s.id) }}
                     </div>
                   </td>
 
@@ -260,8 +273,17 @@
                   </td>
                 </tr>
                 {% endfor %}
+                <tr id="sectionsNoMatches" hidden>
+                  <td colspan="8" class="text-center text-muted py-3">No sections match the filters.</td>
+                </tr>
               </tbody>
             </table>
+          </div>
+          <div id="sectionsPaginationWrap" class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+            <div id="sectionsPaginationSummary" class="text-muted small"></div>
+            <nav aria-label="Existing sections pagination">
+              <ul id="sectionsPagination" class="pagination pagination-sm mb-0"></ul>
+            </nav>
           </div>
         {% else %}
           <p class="text-muted mb-0">No sections stored yet.</p>
@@ -269,6 +291,8 @@
       </div>
     </div>
   </div>
+
+  {{ items_modal('sectionsItemsModal') }}
 
   <!-- Edit section modal -->
   <div class="modal fade" id="editSectionModal" tabindex="-1" aria-hidden="true">
@@ -1039,4 +1063,11 @@
 
 
 
+<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    ArcheoDBInitListTable('sections');
+    ArcheoDBInitListItemsModal('sectionsItemsModal');
+  });
+</script>
 {% endblock %}
