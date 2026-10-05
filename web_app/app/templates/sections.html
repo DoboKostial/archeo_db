@@ -172,7 +172,58 @@
     }
   </script>
 
-  <!-- Row 2: Existing sections list + GLOBAL actions -->
+  <!-- Row 2: Attach graphic documentation -->
+  <fieldset class="border p-3 bg-success-subtle mt-4">
+    <legend class="w-auto px-2">Attach graphic documentation</legend>
+
+    <!-- Authors datalist -->
+    <datalist id="authors-list">
+      {% for a in authors %}
+        <option value="{{ a }}"></option>
+      {% endfor %}
+    </datalist>
+
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Select section</label>
+        <select id="secDocSelect" class="form-select">
+          <option value="" selected>-- select section --</option>
+          {% for s in sections %}
+            <option value="{{ s.id }}">{{ s.id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <div class="alert alert-light border mb-0 py-2">
+          <span class="text-muted">Selected:</span>
+          <strong id="secDocSelectedLabel" class="ms-1">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecPhotos">
+        Upload photos
+      </button>
+      <button type="button" class="btn btn-secondary secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecSketches">
+        Upload sketches
+      </button>
+      <button type="button" class="btn btn-warning secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecPhotograms">
+        Upload photograms
+      </button>
+      <button type="button" class="btn btn-dark secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecDrawings">
+        Upload drawings
+      </button>
+    </div>
+
+    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+  </fieldset>
+
+  <!-- Row 3: Existing sections list + GLOBAL actions -->
   <div class="row g-3 mt-3">
     <div class="col-12">
       <div class="p-3 rounded-3 border list-panel sections-list-panel">
@@ -212,7 +263,7 @@
 
         {% if sections and sections|length %}
           <div class="table-responsive">
-            <table id="sectionsTable" class="table table-sm table-bordered align-middle mb-0 w-100" data-page-size="10">
+            <table id="sectionsTable" class="table table-sm table-striped table-bordered align-middle mb-0 w-100" data-page-size="10">
               <thead class="table-light">
                 <tr>
                   <th scope="col" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ column_header("ID", "id", "sections") }}</th>
@@ -704,59 +755,6 @@
   </script>
 
 
-  <!-- Row 3: Graphic documentation -->
-  <div class="container mt-4">
-    <fieldset class="border p-3 bg-success-subtle">
-      <legend class="w-auto px-2">Graphic documentation</legend>
-
-      <!-- Authors datalist -->
-      <datalist id="authors-list">
-        {% for a in authors %}
-          <option value="{{ a }}"></option>
-        {% endfor %}
-      </datalist>
-
-      <div class="row g-2 align-items-end mb-3">
-        <div class="col-md-6">
-          <label class="form-label">Select section</label>
-          <select id="secDocSelect" class="form-select">
-            <option value="" selected>-- select section --</option>
-            {% for s in sections %}
-              <option value="{{ s.id }}">{{ s.id }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <div class="alert alert-light border mb-0 py-2">
-            <span class="text-muted">Selected:</span>
-            <strong id="secDocSelectedLabel" class="ms-1">—</strong>
-          </div>
-        </div>
-      </div>
-
-      <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-primary secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecPhotos">
-          Upload photos
-        </button>
-        <button type="button" class="btn btn-secondary secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecSketches">
-          Upload sketches
-        </button>
-        <button type="button" class="btn btn-warning secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecPhotograms">
-          Upload photograms
-        </button>
-        <button type="button" class="btn btn-dark secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecDrawings">
-          Upload drawings
-        </button>
-      </div>
-
-      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-    </fieldset>
-  </div>
-
   <!-- Photos modal -->
   <div class="modal fade" id="modalSecPhotos" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -1063,7 +1061,7 @@
 
 
 
-<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
     ArcheoDBInitListTable('sections');

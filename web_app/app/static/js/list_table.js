@@ -72,6 +72,9 @@ window.ArcheoDBInitListTable = function (prefix) {
     const end = Math.min(start + pageSize, matched.length);
     const visible = new Set(matched.slice(start, end).map(item => item.row));
     rows.forEach(row => row.hidden = !visible.has(row));
+    matched.slice(start, end).forEach((item, index) => {
+      item.row.classList.toggle('list-row-striped', index % 2 === 0);
+    });
     const fragment = document.createDocumentFragment();
     matched.forEach(item => fragment.appendChild(item.row));
     tbody.insertBefore(fragment, noMatches);

@@ -289,8 +289,55 @@
   </div>
 </div>
 
+</div>
 
-<!-- Row 2: Existing polygons list (full width) -->
+<!-- Row 2: Attach graphic documentation -->
+<div class="row g-3 mt-3">
+  <div class="col-12">
+    <fieldset class="border p-3 bg-success-subtle">
+      <legend class="w-auto px-2">Attach graphic documentation</legend>
+
+      <!-- Polygon selector -->
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Select polygon</label>
+          <select id="polyDocSelect" class="form-select">
+            <option value="" selected>-- select polygon --</option>
+            {% for p in polygons %}
+              <option value="{{ p.name }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <div class="alert alert-light border mb-0 py-2">
+            <span class="text-muted">Selected:</span>
+            <strong id="polyDocSelectedLabel" class="ms-1">—</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-primary polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolyPhotos">
+          Upload photos
+        </button>
+        <button type="button" class="btn btn-secondary polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolySketches">
+          Upload sketches
+        </button>
+        <button type="button" class="btn btn-warning polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolyPhotograms">
+          Upload photograms
+        </button>
+      </div>
+
+      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+    </fieldset>
+  </div>
+</div>
+
+<!-- Row 3: Existing polygons list (full width) -->
 <div class="row g-3 mt-2">
   <!-- Existing polygons + actions -->
   <div class="col-12">
@@ -326,7 +373,7 @@
 
       {% if polygons and polygons|length %}
         <div class="table-responsive">
-          <table id="polygonsTable" class="table table-sm table-bordered align-middle mb-0 w-100" data-page-size="10">
+          <table id="polygonsTable" class="table table-sm table-striped table-bordered align-middle mb-0 w-100" data-page-size="10">
             <thead class="table-light">
               <tr>
                 <th scope="col" class="text-end" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ polygon_column_header("ID", "id") }}</th>
@@ -445,9 +492,11 @@
   </div>
 </div>
 
+</div>
+
 {{ items_modal('polygonItemsModal') }}
 
-<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   ArcheoDBInitListItemsModal('polygonItemsModal');
@@ -456,50 +505,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-
-<!-- 3. row ========= GRAPHIC DOCUMENTATION (for polygons) ========= -->
-<div class="container mt-4">
-  <fieldset class="border p-3 bg-success-subtle">
-    <legend class="w-auto px-2">Graphic documentation</legend>
-
-    <!-- Polygon selector -->
-    <div class="row g-2 align-items-end mb-3">
-      <div class="col-md-6">
-        <label class="form-label">Select polygon</label>
-        <select id="polyDocSelect" class="form-select">
-          <option value="" selected>-- select polygon --</option>
-          {% for p in polygons %}
-            <option value="{{ p.name }}">{{ p.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-6">
-        <div class="alert alert-light border mb-0 py-2">
-          <span class="text-muted">Selected:</span>
-          <strong id="polyDocSelectedLabel" class="ms-1">—</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolyPhotos">
-        Upload photos
-      </button>
-      <button type="button" class="btn btn-secondary polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolySketches">
-        Upload sketches
-      </button>
-      <button type="button" class="btn btn-warning polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolyPhotograms">
-        Upload photograms
-      </button>
-    </div>
-
-    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-  </fieldset>
-</div>
 
 <!-- Photos modal - opens window for photo selection -->
 <div class="modal fade" id="modalPolyPhotos" tabindex="-1" aria-hidden="true">

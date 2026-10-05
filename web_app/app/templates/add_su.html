@@ -566,26 +566,84 @@
 
 
   <!-- ===========================================================
-       2) SUS LIST (counts + table actions)
+       2) ATTACH GRAPHIC DOCUMENTATION (selected existing SU)
        =========================================================== -->
-  <fieldset class="border p-3 rounded-3 list-panel su-list-panel mt-4">
-    <legend class="w-auto px-2">SUs list</legend>
+  <fieldset class="border p-3 rounded-3 bg-success-subtle mt-4">
+    <legend class="w-auto px-2">Attach graphic documentation</legend>
 
-    <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
-      <span><span class="text-muted">Total</span> <strong class="fs-6">{{ sj_count_total }}</strong></span>
-      <span><span class="text-muted">Deposits</span> <strong class="fs-6">{{ sj_count_deposit }}</strong></span>
-      <span><span class="text-muted">Negatives</span> <strong class="fs-6">{{ sj_count_negativ }}</strong></span>
-      <span><span class="text-muted">Structures</span> <strong class="fs-6">{{ sj_count_structure }}</strong></span>
+    <!-- SU selector (single input with dynamic suggestions) -->
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-12 position-relative">
+        <label class="form-label">Select SU</label>
+
+        <input id="suMediaInput"
+               type="text"
+               class="form-control"
+               placeholder="Start typing SU ID..."
+               autocomplete="off">
+
+        <div id="suSuggestions"
+             class="list-group position-absolute w-100 d-none"
+             style="z-index: 1000;"></div>
+
+        <!-- Hidden source for JS -->
+        <datalist id="suDatalist">
+          {% for su in su_for_media %}
+            <option value="{{ su.id }}"
+                    label="{{ su.id }}{% if su.typ %} ({{ su.typ }}){% endif %}{% if su.desc %} - {{ su.desc[:60] }}{% endif %}">
+            </option>
+          {% endfor %}
+        </datalist>
+
+        <div class="form-text">Pick an existing SU first — uploads will attach to it.</div>
+      </div>
+
+      <div class="col-12">
+        <div class="alert alert-light border mb-0 py-2">
+          <span class="text-muted">Selected:</span>
+          <strong id="suMediaSelectedLabel" class="ms-1">—</strong>
+        </div>
+      </div>
     </div>
 
-    <div class="d-flex align-items-center gap-2 mb-2">
-      <h6 class="mb-0">Stored SUs</h6>
+    <!-- Action buttons -->
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotos">
+        Upload photos
+      </button>
+      <button type="button" class="btn btn-secondary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalSketches">
+        Upload sketches
+      </button>
+      <button type="button" class="btn btn-info suDocBtn" data-bs-toggle="modal" data-bs-target="#modalDrawings">
+        Upload drawings
+      </button>
+      <button type="button" class="btn btn-warning suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotograms">
+        Upload photograms
+      </button>
+    </div>
+
+    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+  </fieldset>
+
+  <!-- ===========================================================
+       3) EXISTING SUS (counts + table actions)
+       =========================================================== -->
+  <fieldset class="border p-3 rounded-3 list-panel su-list-panel mt-4">
+    <legend class="w-auto px-2">
+      Existing SUs
       {% if sus %}
         <button type="button" id="suResetTable" class="polygon-column-button"
                 title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
           <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
         </button>
       {% endif %}
+    </legend>
+
+    <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
+      <span><span class="text-muted">Total</span> <strong class="fs-6">{{ sj_count_total }}</strong></span>
+      <span><span class="text-muted">Deposits</span> <strong class="fs-6">{{ sj_count_deposit }}</strong></span>
+      <span><span class="text-muted">Negatives</span> <strong class="fs-6">{{ sj_count_negativ }}</strong></span>
+      <span><span class="text-muted">Structures</span> <strong class="fs-6">{{ sj_count_structure }}</strong></span>
     </div>
 
     {% if sus and sus|length > 0 %}
@@ -659,7 +717,7 @@
       <div id="suPaginationWrap"
            class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
         <div id="suPaginationSummary" class="text-muted small"></div>
-        <nav aria-label="SUs pagination">
+        <nav aria-label="Existing SUs pagination">
           <ul id="suPagination" class="pagination pagination-sm mb-0"></ul>
         </nav>
       </div>
@@ -669,67 +727,6 @@
   </fieldset>
 
   {{ items_modal('suItemsModal') }}
-
-  <!-- ===========================================================
-       3) ATTACH GRAPHIC DOCUMENTATION (selected existing SU)
-       =========================================================== -->
-  <fieldset class="border p-3 rounded-3 bg-success-subtle mt-4">
-    <legend class="w-auto px-2">Attach graphic documentation</legend>
-
-        <!-- SU selector (single input with dynamic suggestions) -->
-        <div class="row g-2 align-items-end mb-3">
-          <div class="col-12 position-relative">
-            <label class="form-label">Select SU</label>
-
-            <input id="suMediaInput"
-                  type="text"
-                  class="form-control"
-                  placeholder="Start typing SU ID..."
-                  autocomplete="off">
-
-            <div id="suSuggestions"
-                class="list-group position-absolute w-100 d-none"
-                style="z-index: 1000;"></div>
-
-            <!-- Hidden source for JS -->
-            <datalist id="suDatalist">
-              {% for su in su_for_media %}
-                <option value="{{ su.id }}"
-                        label="{{ su.id }}{% if su.typ %} ({{ su.typ }}){% endif %}{% if su.desc %} - {{ su.desc[:60] }}{% endif %}">
-                </option>
-              {% endfor %}
-            </datalist>
-
-            <div class="form-text">Pick an existing SU first — uploads will attach to it.</div>
-          </div>
-
-          <div class="col-12">
-            <div class="alert alert-light border mb-0 py-2">
-              <span class="text-muted">Selected:</span>
-              <strong id="suMediaSelectedLabel" class="ms-1">—</strong>
-            </div>
-          </div>
-        </div>
-
-
-    <!-- action buttons -->
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotos">
-        Upload photos
-      </button>
-      <button type="button" class="btn btn-secondary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalSketches">
-        Upload sketches
-      </button>
-      <button type="button" class="btn btn-info suDocBtn" data-bs-toggle="modal" data-bs-target="#modalDrawings">
-        Upload drawings
-      </button>
-      <button type="button" class="btn btn-warning suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotograms">
-        Upload photograms
-      </button>
-    </div>
-
-    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-  </fieldset>
 
 </div>
 
@@ -1241,6 +1238,6 @@
 <script>
   window.ArcheoDBOpenEditSuId = {{ open_edit_su_id|tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/list_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
 <script src="{{ url_for('static', filename='js/su.js', v='su-list-1') }}"></script>
 {% endblock %}

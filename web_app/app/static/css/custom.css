@@ -319,6 +319,20 @@
   background: #fff;
 }
 
+.table-striped {
+  --bs-table-bg: #fff;
+  --bs-table-striped-bg: #f2f2f2;
+}
+
+/* Filtered and paginated listings stripe visible rows, not hidden DOM rows. */
+.table-striped > tbody > tr[data-list-row] > * {
+  --bs-table-bg-type: transparent;
+}
+
+.table-striped > tbody > tr[data-list-row].list-row-striped > * {
+  --bs-table-bg-type: var(--bs-table-striped-bg);
+}
+
 .gallery-panel .pagination,
 .list-panel .pagination,
 .polygons-list-panel .pagination {
