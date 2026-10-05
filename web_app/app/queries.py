@@ -971,7 +971,9 @@ def get_polygons_list():
       has_bottom (binding exists),
       notes,
       top_ranges,
-      bottom_ranges
+      bottom_ranges,
+      documented_by,
+      sj_ids (linked SUs, ordered by ID)
     """
     return """
         SELECT
@@ -1057,7 +1059,14 @@ def get_polygons_list():
                   ),
                   '[]'::jsonb
                 )
-            )                                           AS documented_by
+            )                                           AS documented_by,
+
+            ARRAY(
+              SELECT DISTINCT x.ref_sj
+              FROM tabaid_sj_polygon x
+              WHERE x.ref_polygon = p.polygon_name
+              ORDER BY x.ref_sj
+            )                                           AS sj_ids
 
         FROM tab_polygons p
         ORDER BY p.polygon_name;
