@@ -1,7 +1,6 @@
 {# app/templates/polygons.html #}
 {% extends "base.html" %}
 {% block title %}Polygons{% endblock %}
-{% set polygon_cell_limit = 10 %}
 
 {% macro polygon_item_link(kind, value) -%}
   {%- if kind == "sus" -%}
@@ -18,6 +17,7 @@
 {%- endmacro %}
 
 {% macro polygon_item_list(label, kind, values, polygon) -%}
+  {%- set polygon_cell_limit = 10 if kind == "sus" else 3 -%}
   {%- for value in values[:polygon_cell_limit] -%}
     <span class="text-break">{{ polygon_item_link(kind, value) }}</span>{{ ", " if not loop.last }}
   {%- endfor -%}
