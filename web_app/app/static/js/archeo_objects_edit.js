@@ -37,64 +37,95 @@
       });
     }
 
-    // open edit modal -> fetch object
-    document.querySelectorAll(".btn-edit").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (editError) { editError.classList.add("d-none"); editError.textContent = ""; }
+    const editModal = document.getElementById("editObjectModal");
+    const saveEdit = document.getElementById("saveEdit");
+    let loadVersion = 0;
 
-        const id = btn.getAttribute("data-object-id");
-        const url = CFG.urlApiGetObjectBase.replace("/0", `/${id}`);
+    function showError(message) {
+      if (!editError) return;
+      editError.textContent = message;
+      editError.classList.toggle("d-none", !message);
+    }
 
-        const r = await fetch(url);
-        const data = await r.json();
+    function setEditorEnabled(enabled) {
+      editModal.querySelectorAll(".modal-body input, .modal-body select, .modal-body button, #btnEditInhumModal, #saveEdit")
+        .forEach((control) => { control.disabled = !enabled; });
+      document.getElementById("edit_id_object_display").disabled = true;
+    }
 
-        if (!r.ok) {
-          if (editError) {
-            editError.textContent = data.error || "Failed to load object.";
-            editError.classList.remove("d-none");
-          }
-          return;
-        }
+    function populateObject(data) {
+      // base fields
+      document.getElementById("edit_id_object").value = data.id_object;
+      document.getElementById("edit_id_object_display").value = data.id_object;
+      document.getElementById("edit_object_typ").value = data.object_typ || "";
+      document.getElementById("edit_superior_object").value = (data.superior_object ?? "");
+      document.getElementById("edit_notes").value = data.notes || "";
 
-        // base fields
-        document.getElementById("edit_id_object").value = data.id_object;
-        document.getElementById("edit_id_object_display").value = data.id_object;
-        document.getElementById("edit_object_typ").value = data.object_typ || "";
-        document.getElementById("edit_superior_object").value = (data.superior_object ?? "");
-        document.getElementById("edit_notes").value = data.notes || "";
-
-        // SUs
-        if (editSjContainer) {
-          editSjContainer.innerHTML = "";
-          const sj = data.sj_ids || [];
-          if (sj.length) {
-            sj.forEach((v) => editSjContainer.appendChild(buildSjInput(v)));
-          } else {
-            editSjContainer.appendChild(buildSjInput(""));
-            editSjContainer.appendChild(buildSjInput(""));
-          }
-        }
-
-        // inhum grave to hidden edit fields
-        const g = data.inhum_grave || { present: false };
-        document.getElementById("edit_is_inhum_grave").value = g.present ? "1" : "0";
-        document.getElementById("edit_inhum_preservation").value = g.preservation ?? "";
-        document.getElementById("edit_inhum_orientation_dir").value = g.orientation_dir ?? "";
-        document.getElementById("edit_inhum_notes").value = g.notes_grave ?? "";
-        document.getElementById("edit_inhum_anthropo_present").value = g.anthropo_present ? "1" : "0";
-        document.getElementById("edit_inhum_burial_box_type").value = g.burial_box_type ?? "";
-
-        let bm = g.bone_map;
-        if (typeof bm === "string") {
-          document.getElementById("edit_inhum_bone_map").value = bm;
-        } else if (bm && typeof bm === "object") {
-          document.getElementById("edit_inhum_bone_map").value = JSON.stringify(bm);
+      // SUs
+      if (editSjContainer) {
+        editSjContainer.innerHTML = "";
+        const sj = data.sj_ids || [];
+        if (sj.length) {
+          sj.forEach((v) => editSjContainer.appendChild(buildSjInput(v)));
         } else {
-          document.getElementById("edit_inhum_bone_map").value = "";
+          editSjContainer.appendChild(buildSjInput(""));
+          editSjContainer.appendChild(buildSjInput(""));
         }
+      }
 
-        if (Shared.syncInhumBadge) Shared.syncInhumBadge("edit");
+      // inhum grave to hidden edit fields
+      const g = data.inhum_grave || { present: false };
+      document.getElementById("edit_is_inhum_grave").value = g.present ? "1" : "0";
+      document.getElementById("edit_inhum_preservation").value = g.preservation ?? "";
+      document.getElementById("edit_inhum_orientation_dir").value = g.orientation_dir ?? "";
+      document.getElementById("edit_inhum_notes").value = g.notes_grave ?? "";
+      document.getElementById("edit_inhum_anthropo_present").value = g.anthropo_present ? "1" : "0";
+      document.getElementById("edit_inhum_burial_box_type").value = g.burial_box_type ?? "";
+
+      let bm = g.bone_map;
+      if (typeof bm === "string") {
+        document.getElementById("edit_inhum_bone_map").value = bm;
+      } else if (bm && typeof bm === "object") {
+        document.getElementById("edit_inhum_bone_map").value = JSON.stringify(bm);
+      } else {
+        document.getElementById("edit_inhum_bone_map").value = "";
+      }
+
+      if (Shared.syncInhumBadge) Shared.syncInhumBadge("edit");
+    }
+
+    async function openObject(id) {
+      if (!editModal) return;
+      const version = ++loadVersion;
+      showError("");
+      populateObject({ id_object: "", sj_ids: [] });
+      setEditorEnabled(false);
+      editModal.setAttribute("aria-busy", "true");
+      bootstrap.Modal.getOrCreateInstance(editModal).show();
+      try {
+        const url = CFG.urlApiGetObjectBase.replace("/0", `/${id}`);
+        const response = await fetch(url, { headers: { Accept: "application/json" } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed to load object.");
+        if (version !== loadVersion) return;
+        populateObject(data);
+        setEditorEnabled(true);
+      } catch (error) {
+        if (version === loadVersion) showError(error.message || "Failed to load object.");
+      } finally {
+        if (version === loadVersion) editModal.removeAttribute("aria-busy");
+      }
+    }
+
+    window.ArcheoObjectsEditor = { open: openObject };
+    if (editModal) {
+      editModal.addEventListener("hidden.bs.modal", () => {
+        loadVersion++;
+        editModal.removeAttribute("aria-busy");
       });
+    }
+    document.querySelectorAll(".btn-edit").forEach((btn) => {
+      btn.addEventListener("click", () => openObject(btn.getAttribute("data-object-id")));
     });
 
     const requestedObject = new URLSearchParams(window.location.search).get("edit_object");
@@ -105,7 +136,6 @@
     }
 
     // save edit
-    const saveEdit = document.getElementById("saveEdit");
     if (saveEdit) {
       saveEdit.addEventListener("click", async () => {
         if (editError) { editError.classList.add("d-none"); editError.textContent = ""; }
@@ -133,22 +163,21 @@
           bone_map: bone_map,
         };
 
-        const r = await fetch(CFG.urlUpdateObject, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-          body: JSON.stringify({ id_object, object_typ, superior_object, notes, sj_ids, inhum_grave }),
-        });
-
-        const data = await r.json();
-        if (!r.ok) {
-          if (editError) {
-            editError.textContent = data.error || "Update failed.";
-            editError.classList.remove("d-none");
-          }
-          return;
+        saveEdit.disabled = true;
+        try {
+          const response = await fetch(CFG.urlUpdateObject, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+            body: JSON.stringify({ id_object, object_typ, superior_object, notes, sj_ids, inhum_grave }),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Update failed.");
+          window.location.reload();
+        } catch (error) {
+          showError(error.message || "Update failed.");
+        } finally {
+          saveEdit.disabled = false;
         }
-
-        window.location.reload();
       });
     }
 

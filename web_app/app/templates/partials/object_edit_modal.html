@@ -1,0 +1,70 @@
+<div class="modal fade" id="editObjectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header d-flex align-items-center justify-content-between">
+        <h5 class="modal-title">Edit object</h5>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="badge bg-secondary d-none" id="editInhumBadge">Inhumation grave</span>
+          <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditInhumModal">
+            Object is a grave
+          </button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="edit_id_object">
+
+        {# inhum grave hidden fields (edit modal) #}
+        <input type="hidden" id="edit_is_inhum_grave" value="0">
+        <input type="hidden" id="edit_inhum_preservation" value="">
+        <input type="hidden" id="edit_inhum_orientation_dir" value="">
+        <input type="hidden" id="edit_inhum_bone_map" value="">
+        <input type="hidden" id="edit_inhum_notes" value="">
+        <input type="hidden" id="edit_inhum_anthropo_present" value="0">
+        <input type="hidden" id="edit_inhum_burial_box_type" value="">
+
+        <div class="row g-3">
+          <div class="col-md-2">
+            <label class="form-label">ID</label>
+            <input type="number" class="form-control" id="edit_id_object_display" disabled>
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="edit_object_typ" required>
+              <option value="">-- choose a type --</option>
+              {% for typ in object_types %}
+                <option value="{{ typ }}">{{ typ }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="col-md-2">
+            <label class="form-label">Superior</label>
+            <input type="number" class="form-control" id="edit_superior_object">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Notes</label>
+            <input type="text" class="form-control" id="edit_notes">
+          </div>
+
+          <div class="col-12">
+            <label class="form-label">SUs</label>
+            <div id="edit_sj_container"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="edit_add_sj">+ Add SU</button>
+            <div class="form-text">At least 2 SUs.</div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="edit_error"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="saveEdit">Save changes</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

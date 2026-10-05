@@ -163,6 +163,12 @@ class _HarrisPageCursor:
         self.query = query
 
     def fetchall(self):
+        if self.query == su_routes.list_authors_sql():
+            return [("author@example.invalid",)]
+        if self.query == su_routes.list_polygon_names_sql():
+            return [("P1",)]
+        if self.query == su_routes.list_object_types_sql():
+            return [("wall",)]
         return [("deposit", 2)]
 
     def fetchone(self):
@@ -214,7 +220,15 @@ def test_harrismatrix_page_renders_clickable_overlay(client, monkeypatch):
     assert "hmatrix-image-wrap" in html
     assert "hmatrix-hotspot hmatrix-hotspot-su" in html
     assert 'data-hmatrix-id="1"' in html
-    assert 'id="hmatrixEntityModal"' in html
+    assert 'id="hmatrixEntityModal"' not in html
+    for modal in ("editSuModal", "editObjectModal", "inhumGraveModal", "hmatrixSuPickerModal"):
+        assert html.count(f'id="{modal}"') == 1
+    assert 'name="return_to" value="harrismatrix"' in html
+    assert '<option value="author@example.invalid">' in html
+    assert '<option value="P1">' in html
+    assert '<option value="wall">' in html
+    assert "js/harrismatrix.js" in html
+    assert "js/archeo_objects_edit.js" in html
 
 
 class _DetailCursor:
@@ -296,6 +310,113 @@ def test_harrismatrix_su_detail_api_returns_entity_payload(client, monkeypatch):
     assert data["deposit"]["deposit_typ"] == "floor"
     assert data["above_ids"] == [1]
     assert data["below_ids"] == [8]
+    assert data["editor"]["id"] == 7
+    assert data["editor"]["typ"] == "deposit"
+    assert data["editor"]["desc"] == "floor layer"
+    assert data["editor"]["recorded"] == "2026-08-06"
+    assert data["editor"]["excav_extent"] == 80
+    assert data["editor"]["deposit_typ"] == "floor"
+    assert data["editor"]["polygon_names"] == ["P1"]
+    assert data["editor"]["above_ids"] == [1]
+    assert data["editor"]["below_ids"] == [8]
+
+
+@pytest.mark.parametrize("typ", ["deposit", "negativ", "structure"])
+def test_harris_editor_preserves_zero_and_all_subtype_fields(typ):
+    row = [None] * 32
+    row[:10] = [7, typ, "Description", "Interpretation", date(2026, 10, 5),
+                "author@example.invalid", True, False, 0, 42]
+    row[10:16] = ["fill", "brown", "clear", "sand", "loose", "pick"]
+    row[16:21] = ["pit", True, "round", "straight", "flat"]
+    row[21:28] = ["wall", "masonry", "mortar", "stone", 0, 1.2, 3.4]
+    row[28:] = [["P1"], [1], [8], [9]]
+    editor = su_routes._harris_su_payload(tuple(row))["editor"]
+    assert editor["typ"] == typ
+    assert editor["excav_extent"] == 0
+    assert editor["deposit_typ"] == "fill"
+    assert editor["structure"] == "sand"
+    assert editor["negativ_typ"] == "pit"
+    assert editor["ident_niveau_cut"] is True
+    assert editor["shape_bottom"] == "flat"
+    assert editor["structure_typ"] == "wall"
+    assert editor["basic_material"] == "stone"
+    assert editor["length_m"] == 0
+    assert editor["width_m"] == 1.2
+    assert editor["height_m"] == 3.4
+    assert editor["equal_ids"] == [9]
+
+
+@pytest.mark.parametrize("return_to, destination", [
+    ("harrismatrix", "/harrismatrix"), ("", "/add-sj"),
+    ("https://example.invalid/", "/add-sj"),
+])
+@pytest.mark.parametrize("valid", [False, True])
+def test_su_edit_returns_to_matrix_only_for_allowed_origin(client, monkeypatch, return_to, destination, valid):
+    class Connection(_DetailConnection):
+        def __init__(self):
+            super().__init__((1,))
+            self.committed = False
+
+        def commit(self):
+            self.committed = True
+
+    connection = Connection()
+    monkeypatch.setattr(su_routes, "get_terrain_connection", lambda _dbname: connection)
+    monkeypatch.setattr(su_routes, "_save_su_subtype", lambda *args: None)
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+        session["harrismatrix_image"] = "matrix.png"
+    response = client.post("/su/edit", data={
+        "id_sj": "7" if valid else "invalid", "sj_typ": "deposit",
+        "author": "author@example.invalid", "excav_extent": "0",
+        "return_to": return_to,
+    })
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(destination)
+    assert connection.committed is valid
+    with client.session_transaction() as session:
+        assert session["harrismatrix_image"] == "matrix.png"
+
+
+@pytest.mark.parametrize("path", ["/harrismatrix", "/harrismatrix/api/su/7", "/harrismatrix/api/object/3"])
+def test_harris_editor_requires_selected_database(client, monkeypatch, path):
+    def unexpected_connection(_dbname):
+        pytest.fail("Database guard must precede connection")
+
+    monkeypatch.setattr(su_routes, "get_terrain_connection", unexpected_connection)
+    assert client.get(path).status_code == 302
+
+
+def test_harris_missing_su_does_not_return_editor_data(client, monkeypatch):
+    monkeypatch.setattr(su_routes, "get_terrain_connection", lambda _dbname: _DetailConnection(None))
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+    response = client.get("/harrismatrix/api/su/7")
+    assert response.status_code == 404
+    assert "editor" not in response.get_json()
+
+
+@pytest.mark.parametrize("path", ["/harrismatrix", "/harrismatrix/api/su/7", "/harrismatrix/api/object/3"])
+def test_harris_editor_requires_login(client, monkeypatch, path):
+    def unexpected_connection(_dbname):
+        pytest.fail("Login guard must precede connection")
+
+    monkeypatch.setattr(su_routes, "get_terrain_connection", unexpected_connection)
+    client.delete_cookie("token")
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+    response = client.get(path)
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+@pytest.mark.parametrize("path", ["/su/edit", "/objects/update"])
+def test_matrix_editor_save_requires_csrf(client, monkeypatch, path):
+    monkeypatch.setitem(client.application.config, "WTF_CSRF_ENABLED", True)
+    with client.session_transaction() as session:
+        session["selected_db"] = "02_test"
+    response = client.post(path, data={"id_sj": "7", "return_to": "harrismatrix"})
+    assert response.status_code == 400
 
 
 def test_harrismatrix_object_detail_api_returns_object_payload(client, monkeypatch):

@@ -44,6 +44,8 @@ from app.queries import (
     get_all_objects,
     get_sj_with_object_refs,
     harris_su_detail_sql,
+    list_authors_sql,
+    list_object_types_sql,
     q_get_object_with_sjs,
     q_get_object_inhum_grave,
     list_polygon_names_sql,
@@ -173,7 +175,7 @@ def _su_row_to_dict(row):
         "author": row[5] or "",
         "docu_plan": bool(row[6]),
         "docu_vertical": bool(row[7]),
-        "excav_extent": row[8] or "",
+        "excav_extent": "" if row[8] is None else row[8],
         "deposit_typ": row[9] or "",
         "color": row[10] or "",
         "boundary_visibility": row[11] or "",
@@ -583,6 +585,9 @@ def delete_su():
 @require_selected_db
 def edit_su():
     selected_db = session["selected_db"]
+    return_endpoint = (
+        "su.harrismatrix" if request.form.get("return_to") == "harrismatrix" else "su.add_su"
+    )
 
     try:
         sj_id = int(request.form.get("id_sj") or "0")
@@ -612,7 +617,7 @@ def edit_su():
 
     except Exception as e:
         flash(f"Invalid SU edit data: {e}", "warning")
-        return redirect(url_for("su.add_su"))
+        return redirect(url_for(return_endpoint))
 
     conn = get_terrain_connection(selected_db)
     conn.autocommit = False
@@ -663,6 +668,8 @@ def edit_su():
 
         conn.commit()
         flash(f"SU #{sj_id} updated.", "success")
+        if return_endpoint == "su.harrismatrix":
+            flash("Regenerate the matrix to reflect changes to stratigraphy or SU types.", "info")
         logger.info(f"[{selected_db}] SU updated id={sj_id} type={sj_typ}")
 
     except Exception as e:
@@ -676,7 +683,7 @@ def edit_su():
         except Exception:
             pass
 
-    return redirect(url_for("su.add_su"))
+    return redirect(url_for(return_endpoint))
 
 
 # -------------------------------------------------------------------
@@ -905,6 +912,13 @@ def harrismatrix():
         cur.execute(count_sj_without_relation())
         sj_without_relation = cur.fetchone()[0]
 
+        cur.execute(list_authors_sql())
+        authors = [row[0] for row in cur.fetchall()]
+        cur.execute(list_polygon_names_sql())
+        polygons = [row[0] for row in cur.fetchall()]
+        cur.execute(list_object_types_sql())
+        object_types = [row[0] for row in cur.fetchall()]
+
     finally:
         try:
             cur.close()
@@ -927,6 +941,10 @@ def harrismatrix():
         sj_type_counts=sj_type_counts,
         harris_image=harris_image,
         harris_links=harris_links,
+        authors=authors,
+        polygons=polygons,
+        object_types=object_types,
+        su_edit_return_to="harrismatrix",
     )
 
 
@@ -980,6 +998,8 @@ def _harris_su_payload(row):
         "above_ids": [int(v) for v in (row[29] or [])],
         "below_ids": [int(v) for v in (row[30] or [])],
         "equal_ids": [int(v) for v in (row[31] or [])],
+        # The Harris detail query adds ref_object before the shared editor fields.
+        "editor": _su_row_to_dict(row[:9] + row[10:]),
     }
 
 

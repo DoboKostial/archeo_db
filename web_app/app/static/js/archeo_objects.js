@@ -207,6 +207,18 @@
     // --- Inhumation modal open buttons
     const btnCreateInhumModal = document.getElementById("btnCreateInhumModal");
     const btnEditInhumModal = document.getElementById("btnEditInhumModal");
+    const graveModal = document.getElementById("inhumGraveModal");
+    const objectModal = document.getElementById("editObjectModal");
+    let returnToObject = false;
+
+    if (graveModal && objectModal) {
+      graveModal.addEventListener("hidden.bs.modal", () => {
+        if (returnToObject) {
+          returnToObject = false;
+          bootstrap.Modal.getOrCreateInstance(objectModal).show();
+        }
+      });
+    }
 
     if (btnCreateInhumModal) {
       btnCreateInhumModal.addEventListener("click", () => {
@@ -220,7 +232,16 @@
       btnEditInhumModal.addEventListener("click", () => {
         window.__inhumContext = "edit";
         loadInhumFromHidden("edit");
-        bootstrap.Modal.getOrCreateInstance(document.getElementById("inhumGraveModal")).show();
+        // Bootstrap supports one open modal; return to the editor after the grave dialog.
+        returnToObject = Boolean(objectModal?.classList.contains("show"));
+        if (returnToObject) {
+          objectModal.addEventListener("hidden.bs.modal", () => {
+            bootstrap.Modal.getOrCreateInstance(graveModal).show();
+          }, { once: true });
+          bootstrap.Modal.getOrCreateInstance(objectModal).hide();
+        } else {
+          bootstrap.Modal.getOrCreateInstance(graveModal).show();
+        }
       });
     }
 

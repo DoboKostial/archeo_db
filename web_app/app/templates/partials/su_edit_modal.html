@@ -1,0 +1,269 @@
+<div class="modal fade" id="editSuModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <form method="post" action="{{ url_for('su.edit_su') }}" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit SU <span id="editSuTitle">—</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" name="id_sj" id="edit_id_sj" value="">
+        {% if su_edit_return_to is defined %}
+          <input type="hidden" name="return_to" value="{{ su_edit_return_to }}">
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-lg-4">
+            <fieldset class="border p-3 rounded-3 bg-light h-100">
+              <legend class="w-auto px-2">Basic info</legend>
+
+              <div class="mb-3">
+                <label for="edit_sj_typ" class="form-label">SU type</label>
+                <select class="form-select" id="edit_sj_typ" name="sj_typ" required>
+                  <option value="deposit">Deposit</option>
+                  <option value="negativ">Negativ</option>
+                  <option value="structure">Structure</option>
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label for="edit_recorded" class="form-label">Recorded</label>
+                <input type="date" class="form-control" id="edit_recorded" name="recorded">
+              </div>
+
+              <div class="mb-3">
+                <label for="edit_excav_extent" class="form-label">Excavation extent (%)</label>
+                <div class="excav-extent-picker">
+                  <input type="number"
+                         class="form-control excav-extent-input"
+                         id="edit_excav_extent"
+                         name="excav_extent"
+                         min="0"
+                         max="100"
+                         step="1"
+                         placeholder="%">
+                  <div class="excav-extent-actions"
+                       data-choice-group
+                       data-choice-target="edit_excav_extent"
+                       aria-label="Quick excavation extent selection">
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="0" title="0%" aria-label="Excavation extent 0%">
+                      <span class="negative-mini-icon extent-choice-icon extent-empty" aria-hidden="true">
+                        <span class="extent-percent-label">0%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="25" title="25%" aria-label="Excavation extent 25%">
+                      <span class="negative-mini-icon extent-choice-icon extent-quarter" aria-hidden="true">
+                        <span class="extent-percent-label">25%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="50" title="50%" aria-label="Excavation extent 50%">
+                      <span class="negative-mini-icon extent-choice-icon extent-half" aria-hidden="true">
+                        <span class="extent-percent-label">50%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="75" title="75%" aria-label="Excavation extent 75%">
+                      <span class="negative-mini-icon extent-choice-icon extent-three-quarter" aria-hidden="true">
+                        <span class="extent-percent-label">75%</span>
+                      </span>
+                    </button>
+                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="100" title="100%" aria-label="Excavation extent 100%">
+                      <span class="negative-mini-icon extent-choice-icon extent-full" aria-hidden="true">
+                        <span class="extent-percent-label">100%</span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label for="edit_author" class="form-label">Author (email)</label>
+                <select class="form-select" id="edit_author" name="author" required>
+                  <option value="">-- choose --</option>
+                  {% for a in authors %}
+                    <option value="{{ a }}">{{ a }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label for="edit_description" class="form-label">Description</label>
+                <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+              </div>
+
+              <div class="mb-3">
+                <label for="edit_interpretation" class="form-label">Interpretation</label>
+                <textarea class="form-control" id="edit_interpretation" name="interpretation" rows="2"></textarea>
+              </div>
+
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="edit_docu_plan" name="docu_plan">
+                <label class="form-check-label" for="edit_docu_plan">Documentation: plan</label>
+              </div>
+
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="edit_docu_vertical" name="docu_vertical">
+                <label class="form-check-label" for="edit_docu_vertical">Documentation: vertical</label>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="col-lg-4">
+            <fieldset class="border p-3 rounded-3 bg-light h-100">
+              <legend class="w-auto px-2">Type-specific</legend>
+
+              <div id="edit_deposit_fields" class="edit-sj-type-block">
+                <div class="mb-2">
+                  <label class="form-label">Deposit type</label>
+                  <input type="text" class="form-control" name="deposit_typ" id="edit_deposit_typ">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Color</label>
+                  <input type="text" class="form-control" name="color" id="edit_color">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Boundary visibility</label>
+                  <input type="hidden" name="boundary_visibility" id="edit_boundary_visibility">
+                  <div class="deposit-choice-grid deposit-boundary-grid" data-choice-group data-choice-target="edit_boundary_visibility">
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="very_good" data-choice-aliases="sharp" title="Very good" aria-label="Boundary visibility very good">
+                      <span class="boundary-choice-icon boundary-very-good" aria-hidden="true"></span>
+                      <span>Very good</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="clear" data-choice-aliases="distinctive" title="Clear" aria-label="Boundary visibility clear">
+                      <span class="boundary-choice-icon boundary-clear" aria-hidden="true"></span>
+                      <span>Clear</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="not_clear" data-choice-aliases="non-distinctive" title="Not clear" aria-label="Boundary visibility not clear">
+                      <span class="boundary-choice-icon boundary-not-clear" aria-hidden="true"></span>
+                      <span>Not clear</span>
+                    </button>
+                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="hypothetical" data-choice-aliases="hypotetical" title="Hypothetical" aria-label="Boundary visibility hypothetical">
+                      <span class="boundary-choice-icon boundary-hypothetical" aria-hidden="true"></span>
+                      <span>Hypothetical</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Structure</label>
+                  <input type="text" class="form-control" name="structure" id="edit_structure">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Compactness</label>
+                  <input type="text" class="form-control" name="compactness" id="edit_compactness">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Deposit removed</label>
+                  <input type="hidden" name="deposit_removed" id="edit_deposit_removed">
+                  <div class="deposit-choice-grid deposit-removed-grid" data-choice-group data-choice-target="edit_deposit_removed">
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="excavator" title="excavator" aria-label="Deposit removed by excavator">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-excavator.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="not_removed" title="not removed" aria-label="Deposit not removed">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-not-removed.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="pick" title="pick" aria-label="Deposit removed by pick">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-pick.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="shovel" title="shovel" aria-label="Deposit removed by shovel">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-shovel.png') }}" alt="" aria-hidden="true">
+                    </button>
+                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="spatula" title="spatula" aria-label="Deposit removed by spatula">
+                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-spatula.png') }}" alt="" aria-hidden="true">
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="edit_negativ_fields" class="edit-sj-type-block">
+                <div class="mb-2">
+                  <label class="form-label">Negativ type</label>
+                  <input type="text" class="form-control" name="negativ_typ" id="edit_negativ_typ">
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="checkbox" id="edit_ident_niveau_cut" name="ident_niveau_cut">
+                  <label class="form-check-label" for="edit_ident_niveau_cut">Ident. niveau cut</label>
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Shape plan</label>
+                  <input type="text" class="form-control" name="shape_plan" id="edit_shape_plan">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Shape sides</label>
+                  <input type="text" class="form-control" name="shape_sides" id="edit_shape_sides">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Shape bottom</label>
+                  <input type="text" class="form-control" name="shape_bottom" id="edit_shape_bottom">
+                </div>
+              </div>
+
+              <div id="edit_structure_fields" class="edit-sj-type-block">
+                <div class="mb-2">
+                  <label class="form-label">Structure type</label>
+                  <input type="text" class="form-control" name="structure_typ" id="edit_structure_typ">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Construction type</label>
+                  <input type="text" class="form-control" name="construction_typ" id="edit_construction_typ">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Binder</label>
+                  <input type="text" class="form-control" name="binder" id="edit_binder">
+                </div>
+                <div class="mb-2">
+                  <label class="form-label">Basic material</label>
+                  <input type="text" class="form-control" name="basic_material" id="edit_basic_material">
+                </div>
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <label class="form-label">Length</label>
+                    <input type="number" step="0.01" class="form-control" name="length_m" id="edit_length_m">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Width</label>
+                    <input type="number" step="0.01" class="form-control" name="width_m" id="edit_width_m">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Height</label>
+                    <input type="number" step="0.01" class="form-control" name="height_m" id="edit_height_m">
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="col-lg-4">
+            <fieldset class="border p-3 rounded-3 bg-light mb-3">
+              <legend class="w-auto px-2">Polygons</legend>
+              <select id="edit_polygon_names" name="polygon_names" class="form-select" multiple size="8">
+                {% for p in polygons %}
+                  <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+              </select>
+            </fieldset>
+
+            <fieldset class="border p-3 rounded-3 bg-light">
+              <legend class="w-auto px-2">Stratigraphic relations</legend>
+              <div class="mb-2">
+                <label class="form-label">Below (SU IDs)</label>
+                <input type="text" class="form-control" id="edit_below_ids" name="below_ids" placeholder="1, 2">
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Equal (=)</label>
+                <input type="text" class="form-control" id="edit_equal_ids" name="equal_ids" placeholder="1, 2">
+              </div>
+              <div>
+                <label class="form-label">Above (SU IDs)</label>
+                <input type="text" class="form-control" id="edit_above_ids" name="above_ids" placeholder="1, 2">
+              </div>
+            </fieldset>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>

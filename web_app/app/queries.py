@@ -142,6 +142,10 @@ def list_authors_sql():
     return "SELECT mail FROM gloss_personalia ORDER BY mail;"
 
 
+def list_object_types_sql():
+    return "SELECT object_typ FROM gloss_object_type ORDER BY object_typ;"
+
+
 # -------------------------------------------------------------------
 # Admin + SRID helpers (auth_db + terrain_db_template + terrain DBs)
 # -------------------------------------------------------------------

@@ -25,6 +25,7 @@ from app.database import get_terrain_connection
 from app.utils.decorators import require_selected_db
 
 from app.queries import (
+    list_object_types_sql,
     # objects
     q_list_objects_with_sjs,
     q_get_object_with_sjs,
@@ -59,7 +60,7 @@ def _get_next_object_id(conn) -> int:
 
 def _get_object_types(conn) -> list[str]:
     with conn.cursor() as cur:
-        cur.execute("SELECT object_typ FROM gloss_object_type ORDER BY object_typ;")
+        cur.execute(list_object_types_sql())
         return [row[0] for row in cur.fetchall()]
 
 
