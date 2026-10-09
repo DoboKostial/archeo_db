@@ -1,5 +1,8 @@
 # Personal GIS access
 
+See the [migration inventory and upgrade order](migrations/README.md) for all
+GIS database changes and the earlier web/mobile migrations.
+
 Apply GIS account management and project privileges together:
 
 ```bash
