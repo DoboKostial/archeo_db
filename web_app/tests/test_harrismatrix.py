@@ -223,9 +223,7 @@ def test_harrismatrix_page_renders_clickable_overlay(client, monkeypatch):
     assert 'id="hmatrixEntityModal"' not in html
     for modal in ("editSuModal", "editObjectModal", "inhumGraveModal", "hmatrixSuPickerModal"):
         assert html.count(f'id="{modal}"') == 1
-    assert 'name="return_to" value="harrismatrix"' in html
-    assert '<option value="author@example.invalid">' in html
-    assert '<option value="P1">' in html
+    assert 'name="return_to" value="su.harrismatrix"' in html
     assert '<option value="wall">' in html
     assert "js/harrismatrix.js" in html
     assert "js/archeo_objects_edit.js" in html
@@ -349,6 +347,11 @@ def test_harris_editor_preserves_zero_and_all_subtype_fields(typ):
 @pytest.mark.parametrize("return_to, destination", [
     ("harrismatrix", "/harrismatrix"), ("", "/add-sj"),
     ("https://example.invalid/", "/add-sj"),
+    ("su.harrismatrix", "/harrismatrix"), ("su.add_su", "/add-sj"),
+    ("polygons.polygons", "/polygons"), ("archeo_objects.objects", "/objects"),
+    ("sections.sections", "/sections"), ("photos.photos", "/photos"),
+    ("sketches.sketches", "/sketches"), ("drawings.drawings", "/drawings"),
+    ("photograms.photograms", "/photograms"), ("auth.logout", "/add-sj"),
 ])
 @pytest.mark.parametrize("valid", [False, True])
 def test_su_edit_returns_to_matrix_only_for_allowed_origin(client, monkeypatch, return_to, destination, valid):

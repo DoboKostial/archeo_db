@@ -5,7 +5,7 @@
 
 {% macro polygon_item_link(kind, value) -%}
   {%- if kind == "sus" -%}
-    <a href="{{ url_for('su.add_su', edit_su=value) }}">{{ value }}</a>
+    <a href="{{ url_for('su.add_su', edit_su=value) }}" data-su-id="{{ value }}">{{ value }}</a>
   {%- elif kind == "photos" -%}
     <a href="{{ url_for('photos.serve_photo_file', id_photo=value) }}" target="_blank" rel="noopener">{{ value }}</a>
   {%- elif kind == "photograms" -%}

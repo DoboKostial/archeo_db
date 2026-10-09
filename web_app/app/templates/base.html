@@ -41,8 +41,26 @@
         {% block content %}{% endblock %}
     </main>
 
+    {% if selected_db or session.get('selected_db') %}
+      {% if request.endpoint == 'su.add_su' %}
+        {% include "partials/su_edit_modal.html" %}
+      {% else %}
+        {% with authors=[], polygons=[] %}
+          {% include "partials/su_edit_modal.html" %}
+        {% endwith %}
+      {% endif %}
+    {% endif %}
+
     <!-- Bootstrap JS (local version) -->
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    {% if selected_db or session.get('selected_db') %}
+      <script>
+        window.ArcheoSuEditorConfig = {
+          detailUrl: {{ url_for('su.su_editor_data', sj_id=0) | tojson }}
+        };
+      </script>
+      <script src="{{ url_for('static', filename='js/su_edit.js', v='shared-su-editor-1') }}"></script>
+    {% endif %}
 
     {% block scripts %}{% endblock %}
 

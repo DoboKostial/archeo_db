@@ -21,7 +21,7 @@
 {% macro su_links(values, owner_id, prefix, owner_label) -%}
   {% if values %}
     {% for sj_id in values[:10] -%}
-      <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ', ' if not loop.last }}
+      <a href="{{ url_for('su.add_su', edit_su=sj_id) }}" data-su-id="{{ sj_id }}">{{ sj_id }}</a>{{ ', ' if not loop.last }}
     {%- endfor %}
     {% if values|length > 10 %}
       <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
@@ -33,7 +33,7 @@
       <template id="{{ prefix }}-items-{{ owner_id }}-sus">
         <ul class="list-unstyled mb-0">
           {% for sj_id in values %}
-            <li class="mb-2"><a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a></li>
+            <li class="mb-2"><a href="{{ url_for('su.add_su', edit_su=sj_id) }}" data-su-id="{{ sj_id }}">{{ sj_id }}</a></li>
           {% endfor %}
         </ul>
       </template>

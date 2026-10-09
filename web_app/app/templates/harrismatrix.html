@@ -68,7 +68,6 @@
   </form>
 
   <section class="hmatrix-output" aria-label="Generated Harris Matrix">
-    <div id="hmatrixEditorError" class="alert alert-danger d-none" role="alert"></div>
     {% if harris_image %}
       <div class="hmatrix-image-wrap">
         <img class="hmatrix-image"
@@ -90,7 +89,6 @@
   </section>
 </div>
 
-{% include "partials/su_edit_modal.html" %}
 {% include "partials/object_edit_modal.html" %}
 {% include "partials/object_grave_modal.html" %}
 
@@ -109,9 +107,6 @@
 </div>
 
 <script>
-  window.ArcheoHarrisConfig = {
-    suDetailBase: {{ url_for('su.harrismatrix_su_detail', sj_id=0) | tojson }}
-  };
   window.ArcheoObjectsConfig = {
     csrfToken: {{ csrf_token() | tojson }},
     urlApiGetObjectBase: {{ url_for('archeo_objects.api_get_object', id_object=0) | tojson }},
@@ -119,8 +114,7 @@
   };
 </script>
 <script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
-<script src="{{ url_for('static', filename='js/su.js', v='su-list-1') }}"></script>
 <script src="{{ url_for('static', filename='js/archeo_objects.js', v='hmatrix-edit-1') }}"></script>
 <script src="{{ url_for('static', filename='js/archeo_objects_edit.js', v='hmatrix-edit-1') }}"></script>
-<script src="{{ url_for('static', filename='js/harrismatrix.js', v='hmatrix-edit-1') }}"></script>
+<script src="{{ url_for('static', filename='js/harrismatrix.js', v='shared-su-editor-1') }}"></script>
 {% endblock %}

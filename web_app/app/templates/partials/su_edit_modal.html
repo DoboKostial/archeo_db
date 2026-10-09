@@ -8,14 +8,15 @@
 
       <div class="modal-body">
         <input type="hidden" name="id_sj" id="edit_id_sj" value="">
-        {% if su_edit_return_to is defined %}
-          <input type="hidden" name="return_to" value="{{ su_edit_return_to }}">
-        {% endif %}
+        <input type="hidden" name="return_to" value="{{ request.endpoint or 'su.add_su' }}">
+        <input type="hidden" name="return_query" value="{{ request.query_string.decode('utf-8', errors='replace') }}">
+        <div id="suEditLoading" class="text-muted mb-3 d-none" role="status">Loading...</div>
+        <div id="suEditError" class="alert alert-danger d-none" role="alert"></div>
 
         <div class="row g-3">
           <div class="col-lg-4">
             <fieldset class="border p-3 rounded-3 bg-light h-100">
-              <legend class="w-auto px-2">Basic info</legend>
+              <legend class="float-none w-auto px-2">Basic info</legend>
 
               <div class="mb-3">
                 <label for="edit_sj_typ" class="form-label">SU type</label>
@@ -109,7 +110,7 @@
 
           <div class="col-lg-4">
             <fieldset class="border p-3 rounded-3 bg-light h-100">
-              <legend class="w-auto px-2">Type-specific</legend>
+              <legend class="float-none w-auto px-2">Type-specific</legend>
 
               <div id="edit_deposit_fields" class="edit-sj-type-block">
                 <div class="mb-2">
@@ -233,7 +234,7 @@
 
           <div class="col-lg-4">
             <fieldset class="border p-3 rounded-3 bg-light mb-3">
-              <legend class="w-auto px-2">Polygons</legend>
+              <legend class="float-none w-auto px-2">Polygons</legend>
               <select id="edit_polygon_names" name="polygon_names" class="form-select" multiple size="8">
                 {% for p in polygons %}
                   <option value="{{ p }}">{{ p }}</option>
@@ -242,7 +243,7 @@
             </fieldset>
 
             <fieldset class="border p-3 rounded-3 bg-light">
-              <legend class="w-auto px-2">Stratigraphic relations</legend>
+              <legend class="float-none w-auto px-2">Stratigraphic relations</legend>
               <div class="mb-2">
                 <label class="form-label">Below (SU IDs)</label>
                 <input type="text" class="form-control" id="edit_below_ids" name="below_ids" placeholder="1, 2">

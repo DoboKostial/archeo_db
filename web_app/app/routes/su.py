@@ -3,6 +3,7 @@ import os
 import re
 import json
 from datetime import datetime
+from urllib.parse import parse_qsl, urlencode
 from psycopg2.extras import Json
 
 import networkx as nx
@@ -585,9 +586,26 @@ def delete_su():
 @require_selected_db
 def edit_su():
     selected_db = session["selected_db"]
-    return_endpoint = (
-        "su.harrismatrix" if request.form.get("return_to") == "harrismatrix" else "su.add_su"
-    )
+    return_endpoint = request.form.get("return_to")
+    if return_endpoint == "harrismatrix":
+        return_endpoint = "su.harrismatrix"
+    if return_endpoint not in {
+        "su.add_su", "su.harrismatrix", "polygons.polygons", "archeo_objects.objects",
+        "sections.sections", "photos.photos", "sketches.sketches",
+        "drawings.drawings", "photograms.photograms",
+    }:
+        return_endpoint = "su.add_su"
+    return_url = url_for(return_endpoint)
+    try:
+        return_query = [
+            (key, value) for key, value in parse_qsl(
+                request.form.get("return_query", ""), keep_blank_values=True, max_num_fields=100
+            ) if key != "edit_su"
+        ]
+    except ValueError:
+        return_query = []
+    if return_query:
+        return_url += "?" + urlencode(return_query)
 
     try:
         sj_id = int(request.form.get("id_sj") or "0")
@@ -617,7 +635,7 @@ def edit_su():
 
     except Exception as e:
         flash(f"Invalid SU edit data: {e}", "warning")
-        return redirect(url_for(return_endpoint))
+        return redirect(return_url)
 
     conn = get_terrain_connection(selected_db)
     conn.autocommit = False
@@ -683,7 +701,7 @@ def edit_su():
         except Exception:
             pass
 
-    return redirect(url_for(return_endpoint))
+    return redirect(return_url)
 
 
 # -------------------------------------------------------------------
@@ -912,10 +930,6 @@ def harrismatrix():
         cur.execute(count_sj_without_relation())
         sj_without_relation = cur.fetchone()[0]
 
-        cur.execute(list_authors_sql())
-        authors = [row[0] for row in cur.fetchall()]
-        cur.execute(list_polygon_names_sql())
-        polygons = [row[0] for row in cur.fetchall()]
         cur.execute(list_object_types_sql())
         object_types = [row[0] for row in cur.fetchall()]
 
@@ -941,10 +955,7 @@ def harrismatrix():
         sj_type_counts=sj_type_counts,
         harris_image=harris_image,
         harris_links=harris_links,
-        authors=authors,
-        polygons=polygons,
         object_types=object_types,
-        su_edit_return_to="harrismatrix",
     )
 
 
@@ -1026,6 +1037,27 @@ def _harris_object_payload(obj, inhum_grave):
         payload["inhum_grave"] = {"present": False}
 
     return payload
+
+
+@su_bp.get("/su/api/<int:sj_id>")
+@require_selected_db
+def su_editor_data(sj_id):
+    conn = get_terrain_connection(session["selected_db"])
+    try:
+        with conn.cursor() as cur:
+            cur.execute(harris_su_detail_sql(), (sj_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": f"SU #{sj_id} not found."}), 404
+            # Both entry points use the same field mapping as the SU listing.
+            editor = _su_row_to_dict(row[:9] + row[10:])
+            cur.execute(list_authors_sql())
+            authors = [value[0] for value in cur.fetchall()]
+            cur.execute(list_polygon_names_sql())
+            polygons = [value[0] for value in cur.fetchall()]
+        return jsonify(editor=editor, authors=authors, polygons=polygons)
+    finally:
+        conn.close()
 
 
 @su_bp.get("/harrismatrix/api/su/<int:sj_id>")
