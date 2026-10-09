@@ -1,0 +1,9 @@
+BEGIN;
+
+ALTER TYPE public.geopt_code
+    ADD VALUE IF NOT EXISTS 'FI' BEFORE 'SP';
+
+ALTER TYPE public.geopt_code
+    ADD VALUE IF NOT EXISTS 'PR' BEFORE 'SP';
+
+COMMIT;

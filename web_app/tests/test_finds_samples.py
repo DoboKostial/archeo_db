@@ -138,7 +138,8 @@ def test_finds_samples_page_uses_neutral_work_surface(client, monkeypatch):
     assert "bg-success-subtle" not in html
     assert "border-primary" not in html
     assert "border-success" not in html
-    assert "btn-primary" not in html
+    # The shared SU editor is separate from the finds/samples work surface.
+    assert "btn-primary" not in html.split("</main>", 1)[0]
     assert "btn-success" not in html
 
 

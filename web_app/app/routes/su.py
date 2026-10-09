@@ -3,6 +3,7 @@ import os
 import re
 import json
 from datetime import datetime
+from urllib.parse import parse_qsl, urlencode
 from psycopg2.extras import Json
 
 import networkx as nx
@@ -44,9 +45,12 @@ from app.queries import (
     get_all_objects,
     get_sj_with_object_refs,
     harris_su_detail_sql,
+    list_authors_sql,
+    list_object_types_sql,
     q_get_object_with_sjs,
     q_get_object_inhum_grave,
     list_polygon_names_sql,
+    polygons_hierarchy_sql,
     list_su_table_sql,
     list_su_for_media_select_sql,
     insert_sj_polygon_link_sql,
@@ -172,7 +176,7 @@ def _su_row_to_dict(row):
         "author": row[5] or "",
         "docu_plan": bool(row[6]),
         "docu_vertical": bool(row[7]),
-        "excav_extent": row[8] or "",
+        "excav_extent": "" if row[8] is None else row[8],
         "deposit_typ": row[9] or "",
         "color": row[10] or "",
         "boundary_visibility": row[11] or "",
@@ -197,6 +201,22 @@ def _su_row_to_dict(row):
         "equal_ids": [int(v) for v in (row[30] or [])],
         "documented_by": _documented_by_to_dict(row[31] if len(row) > 31 else {}),
     }
+
+
+def _su_polygon_memberships(direct_names, parents):
+    direct_names = list(dict.fromkeys(direct_names))
+    memberships = [{"name": name, "inherited": False} for name in direct_names]
+    seen = set(direct_names)
+    for name in direct_names:
+        path = {name}
+        parent = parents.get(name)
+        while parent and parent not in path:
+            path.add(parent)
+            if parent not in seen:
+                memberships.append({"name": parent, "inherited": True})
+                seen.add(parent)
+            parent = parents.get(parent)
+    return memberships
 
 
 def _save_su_subtype(cur, sj_id, sj_typ, form):
@@ -276,9 +296,10 @@ def add_su():
         cur.execute("SELECT mail FROM gloss_personalia ORDER BY mail;")
         authors = [row[0] for row in cur.fetchall()]
 
-        # Polygons list for in-page filtering
-        cur.execute(list_polygon_names_sql())
-        polygons = [r[0] for r in cur.fetchall()]
+        # Keep explicit SU links separate from inherited polygon memberships.
+        cur.execute(polygons_hierarchy_sql())
+        polygon_parents = dict(cur.fetchall())
+        polygons = list(polygon_parents)
 
         # SU list for Attach graphic documentation
         cur.execute(list_su_for_media_select_sql())
@@ -289,6 +310,8 @@ def add_su():
         # Full SU list; the template paginates it client-side.
         cur.execute(list_su_table_sql())
         sus = [_su_row_to_dict(r) for r in cur.fetchall()]
+        for su in sus:
+            su["polygon_memberships"] = _su_polygon_memberships(su["polygon_names"], polygon_parents)
 
         # Overview counts
         cur.execute(count_total_sj())
@@ -563,6 +586,26 @@ def delete_su():
 @require_selected_db
 def edit_su():
     selected_db = session["selected_db"]
+    return_endpoint = request.form.get("return_to")
+    if return_endpoint == "harrismatrix":
+        return_endpoint = "su.harrismatrix"
+    if return_endpoint not in {
+        "su.add_su", "su.harrismatrix", "polygons.polygons", "archeo_objects.objects",
+        "sections.sections", "photos.photos", "sketches.sketches",
+        "drawings.drawings", "photograms.photograms",
+    }:
+        return_endpoint = "su.add_su"
+    return_url = url_for(return_endpoint)
+    try:
+        return_query = [
+            (key, value) for key, value in parse_qsl(
+                request.form.get("return_query", ""), keep_blank_values=True, max_num_fields=100
+            ) if key != "edit_su"
+        ]
+    except ValueError:
+        return_query = []
+    if return_query:
+        return_url += "?" + urlencode(return_query)
 
     try:
         sj_id = int(request.form.get("id_sj") or "0")
@@ -592,7 +635,7 @@ def edit_su():
 
     except Exception as e:
         flash(f"Invalid SU edit data: {e}", "warning")
-        return redirect(url_for("su.add_su"))
+        return redirect(return_url)
 
     conn = get_terrain_connection(selected_db)
     conn.autocommit = False
@@ -643,6 +686,8 @@ def edit_su():
 
         conn.commit()
         flash(f"SU #{sj_id} updated.", "success")
+        if return_endpoint == "su.harrismatrix":
+            flash("Regenerate the matrix to reflect changes to stratigraphy or SU types.", "info")
         logger.info(f"[{selected_db}] SU updated id={sj_id} type={sj_typ}")
 
     except Exception as e:
@@ -656,7 +701,7 @@ def edit_su():
         except Exception:
             pass
 
-    return redirect(url_for("su.add_su"))
+    return redirect(return_url)
 
 
 # -------------------------------------------------------------------
@@ -885,6 +930,9 @@ def harrismatrix():
         cur.execute(count_sj_without_relation())
         sj_without_relation = cur.fetchone()[0]
 
+        cur.execute(list_object_types_sql())
+        object_types = [row[0] for row in cur.fetchall()]
+
     finally:
         try:
             cur.close()
@@ -907,6 +955,7 @@ def harrismatrix():
         sj_type_counts=sj_type_counts,
         harris_image=harris_image,
         harris_links=harris_links,
+        object_types=object_types,
     )
 
 
@@ -960,6 +1009,8 @@ def _harris_su_payload(row):
         "above_ids": [int(v) for v in (row[29] or [])],
         "below_ids": [int(v) for v in (row[30] or [])],
         "equal_ids": [int(v) for v in (row[31] or [])],
+        # The Harris detail query adds ref_object before the shared editor fields.
+        "editor": _su_row_to_dict(row[:9] + row[10:]),
     }
 
 
@@ -986,6 +1037,27 @@ def _harris_object_payload(obj, inhum_grave):
         payload["inhum_grave"] = {"present": False}
 
     return payload
+
+
+@su_bp.get("/su/api/<int:sj_id>")
+@require_selected_db
+def su_editor_data(sj_id):
+    conn = get_terrain_connection(session["selected_db"])
+    try:
+        with conn.cursor() as cur:
+            cur.execute(harris_su_detail_sql(), (sj_id,))
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": f"SU #{sj_id} not found."}), 404
+            # Both entry points use the same field mapping as the SU listing.
+            editor = _su_row_to_dict(row[:9] + row[10:])
+            cur.execute(list_authors_sql())
+            authors = [value[0] for value in cur.fetchall()]
+            cur.execute(list_polygon_names_sql())
+            polygons = [value[0] for value in cur.fetchall()]
+        return jsonify(editor=editor, authors=authors, polygons=polygons)
+    finally:
+        conn.close()
 
 
 @su_bp.get("/harrismatrix/api/su/<int:sj_id>")

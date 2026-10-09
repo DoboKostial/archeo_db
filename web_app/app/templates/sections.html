@@ -1,6 +1,7 @@
 {# app/templates/sections.html #}
 {% extends "base.html" %}
 {% block title %}Sections{% endblock %}
+{% from "macros/list_table.html" import column_header, su_links, items_modal %}
 
 {% macro section_doc_link(kind, value) -%}
   {%- if kind == "photos" -%}
@@ -16,21 +17,59 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro section_doc_group(label, kind, values) -%}
+{% macro section_doc_group(label, kind, values, section_id) -%}
   <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
     {{ label }} (
     {%- if values -%}
       {%- for value in values[:3] -%}
         <span class="text-break">{{ section_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
       {%- endfor -%}
-      {%- if values|length > 3 -%}
-        <span class="text-muted"> +{{ values|length - 3 }}</span>
+      {%- if values|length > 3 %}
+        <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
+                data-bs-toggle="modal" data-bs-target="#sectionsItemsModal"
+                data-items-template="sections-items-{{ section_id }}-{{ kind }}"
+                data-items-title="{{ label }}: Section {{ section_id }} ({{ values|length }})"
+                title="Show all {{ label }} for Section {{ section_id }}"
+                aria-label="Show all {{ label }} for Section {{ section_id }}">+{{ values|length - 3 }}</button>
+        <template id="sections-items-{{ section_id }}-{{ kind }}">
+          <ul class="list-unstyled mb-0">
+            {% for value in values %}
+              <li class="mb-2 text-break">{{ section_doc_link(kind, value) }}</li>
+            {% endfor %}
+          </ul>
+        </template>
       {%- endif -%}
     {%- else -%}
       0
     {%- endif -%}
     )
   </span>
+{%- endmacro %}
+
+{% macro cut_su_picker(select_id, size, heading_class="") -%}
+  <div data-cut-su-picker>
+    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+      <label for="{{ select_id }}" class="form-label mb-0 {{ heading_class }}">Select cut stratigraphic units</label>
+      <button type="button" class="polygon-column-button" data-su-search-button
+              title="Filter stratigraphic units" aria-label="Filter stratigraphic units"
+              aria-controls="{{ select_id }}Filter" aria-expanded="false" {% if not sj_ids %}disabled{% endif %}>
+        <span class="polygon-list-icon polygon-icon-search" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div id="{{ select_id }}Filter" class="mb-2" data-su-search-panel hidden>
+      <input id="{{ select_id }}Search" type="search" class="form-control form-control-sm" data-su-search
+             placeholder="SU ID" aria-label="Filter stratigraphic units by ID" aria-controls="{{ select_id }}"
+             autocomplete="off">
+    </div>
+    <select class="form-select" name="ref_sj[]" id="{{ select_id }}" multiple size="{{ size }}"
+            aria-describedby="{{ select_id }}Status">
+      {% for sj in sj_ids %}
+        <option value="{{ sj }}">{{ sj }}</option>
+      {% endfor %}
+    </select>
+    <div id="{{ select_id }}Status" class="form-text" data-su-search-status role="status"></div>
+    <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+  </div>
 {%- endmacro %}
 
 {% block content %}
@@ -117,13 +156,7 @@
     <!-- Right: Bind SUs (moved here to save vertical space) -->
     <div class="col-md-5">
       <div class="p-3 rounded-3 border">
-        <h5 class="mb-2">Select cut stratigraphic units</h5>
-        <select class="form-select" name="ref_sj[]" multiple size="14">
-          {% for sj in sj_ids %}
-            <option value="{{ sj }}">{{ sj }}</option>
-          {% endfor %}
-        </select>
-        <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+        {{ cut_su_picker("sectionSjs", 14, "h5") }}
       </div>
     </div>
 
@@ -159,14 +192,73 @@
     }
   </script>
 
-  <!-- Row 2: Existing sections list + GLOBAL actions -->
+  <!-- Row 2: Attach graphic documentation -->
+  <fieldset class="border p-3 bg-success-subtle mt-4">
+    <legend class="w-auto px-2">Attach graphic documentation</legend>
+
+    <!-- Authors datalist -->
+    <datalist id="authors-list">
+      {% for a in authors %}
+        <option value="{{ a }}"></option>
+      {% endfor %}
+    </datalist>
+
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-md-6">
+        <label class="form-label">Select section</label>
+        <select id="secDocSelect" class="form-select">
+          <option value="" selected>-- select section --</option>
+          {% for s in sections %}
+            <option value="{{ s.id }}">{{ s.id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <div class="alert alert-light border mb-0 py-2">
+          <span class="text-muted">Selected:</span>
+          <strong id="secDocSelectedLabel" class="ms-1">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecPhotos">
+        Upload photos
+      </button>
+      <button type="button" class="btn btn-secondary secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecSketches">
+        Upload sketches
+      </button>
+      <button type="button" class="btn btn-warning secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecPhotograms">
+        Upload photograms
+      </button>
+      <button type="button" class="btn btn-dark secDocBtn"
+              data-bs-toggle="modal" data-bs-target="#modalSecDrawings">
+        Upload drawings
+      </button>
+    </div>
+
+    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+  </fieldset>
+
+  <!-- Row 3: Existing sections list + GLOBAL actions -->
   <div class="row g-3 mt-3">
     <div class="col-12">
-      <div class="p-3 rounded-3 border list-panel">
+      <div class="p-3 rounded-3 border list-panel sections-list-panel">
 
         <!-- Header + global buttons -->
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-          <h4 class="mb-0">Existing sections</h4>
+          <div class="d-flex align-items-center gap-2">
+            <h4 class="mb-0">Existing sections</h4>
+            {% if sections %}
+              <button type="button" id="sectionsResetTable" class="polygon-column-button"
+                      title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+                <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+              </button>
+            {% endif %}
+          </div>
 
           <div class="d-flex gap-2 flex-wrap">
             <form method="POST" action="{{ url_for('sections.rebuild_all_sections') }}" class="m-0">
@@ -191,20 +283,19 @@
 
         {% if sections and sections|length %}
           <div class="table-responsive">
-            <table class="table table-sm table-bordered align-middle mb-0 w-100">
+            <table id="sectionsTable" class="table table-sm table-striped table-bordered align-middle mb-0 w-100" data-page-size="10">
               <thead class="table-light">
                 <tr>
-                  <th style="width:90px;">ID</th>
-                  <th style="width:140px;">Type</th>
-                  <th>Description</th>
-                  <th class="text-end" style="width:90px;">SRID</th>
-                  <th class="text-end" style="width:150px;">POINT RANGES</th>
-                  <th style="width:150px;">SUs cut</th>
-                  <th style="width:280px;">Is documented by:</th>
-                  <th class="text-end" style="width:170px;">ACTIONS</th>
+                  <th scope="col" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ column_header("ID", "id", "sections") }}</th>
+                  <th scope="col" style="width:140px;" data-column="type" aria-sort="none">{{ column_header("Type", "type", "sections") }}</th>
+                  <th scope="col" style="min-width:180px;" data-column="description" aria-sort="none">{{ column_header("Description", "description", "sections") }}</th>
+                  <th scope="col" class="text-end" style="width:150px;" data-column="ranges" aria-sort="none">{{ column_header("POINT RANGES", "ranges", "sections") }}</th>
+                  <th scope="col" style="min-width:160px;" data-column="sus" aria-sort="none">{{ column_header("SUs cut", "sus", "sections") }}</th>
+                  <th scope="col" style="min-width:280px;" data-column="documentation" aria-sort="none">{{ column_header("Is documented by:", "documentation", "sections") }}</th>
+                  <th scope="col" class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="sectionsTableBody">
                 {% for s in sections %}
                 {% set edit_payload = {
                   "id": s.id,
@@ -214,29 +305,20 @@
                   "sj_ids": s.sj_ids
                 } %}
                 {% set docs = s.documented_by %}
-                <tr>
+                <tr data-list-row>
                   <td>{{ s.id }}</td>
                   <td>{{ s.type }}</td>
-                  <td class="text-break">{{ s.description }}</td>
-                  <td class="text-end">{{ s.srid }}</td>
-                  <td class="text-break">{{ s.ranges }}</td>
-                  <td>
-                    {% if s.sj_ids %}
-                      {% for sj_id in s.sj_ids %}
-                        <a href="{{ url_for('su.add_su', edit_su=sj_id) }}">{{ sj_id }}</a>{{ ", " if not loop.last }}
-                      {% endfor %}
-                    {% else %}
-                      <span class="text-muted">—</span>
-                    {% endif %}
-                  </td>
-                  <td class="small">
+                  <td class="text-break" data-search-value="{{ s.description or '' }}">{{ s.description or '—' }}</td>
+                  <td class="text-break" data-search-value="{{ s.ranges if s.ranges and s.ranges != '—' else '' }}">{{ s.ranges }}</td>
+                  <td data-search-value="{{ s.sj_ids|join(', ') }}">{{ su_links(s.sj_ids, s.id, "sections", "Section") }}</td>
+                  <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Drawings ({{ docs.drawings|join(', ') if docs.drawings else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
                     <div>
-                      {{ section_doc_group("Photos", "photos", docs.photos) }}
-                      {{ section_doc_group("Photograms", "photograms", docs.photograms) }}
+                      {{ section_doc_group("Photos", "photos", docs.photos, s.id) }}
+                      {{ section_doc_group("Photograms", "photograms", docs.photograms, s.id) }}
                     </div>
                     <div>
-                      {{ section_doc_group("Drawings", "drawings", docs.drawings) }}
-                      {{ section_doc_group("Sketches", "sketches", docs.sketches) }}
+                      {{ section_doc_group("Drawings", "drawings", docs.drawings, s.id) }}
+                      {{ section_doc_group("Sketches", "sketches", docs.sketches, s.id) }}
                     </div>
                   </td>
 
@@ -260,8 +342,17 @@
                   </td>
                 </tr>
                 {% endfor %}
+                <tr id="sectionsNoMatches" hidden>
+                  <td colspan="7" class="text-center text-muted py-3">No sections match the filters.</td>
+                </tr>
               </tbody>
             </table>
+          </div>
+          <div id="sectionsPaginationWrap" class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+            <div id="sectionsPaginationSummary" class="text-muted small"></div>
+            <nav aria-label="Existing sections pagination">
+              <ul id="sectionsPagination" class="pagination pagination-sm mb-0"></ul>
+            </nav>
           </div>
         {% else %}
           <p class="text-muted mb-0">No sections stored yet.</p>
@@ -269,6 +360,8 @@
       </div>
     </div>
   </div>
+
+  {{ items_modal('sectionsItemsModal') }}
 
   <!-- Edit section modal -->
   <div class="modal fade" id="editSectionModal" tabindex="-1" aria-hidden="true">
@@ -317,13 +410,7 @@
           </div>
 
           <div class="mt-3">
-            <label class="form-label">Select cut stratigraphic units</label>
-            <select class="form-select" name="ref_sj[]" id="editSectionSjs" multiple size="10">
-              {% for sj in sj_ids %}
-                <option value="{{ sj }}">{{ sj }}</option>
-              {% endfor %}
-            </select>
-            <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
+            {{ cut_su_picker("editSectionSjs", 10) }}
           </div>
         </div>
 
@@ -421,6 +508,7 @@
         Array.from(sjSelect.options).forEach(option => {
           option.selected = selectedSjs.has(option.value);
         });
+        sjSelect.dispatchEvent(new Event('cut-su-reset'));
       });
 
       const requestedId = {{ open_edit_section_id|tojson }};
@@ -679,59 +767,6 @@
     });
   </script>
 
-
-  <!-- Row 3: Graphic documentation -->
-  <div class="container mt-4">
-    <fieldset class="border p-3 bg-success-subtle">
-      <legend class="w-auto px-2">Graphic documentation</legend>
-
-      <!-- Authors datalist -->
-      <datalist id="authors-list">
-        {% for a in authors %}
-          <option value="{{ a }}"></option>
-        {% endfor %}
-      </datalist>
-
-      <div class="row g-2 align-items-end mb-3">
-        <div class="col-md-6">
-          <label class="form-label">Select section</label>
-          <select id="secDocSelect" class="form-select">
-            <option value="" selected>-- select section --</option>
-            {% for s in sections %}
-              <option value="{{ s.id }}">{{ s.id }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <div class="alert alert-light border mb-0 py-2">
-            <span class="text-muted">Selected:</span>
-            <strong id="secDocSelectedLabel" class="ms-1">—</strong>
-          </div>
-        </div>
-      </div>
-
-      <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-primary secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecPhotos">
-          Upload photos
-        </button>
-        <button type="button" class="btn btn-secondary secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecSketches">
-          Upload sketches
-        </button>
-        <button type="button" class="btn btn-warning secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecPhotograms">
-          Upload photograms
-        </button>
-        <button type="button" class="btn btn-dark secDocBtn"
-                data-bs-toggle="modal" data-bs-target="#modalSecDrawings">
-          Upload drawings
-        </button>
-      </div>
-
-      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-    </fieldset>
-  </div>
 
   <!-- Photos modal -->
   <div class="modal fade" id="modalSecPhotos" tabindex="-1" aria-hidden="true">
@@ -1039,4 +1074,80 @@
 
 
 
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
+<script>
+  function initCutSuPickers() {
+    document.querySelectorAll('[data-cut-su-picker]').forEach(picker => {
+      const select = picker.querySelector('select');
+      const options = Array.from(select.options);
+      const button = picker.querySelector('[data-su-search-button]');
+      const panel = picker.querySelector('[data-su-search-panel]');
+      const input = picker.querySelector('[data-su-search]');
+      const status = picker.querySelector('[data-su-search-status]');
+      let selected = new Set(Array.from(select.selectedOptions, option => option.value));
+
+      function render() {
+        const query = input.value.trim().toLocaleLowerCase();
+        let visible = 0;
+        options.forEach(option => {
+          option.hidden = !option.textContent.toLocaleLowerCase().includes(query);
+          if (!option.hidden) visible += 1;
+        });
+        button.classList.toggle('is-active', Boolean(query));
+        status.textContent = options.length
+          ? `${visible ? `Showing ${visible} of ${options.length}` : 'No SUs match the filter.'} | Selected: ${selected.size}`
+          : 'No SUs available.';
+      }
+
+      function closeSearch() {
+        input.value = '';
+        panel.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+        render();
+      }
+
+      button.addEventListener('click', () => {
+        if (panel.hidden) {
+          panel.hidden = false;
+          button.setAttribute('aria-expanded', 'true');
+          input.focus();
+        } else {
+          closeSearch();
+        }
+      });
+      input.addEventListener('input', render);
+      input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') event.preventDefault();
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSearch();
+          button.focus();
+        }
+      });
+      select.addEventListener('change', () => {
+        // Native multi-select clicks may clear hidden selections; only update visible options.
+        options.forEach(option => {
+          if (option.hidden) return;
+          if (option.selected) selected.add(option.value);
+          else selected.delete(option.value);
+        });
+        options.forEach(option => option.selected = selected.has(option.value));
+        render();
+      });
+      const reset = () => {
+        selected = new Set(Array.from(select.selectedOptions, option => option.value));
+        closeSearch();
+      };
+      select.addEventListener('cut-su-reset', reset);
+      select.form.addEventListener('reset', () => setTimeout(reset, 0));
+      render();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initCutSuPickers();
+    ArcheoDBInitListTable('sections');
+    ArcheoDBInitListItemsModal('sectionsItemsModal');
+  });
+</script>
 {% endblock %}

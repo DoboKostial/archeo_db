@@ -142,6 +142,10 @@ def list_authors_sql():
     return "SELECT mail FROM gloss_personalia ORDER BY mail;"
 
 
+def list_object_types_sql():
+    return "SELECT object_typ FROM gloss_object_type ORDER BY object_typ;"
+
+
 # -------------------------------------------------------------------
 # Admin + SRID helpers (auth_db + terrain_db_template + terrain DBs)
 # -------------------------------------------------------------------
@@ -999,7 +1003,9 @@ def get_polygons_list():
       has_bottom (binding exists),
       notes,
       top_ranges,
-      bottom_ranges
+      bottom_ranges,
+      documented_by,
+      sj_ids (linked SUs, ordered by ID)
     """
     return """
         SELECT
@@ -1085,7 +1091,14 @@ def get_polygons_list():
                   ),
                   '[]'::jsonb
                 )
-            )                                           AS documented_by
+            )                                           AS documented_by,
+
+            ARRAY(
+              SELECT DISTINCT x.ref_sj
+              FROM tabaid_sj_polygon x
+              WHERE x.ref_polygon = p.polygon_name
+              ORDER BY x.ref_sj
+            )                                           AS sj_ids
 
         FROM tab_polygons p
         ORDER BY p.polygon_name;
@@ -3473,6 +3486,40 @@ def stats_su_by_type_sql():
     """
 
 
+def stats_su_by_documentation_sql():
+    return """
+        SELECT
+          COUNT(*) FILTER (WHERE docu_plan IS TRUE AND docu_vertical IS TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS TRUE AND docu_vertical IS NOT TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS NOT TRUE AND docu_vertical IS TRUE)::int,
+          COUNT(*) FILTER (WHERE docu_plan IS NOT TRUE AND docu_vertical IS NOT TRUE)::int
+        FROM tab_sj;
+    """
+
+
+def stats_su_by_excav_extent_sql():
+    return """
+        SELECT
+          CASE
+            WHEN excav_extent IS NULL THEN 'Unknown'
+            ELSE excav_extent::text || '%'
+          END AS label,
+          COUNT(*)::int
+        FROM tab_sj
+        GROUP BY excav_extent
+        ORDER BY excav_extent DESC NULLS LAST;
+    """
+
+
+def stats_su_by_excav_completeness_sql():
+    return """
+        SELECT
+          COUNT(*) FILTER (WHERE excav_extent = 100)::int AS fully_excavated,
+          COUNT(*) FILTER (WHERE excav_extent < 100)::int AS not_fully_excavated
+        FROM tab_sj;
+    """
+
+
 def stats_objects_by_type_sql():
     return """
         SELECT COALESCE(NULLIF(object_typ,''), 'unknown') AS object_typ, COUNT(*)::int
@@ -3775,6 +3822,24 @@ def rule_su_without_any_documentation_sql():
           AND NOT EXISTS (SELECT 1 FROM tabaid_sj_drawings d WHERE d.ref_sj = s.id_sj)
           AND NOT EXISTS (SELECT 1 FROM tabaid_sj_sketch k WHERE k.ref_sj = s.id_sj)
         ORDER BY s.id_sj;
+    """
+
+
+def rule_su_unknown_excav_extent_sql():
+    return """
+        SELECT id_sj
+        FROM tab_sj
+        WHERE excav_extent IS NULL
+        ORDER BY id_sj;
+    """
+
+
+def rule_su_without_plan_or_vertical_sql():
+    return """
+        SELECT id_sj, COALESCE(docu_plan, false), COALESCE(docu_vertical, false)
+        FROM tab_sj
+        WHERE docu_plan IS NOT TRUE AND docu_vertical IS NOT TRUE
+        ORDER BY id_sj;
     """
 
 

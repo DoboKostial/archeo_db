@@ -107,6 +107,7 @@ def polygons():
                     "top_ranges": _json_list(row[9]),
                     "bottom_ranges": _json_list(row[10]),
                     "documented_by": _documented_by_to_dict(row[11] if len(row) > 11 else {}),
+                    "sj_ids": _json_list(row[12] if len(row) > 12 else None),
                 }
                 for row in cur.fetchall()
             ]

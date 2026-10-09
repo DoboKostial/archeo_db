@@ -1,7 +1,7 @@
 {% macro entity_link(kind, value) -%}
   {%- set text = value|string -%}
   {%- if kind == "su" -%}
-    <a class="entity-inline-link" href="{{ url_for('su.add_su', edit_su=value) }}">{{ text }}</a>
+    <a class="entity-inline-link" href="{{ url_for('su.add_su', edit_su=value) }}" data-su-id="{{ value }}">{{ text }}</a>
   {%- elif kind == "polygon" -%}
     <a class="entity-inline-link" href="{{ url_for('polygons.polygons', edit_polygon=value) }}">{{ text }}</a>
   {%- elif kind == "section" -%}

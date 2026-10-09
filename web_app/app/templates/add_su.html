@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block title %}Stratigraphic units{% endblock %}
+{% from "macros/list_table.html" import column_header as su_column_header, items_modal %}
 
 {% macro su_doc_link(kind, value) -%}
   {%- if kind == "photos" -%}
@@ -15,16 +16,39 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro su_doc_group(label, kind, values) -%}
+{% macro su_polygon_link(polygon) -%}
+  <a href="{{ url_for('polygons.polygons', edit_polygon=polygon.name) }}">{{ polygon.name }}</a>
+  {%- if polygon.inherited %} <span class="text-muted">(inherited)</span>{% endif -%}
+{%- endmacro %}
+
+{% macro su_list_overflow(label, kind, values, su) -%}
+  {%- if values|length > 3 %}
+    <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
+            data-bs-toggle="modal" data-bs-target="#suItemsModal"
+            data-items-template="su-items-{{ su.id }}-{{ kind }}"
+            data-items-title="{{ label }}: SU {{ su.id }} ({{ values|length }})"
+            title="Show all {{ label }} for SU {{ su.id }}"
+            aria-label="Show all {{ label }} for SU {{ su.id }}">+{{ values|length - 3 }}</button>
+    <template id="su-items-{{ su.id }}-{{ kind }}">
+      <ul class="list-unstyled mb-0">
+        {% for value in values %}
+          <li class="mb-2 text-break">
+            {{ su_polygon_link(value) if kind == "polygons" else su_doc_link(kind, value) }}
+          </li>
+        {% endfor %}
+      </ul>
+    </template>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro su_doc_group(label, kind, values, su) -%}
   <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
     {{ label }} (
     {%- if values -%}
       {%- for value in values[:3] -%}
         <span class="text-break">{{ su_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
       {%- endfor -%}
-      {%- if values|length > 3 -%}
-        <span class="text-muted"> +{{ values|length - 3 }}</span>
-      {%- endif -%}
+      {{ su_list_overflow(label, kind, values, su) }}
     {%- else -%}
       0
     {%- endif -%}
@@ -542,10 +566,78 @@
 
 
   <!-- ===========================================================
-       2) SUS LIST (counts + table actions)
+       2) ATTACH GRAPHIC DOCUMENTATION (selected existing SU)
        =========================================================== -->
-  <fieldset class="border p-3 rounded-3 list-panel mt-4">
-    <legend class="w-auto px-2">SUs list</legend>
+  <fieldset class="border p-3 rounded-3 bg-success-subtle mt-4">
+    <legend class="w-auto px-2">Attach graphic documentation</legend>
+
+    <!-- SU selector (single input with dynamic suggestions) -->
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-12 position-relative">
+        <label class="form-label">Select SU</label>
+
+        <input id="suMediaInput"
+               type="text"
+               class="form-control"
+               placeholder="Start typing SU ID..."
+               autocomplete="off">
+
+        <div id="suSuggestions"
+             class="list-group position-absolute w-100 d-none"
+             style="z-index: 1000;"></div>
+
+        <!-- Hidden source for JS -->
+        <datalist id="suDatalist">
+          {% for su in su_for_media %}
+            <option value="{{ su.id }}"
+                    label="{{ su.id }}{% if su.typ %} ({{ su.typ }}){% endif %}{% if su.desc %} - {{ su.desc[:60] }}{% endif %}">
+            </option>
+          {% endfor %}
+        </datalist>
+
+        <div class="form-text">Pick an existing SU first — uploads will attach to it.</div>
+      </div>
+
+      <div class="col-12">
+        <div class="alert alert-light border mb-0 py-2">
+          <span class="text-muted">Selected:</span>
+          <strong id="suMediaSelectedLabel" class="ms-1">—</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" class="btn btn-primary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotos">
+        Upload photos
+      </button>
+      <button type="button" class="btn btn-secondary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalSketches">
+        Upload sketches
+      </button>
+      <button type="button" class="btn btn-info suDocBtn" data-bs-toggle="modal" data-bs-target="#modalDrawings">
+        Upload drawings
+      </button>
+      <button type="button" class="btn btn-warning suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotograms">
+        Upload photograms
+      </button>
+    </div>
+
+    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+  </fieldset>
+
+  <!-- ===========================================================
+       3) EXISTING SUS (counts + table actions)
+       =========================================================== -->
+  <fieldset class="border p-3 rounded-3 list-panel su-list-panel mt-4">
+    <legend class="w-auto px-2">
+      Existing SUs
+      {% if sus %}
+        <button type="button" id="suResetTable" class="polygon-column-button"
+                title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+          <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+        </button>
+      {% endif %}
+    </legend>
 
     <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
       <span><span class="text-muted">Total</span> <strong class="fs-6">{{ sj_count_total }}</strong></span>
@@ -554,39 +646,46 @@
       <span><span class="text-muted">Structures</span> <strong class="fs-6">{{ sj_count_structure }}</strong></span>
     </div>
 
-    <h6 class="mb-2">Stored SUs</h6>
-
     {% if sus and sus|length > 0 %}
       <div class="table-responsive">
         <table id="suTable" class="table table-sm table-striped align-middle" data-page-size="10">
           <thead>
             <tr>
-              <th class="text-end">ID</th>
-              <th>Type</th>
-              <th>Description</th>
-              <th>Recorded</th>
-              <th>Author</th>
-              <th>Is documented by:</th>
-              <th class="text-end">Action</th>
+              <th scope="col" class="text-end" data-column="id" data-sort-type="number" aria-sort="none">{{ su_column_header("ID", "id", "su") }}</th>
+              <th scope="col" data-column="type" aria-sort="none">{{ su_column_header("Type", "type", "su") }}</th>
+              <th scope="col" style="min-width:180px;" data-column="description" aria-sort="none">{{ su_column_header("Description", "description", "su") }}</th>
+              <th scope="col" data-column="recorded" aria-sort="none">{{ su_column_header("Recorded", "recorded", "su") }}</th>
+              <th scope="col" style="min-width:160px;" data-column="author" aria-sort="none">{{ su_column_header("Author", "author", "su") }}</th>
+              <th scope="col" style="min-width:140px;" data-column="polygon" aria-sort="none">{{ su_column_header("Polygon", "polygon", "su") }}</th>
+              <th scope="col" style="min-width:250px;" data-column="documentation" aria-sort="none">{{ su_column_header("Is documented by:", "documentation", "su") }}</th>
+              <th scope="col" class="text-end">Action</th>
             </tr>
           </thead>
           <tbody id="suTableBody">
             {% for su in sus %}
               {% set docs = su.documented_by %}
-              <tr>
+              <tr data-list-row>
                 <td class="text-end"><strong>{{ su.id }}</strong></td>
-                <td>{{ su.typ or '—' }}</td>
-                <td title="{{ su.desc }}">{{ (su.desc[:120] ~ ('…' if su.desc|length > 120 else '')) if su.desc else '—' }}</td>
-                <td>{{ su.recorded if su.recorded else '—' }}</td>
-                <td>{{ su.author if su.author else '—' }}</td>
-                <td class="small">
+                <td data-search-value="{{ su.typ }}">{{ su.typ or '—' }}</td>
+                <td title="{{ su.desc }}" data-search-value="{{ su.desc }}">{{ (su.desc[:120] ~ ('…' if su.desc|length > 120 else '')) if su.desc else '—' }}</td>
+                <td class="text-nowrap" data-search-value="{{ su.recorded }}">{{ su.recorded if su.recorded else '—' }}</td>
+                <td class="text-break" data-search-value="{{ su.author }}">{{ su.author if su.author else '—' }}</td>
+                <td class="small text-break" data-search-value="{% for polygon in su.polygon_memberships %}{{ polygon.name }}{{ ' (inherited)' if polygon.inherited }}{{ ', ' if not loop.last }}{% endfor %}">
+                  {% if su.polygon_memberships %}
+                    {% for polygon in su.polygon_memberships[:3] %}
+                      {{ su_polygon_link(polygon) }}{{ ', ' if not loop.last }}
+                    {% endfor %}
+                    {{ su_list_overflow("Polygons", "polygons", su.polygon_memberships, su) }}
+                  {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Drawings ({{ docs.drawings|join(', ') if docs.drawings else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
                   <div>
-                    {{ su_doc_group("Photos", "photos", docs.photos) }}
-                    {{ su_doc_group("Photograms", "photograms", docs.photograms) }}
+                    {{ su_doc_group("Photos", "photos", docs.photos, su) }}
+                    {{ su_doc_group("Photograms", "photograms", docs.photograms, su) }}
                   </div>
                   <div>
-                    {{ su_doc_group("Drawings", "drawings", docs.drawings) }}
-                    {{ su_doc_group("Sketches", "sketches", docs.sketches) }}
+                    {{ su_doc_group("Drawings", "drawings", docs.drawings, su) }}
+                    {{ su_doc_group("Sketches", "sketches", docs.sketches, su) }}
                   </div>
                 </td>
                 <td class="text-end">
@@ -609,13 +708,16 @@
                 </td>
               </tr>
             {% endfor %}
+            <tr id="suNoMatches" hidden>
+              <td colspan="8" class="text-center text-muted py-3">No SUs match the filters.</td>
+            </tr>
           </tbody>
         </table>
       </div>
       <div id="suPaginationWrap"
            class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
         <div id="suPaginationSummary" class="text-muted small"></div>
-        <nav aria-label="SUs pagination">
+        <nav aria-label="Existing SUs pagination">
           <ul id="suPagination" class="pagination pagination-sm mb-0"></ul>
         </nav>
       </div>
@@ -624,67 +726,7 @@
     {% endif %}
   </fieldset>
 
-
-  <!-- ===========================================================
-       3) ATTACH GRAPHIC DOCUMENTATION (selected existing SU)
-       =========================================================== -->
-  <fieldset class="border p-3 rounded-3 bg-success-subtle mt-4">
-    <legend class="w-auto px-2">Attach graphic documentation</legend>
-
-        <!-- SU selector (single input with dynamic suggestions) -->
-        <div class="row g-2 align-items-end mb-3">
-          <div class="col-12 position-relative">
-            <label class="form-label">Select SU</label>
-
-            <input id="suMediaInput"
-                  type="text"
-                  class="form-control"
-                  placeholder="Start typing SU ID..."
-                  autocomplete="off">
-
-            <div id="suSuggestions"
-                class="list-group position-absolute w-100 d-none"
-                style="z-index: 1000;"></div>
-
-            <!-- Hidden source for JS -->
-            <datalist id="suDatalist">
-              {% for su in su_for_media %}
-                <option value="{{ su.id }}"
-                        label="{{ su.id }}{% if su.typ %} ({{ su.typ }}){% endif %}{% if su.desc %} - {{ su.desc[:60] }}{% endif %}">
-                </option>
-              {% endfor %}
-            </datalist>
-
-            <div class="form-text">Pick an existing SU first — uploads will attach to it.</div>
-          </div>
-
-          <div class="col-12">
-            <div class="alert alert-light border mb-0 py-2">
-              <span class="text-muted">Selected:</span>
-              <strong id="suMediaSelectedLabel" class="ms-1">—</strong>
-            </div>
-          </div>
-        </div>
-
-
-    <!-- action buttons -->
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotos">
-        Upload photos
-      </button>
-      <button type="button" class="btn btn-secondary suDocBtn" data-bs-toggle="modal" data-bs-target="#modalSketches">
-        Upload sketches
-      </button>
-      <button type="button" class="btn btn-info suDocBtn" data-bs-toggle="modal" data-bs-target="#modalDrawings">
-        Upload drawings
-      </button>
-      <button type="button" class="btn btn-warning suDocBtn" data-bs-toggle="modal" data-bs-target="#modalPhotograms">
-        Upload photograms
-      </button>
-    </div>
-
-    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-  </fieldset>
+  {{ items_modal('suItemsModal') }}
 
 </div>
 
@@ -692,272 +734,6 @@
 <!-- ===========================================================
      EDIT SU MODAL
      =========================================================== -->
-<div class="modal fade" id="editSuModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
-    <form method="post" action="{{ url_for('su.edit_su') }}" class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit SU <span id="editSuTitle">—</span></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-
-      <div class="modal-body">
-        <input type="hidden" name="id_sj" id="edit_id_sj" value="">
-
-        <div class="row g-3">
-          <div class="col-lg-4">
-            <fieldset class="border p-3 rounded-3 bg-light h-100">
-              <legend class="w-auto px-2">Basic info</legend>
-
-              <div class="mb-3">
-                <label for="edit_sj_typ" class="form-label">SU type</label>
-                <select class="form-select" id="edit_sj_typ" name="sj_typ" required>
-                  <option value="deposit">Deposit</option>
-                  <option value="negativ">Negativ</option>
-                  <option value="structure">Structure</option>
-                </select>
-              </div>
-
-              <div class="mb-3">
-                <label for="edit_recorded" class="form-label">Recorded</label>
-                <input type="date" class="form-control" id="edit_recorded" name="recorded">
-              </div>
-
-              <div class="mb-3">
-                <label for="edit_excav_extent" class="form-label">Excavation extent (%)</label>
-                <div class="excav-extent-picker">
-                  <input type="number"
-                         class="form-control excav-extent-input"
-                         id="edit_excav_extent"
-                         name="excav_extent"
-                         min="0"
-                         max="100"
-                         step="1"
-                         placeholder="%">
-                  <div class="excav-extent-actions"
-                       data-choice-group
-                       data-choice-target="edit_excav_extent"
-                       aria-label="Quick excavation extent selection">
-                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="0" title="0%" aria-label="Excavation extent 0%">
-                      <span class="negative-mini-icon extent-choice-icon extent-empty" aria-hidden="true">
-                        <span class="extent-percent-label">0%</span>
-                      </span>
-                    </button>
-                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="25" title="25%" aria-label="Excavation extent 25%">
-                      <span class="negative-mini-icon extent-choice-icon extent-quarter" aria-hidden="true">
-                        <span class="extent-percent-label">25%</span>
-                      </span>
-                    </button>
-                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="50" title="50%" aria-label="Excavation extent 50%">
-                      <span class="negative-mini-icon extent-choice-icon extent-half" aria-hidden="true">
-                        <span class="extent-percent-label">50%</span>
-                      </span>
-                    </button>
-                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="75" title="75%" aria-label="Excavation extent 75%">
-                      <span class="negative-mini-icon extent-choice-icon extent-three-quarter" aria-hidden="true">
-                        <span class="extent-percent-label">75%</span>
-                      </span>
-                    </button>
-                    <button type="button" class="negative-choice-btn excav-extent-btn" data-choice-value="100" title="100%" aria-label="Excavation extent 100%">
-                      <span class="negative-mini-icon extent-choice-icon extent-full" aria-hidden="true">
-                        <span class="extent-percent-label">100%</span>
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mb-3">
-                <label for="edit_author" class="form-label">Author (email)</label>
-                <select class="form-select" id="edit_author" name="author" required>
-                  <option value="">-- choose --</option>
-                  {% for a in authors %}
-                    <option value="{{ a }}">{{ a }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-
-              <div class="mb-3">
-                <label for="edit_description" class="form-label">Description</label>
-                <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
-              </div>
-
-              <div class="mb-3">
-                <label for="edit_interpretation" class="form-label">Interpretation</label>
-                <textarea class="form-control" id="edit_interpretation" name="interpretation" rows="2"></textarea>
-              </div>
-
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="edit_docu_plan" name="docu_plan">
-                <label class="form-check-label" for="edit_docu_plan">Documentation: plan</label>
-              </div>
-
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="edit_docu_vertical" name="docu_vertical">
-                <label class="form-check-label" for="edit_docu_vertical">Documentation: vertical</label>
-              </div>
-            </fieldset>
-          </div>
-
-          <div class="col-lg-4">
-            <fieldset class="border p-3 rounded-3 bg-light h-100">
-              <legend class="w-auto px-2">Type-specific</legend>
-
-              <div id="edit_deposit_fields" class="edit-sj-type-block">
-                <div class="mb-2">
-                  <label class="form-label">Deposit type</label>
-                  <input type="text" class="form-control" name="deposit_typ" id="edit_deposit_typ">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Color</label>
-                  <input type="text" class="form-control" name="color" id="edit_color">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Boundary visibility</label>
-                  <input type="hidden" name="boundary_visibility" id="edit_boundary_visibility">
-                  <div class="deposit-choice-grid deposit-boundary-grid" data-choice-group data-choice-target="edit_boundary_visibility">
-                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="very_good" data-choice-aliases="sharp" title="Very good" aria-label="Boundary visibility very good">
-                      <span class="boundary-choice-icon boundary-very-good" aria-hidden="true"></span>
-                      <span>Very good</span>
-                    </button>
-                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="clear" data-choice-aliases="distinctive" title="Clear" aria-label="Boundary visibility clear">
-                      <span class="boundary-choice-icon boundary-clear" aria-hidden="true"></span>
-                      <span>Clear</span>
-                    </button>
-                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="not_clear" data-choice-aliases="non-distinctive" title="Not clear" aria-label="Boundary visibility not clear">
-                      <span class="boundary-choice-icon boundary-not-clear" aria-hidden="true"></span>
-                      <span>Not clear</span>
-                    </button>
-                    <button type="button" class="deposit-choice-btn boundary-choice-option" data-choice-value="hypothetical" data-choice-aliases="hypotetical" title="Hypothetical" aria-label="Boundary visibility hypothetical">
-                      <span class="boundary-choice-icon boundary-hypothetical" aria-hidden="true"></span>
-                      <span>Hypothetical</span>
-                    </button>
-                  </div>
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Structure</label>
-                  <input type="text" class="form-control" name="structure" id="edit_structure">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Compactness</label>
-                  <input type="text" class="form-control" name="compactness" id="edit_compactness">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Deposit removed</label>
-                  <input type="hidden" name="deposit_removed" id="edit_deposit_removed">
-                  <div class="deposit-choice-grid deposit-removed-grid" data-choice-group data-choice-target="edit_deposit_removed">
-                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="excavator" title="excavator" aria-label="Deposit removed by excavator">
-                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-excavator.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="not_removed" title="not removed" aria-label="Deposit not removed">
-                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-not-removed.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="pick" title="pick" aria-label="Deposit removed by pick">
-                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-pick.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="shovel" title="shovel" aria-label="Deposit removed by shovel">
-                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-shovel.png') }}" alt="" aria-hidden="true">
-                    </button>
-                    <button type="button" class="deposit-choice-btn deposit-removed-option" data-choice-value="spatula" title="spatula" aria-label="Deposit removed by spatula">
-                      <img class="deposit-removed-icon" src="{{ url_for('static', filename='images/icons/deposit-removed-spatula.png') }}" alt="" aria-hidden="true">
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div id="edit_negativ_fields" class="edit-sj-type-block">
-                <div class="mb-2">
-                  <label class="form-label">Negativ type</label>
-                  <input type="text" class="form-control" name="negativ_typ" id="edit_negativ_typ">
-                </div>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="checkbox" id="edit_ident_niveau_cut" name="ident_niveau_cut">
-                  <label class="form-check-label" for="edit_ident_niveau_cut">Ident. niveau cut</label>
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Shape plan</label>
-                  <input type="text" class="form-control" name="shape_plan" id="edit_shape_plan">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Shape sides</label>
-                  <input type="text" class="form-control" name="shape_sides" id="edit_shape_sides">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Shape bottom</label>
-                  <input type="text" class="form-control" name="shape_bottom" id="edit_shape_bottom">
-                </div>
-              </div>
-
-              <div id="edit_structure_fields" class="edit-sj-type-block">
-                <div class="mb-2">
-                  <label class="form-label">Structure type</label>
-                  <input type="text" class="form-control" name="structure_typ" id="edit_structure_typ">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Construction type</label>
-                  <input type="text" class="form-control" name="construction_typ" id="edit_construction_typ">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Binder</label>
-                  <input type="text" class="form-control" name="binder" id="edit_binder">
-                </div>
-                <div class="mb-2">
-                  <label class="form-label">Basic material</label>
-                  <input type="text" class="form-control" name="basic_material" id="edit_basic_material">
-                </div>
-                <div class="row g-2">
-                  <div class="col-md-4">
-                    <label class="form-label">Length</label>
-                    <input type="number" step="0.01" class="form-control" name="length_m" id="edit_length_m">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Width</label>
-                    <input type="number" step="0.01" class="form-control" name="width_m" id="edit_width_m">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label">Height</label>
-                    <input type="number" step="0.01" class="form-control" name="height_m" id="edit_height_m">
-                  </div>
-                </div>
-              </div>
-            </fieldset>
-          </div>
-
-          <div class="col-lg-4">
-            <fieldset class="border p-3 rounded-3 bg-light mb-3">
-              <legend class="w-auto px-2">Polygons</legend>
-              <select id="edit_polygon_names" name="polygon_names" class="form-select" multiple size="8">
-                {% for p in polygons %}
-                  <option value="{{ p }}">{{ p }}</option>
-                {% endfor %}
-              </select>
-            </fieldset>
-
-            <fieldset class="border p-3 rounded-3 bg-light">
-              <legend class="w-auto px-2">Stratigraphic relations</legend>
-              <div class="mb-2">
-                <label class="form-label">Below (SU IDs)</label>
-                <input type="text" class="form-control" id="edit_below_ids" name="below_ids" placeholder="1, 2">
-              </div>
-              <div class="mb-2">
-                <label class="form-label">Equal (=)</label>
-                <input type="text" class="form-control" id="edit_equal_ids" name="equal_ids" placeholder="1, 2">
-              </div>
-              <div>
-                <label class="form-label">Above (SU IDs)</label>
-                <input type="text" class="form-control" id="edit_above_ids" name="above_ids" placeholder="1, 2">
-              </div>
-            </fieldset>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save changes</button>
-      </div>
-    </form>
-  </div>
-</div>
 
 
 <!-- ===========================================================
@@ -1196,5 +972,6 @@
 <script>
   window.ArcheoDBOpenEditSuId = {{ open_edit_su_id|tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/su.js') }}"></script>
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
+<script src="{{ url_for('static', filename='js/su.js', v='shared-su-editor-1') }}"></script>
 {% endblock %}

@@ -1,9 +1,12 @@
 {# app/templates/polygons.html #}
 {% extends "base.html" %}
 {% block title %}Polygons{% endblock %}
+{% from "macros/list_table.html" import column_header as polygon_column_header, items_modal %}
 
-{% macro polygon_doc_link(kind, value) -%}
-  {%- if kind == "photos" -%}
+{% macro polygon_item_link(kind, value) -%}
+  {%- if kind == "sus" -%}
+    <a href="{{ url_for('su.add_su', edit_su=value) }}" data-su-id="{{ value }}">{{ value }}</a>
+  {%- elif kind == "photos" -%}
     <a href="{{ url_for('photos.serve_photo_file', id_photo=value) }}" target="_blank" rel="noopener">{{ value }}</a>
   {%- elif kind == "photograms" -%}
     <a href="{{ url_for('photograms.serve_photogram_file', id_photogram=value) }}" target="_blank" rel="noopener">{{ value }}</a>
@@ -14,16 +17,33 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% macro polygon_doc_group(label, kind, values) -%}
+{% macro polygon_item_list(label, kind, values, polygon) -%}
+  {%- set polygon_cell_limit = 10 if kind == "sus" else 3 -%}
+  {%- for value in values[:polygon_cell_limit] -%}
+    <span class="text-break">{{ polygon_item_link(kind, value) }}</span>{{ ", " if not loop.last }}
+  {%- endfor -%}
+  {%- if values|length > polygon_cell_limit %}
+    <button type="button" class="btn btn-link p-0 align-baseline text-nowrap" style="font-size:inherit;"
+            data-bs-toggle="modal" data-bs-target="#polygonItemsModal"
+            data-items-template="polygon-items-{{ polygon.id }}-{{ kind }}"
+            data-items-title="{{ label }}: {{ polygon.name }} ({{ values|length }})"
+            title="Show all {{ label }} for polygon {{ polygon.name }}"
+            aria-label="Show all {{ label }} for polygon {{ polygon.name }}">+{{ values|length - polygon_cell_limit }}</button>
+    <template id="polygon-items-{{ polygon.id }}-{{ kind }}">
+      <ul class="list-unstyled mb-0">
+        {% for value in values %}
+          <li class="mb-2 text-break">{{ polygon_item_link(kind, value) }}</li>
+        {% endfor %}
+      </ul>
+    </template>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro polygon_doc_group(label, kind, values, polygon) -%}
   <span class="d-inline-block me-2" title="{{ values|join(', ') if values else '' }}">
     {{ label }} (
     {%- if values -%}
-      {%- for value in values[:3] -%}
-        <span class="text-break">{{ polygon_doc_link(kind, value) }}</span>{{ ", " if not loop.last }}
-      {%- endfor -%}
-      {%- if values|length > 3 -%}
-        <span class="text-muted"> +{{ values|length - 3 }}</span>
-      {%- endif -%}
+      {{ polygon_item_list(label, kind, values, polygon) }}
     {%- else -%}
       0
     {%- endif -%}
@@ -269,14 +289,69 @@
   </div>
 </div>
 
+</div>
 
-<!-- Row 2: Existing polygons list (full width) -->
+<!-- Row 2: Attach graphic documentation -->
+<div class="row g-3 mt-3">
+  <div class="col-12">
+    <fieldset class="border p-3 bg-success-subtle">
+      <legend class="w-auto px-2">Attach graphic documentation</legend>
+
+      <!-- Polygon selector -->
+      <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Select polygon</label>
+          <select id="polyDocSelect" class="form-select">
+            <option value="" selected>-- select polygon --</option>
+            {% for p in polygons %}
+              <option value="{{ p.name }}">{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <div class="alert alert-light border mb-0 py-2">
+            <span class="text-muted">Selected:</span>
+            <strong id="polyDocSelectedLabel" class="ms-1">—</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-primary polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolyPhotos">
+          Upload photos
+        </button>
+        <button type="button" class="btn btn-secondary polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolySketches">
+          Upload sketches
+        </button>
+        <button type="button" class="btn btn-warning polyDocBtn"
+                data-bs-toggle="modal" data-bs-target="#modalPolyPhotograms">
+          Upload photograms
+        </button>
+      </div>
+
+      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+    </fieldset>
+  </div>
+</div>
+
+<!-- Row 3: Existing polygons list (full width) -->
 <div class="row g-3 mt-2">
   <!-- Existing polygons + actions -->
   <div class="col-12">
     <div class="p-3 rounded-3 border polygons-list-panel">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-        <h4 class="mb-0">Existing polygons</h4>
+        <div class="d-flex align-items-center gap-2">
+          <h4 class="mb-0">Existing polygons</h4>
+          {% if polygons %}
+            <button type="button" id="polygonsResetTable" class="polygon-column-button"
+                    title="Clear filters and sorting" aria-label="Clear filters and sorting" disabled>
+              <span class="polygon-list-icon polygon-icon-reset" aria-hidden="true"></span>
+            </button>
+          {% endif %}
+        </div>
         <!-- Here buttons for actions -->
         <div class="d-flex flex-wrap gap-2">
           <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
@@ -298,19 +373,19 @@
 
       {% if polygons and polygons|length %}
         <div class="table-responsive">
-          <table id="polygonsTable" class="table table-sm table-bordered align-middle mb-0 w-100" data-page-size="10">
+          <table id="polygonsTable" class="table table-sm table-striped table-bordered align-middle mb-0 w-100" data-page-size="10">
             <thead class="table-light">
               <tr>
-                <th class="text-end" style="width:44px;">ID</th>
-                <th style="min-width:130px;">Name</th>
-                <th style="width:120px;">Parent</th>
-                <th style="width:250px;">Allocation reason</th>
-                <th class="text-center" style="width:80px;">TOP</th>
-                <th class="text-center" style="width:80px;">BOTTOM</th>
-                <th class="text-end" style="width:72px;">POINTS NR.</th>
-                <th class="text-end" style="width:120px;">SRID / EPSG</th>
-                <th style="width:260px;">Is documented by:</th>
-                <th class="text-end" style="width:150px;">ACTIONS</th>
+                <th scope="col" class="text-end" style="width:44px;" data-column="id" data-sort-type="number" aria-sort="none">{{ polygon_column_header("ID", "id") }}</th>
+                <th scope="col" style="min-width:130px;" data-column="name" aria-sort="none">{{ polygon_column_header("Name", "name") }}</th>
+                <th scope="col" style="width:120px;" data-column="parent" aria-sort="none">{{ polygon_column_header("Parent", "parent") }}</th>
+                <th scope="col" style="width:250px;" data-column="allocation" aria-sort="none">{{ polygon_column_header("Allocation reason", "allocation") }}</th>
+                <th scope="col" class="text-center" style="width:80px;" data-column="top" aria-sort="none">{{ polygon_column_header("TOP", "top") }}</th>
+                <th scope="col" class="text-center" style="width:80px;" data-column="bottom" aria-sort="none">{{ polygon_column_header("BOTTOM", "bottom") }}</th>
+                <th scope="col" class="text-end" style="width:72px;" data-column="points" data-sort-type="number" aria-sort="none">{{ polygon_column_header("POINTS NR.", "points") }}</th>
+                <th scope="col" style="width:120px;" data-column="sus" aria-sort="none">{{ polygon_column_header("SUs", "sus") }}</th>
+                <th scope="col" style="width:260px;" data-column="documentation" aria-sort="none">{{ polygon_column_header("Is documented by:", "documentation") }}</th>
+                <th scope="col" class="text-end" style="width:150px;">ACTIONS</th>
               </tr>
             </thead>
             <tbody id="polygonsTableBody">
@@ -324,11 +399,11 @@
                 "bottom_ranges": p.bottom_ranges
               } %}
               {% set docs = p.documented_by %}
-              <tr>
+              <tr data-polygon-row data-list-row>
                 <td class="text-end">{{ p.id }}</td>
                 <td class="text-nowrap">{{ p.name }}</td>
 
-                <td class="text-break">
+                <td class="text-break" data-search-value="{{ p.parent or '' }}">
                   {% if p.parent %}
                     {{ p.parent }}
                   {% else %}
@@ -358,21 +433,21 @@
 
                 <td class="text-end">{{ p.points }}</td>
 
-                <td class="text-end">
-                  {% if p.srid %}
-                    {{ p.srid }}
+                <td data-search-value="{{ p.sj_ids|join(', ') }}">
+                  {% if p.sj_ids %}
+                    {{ polygon_item_list("SUs", "sus", p.sj_ids, p) }}
                   {% else %}
                     <span class="text-muted">—</span>
                   {% endif %}
                 </td>
 
-                <td class="small">
+                <td class="small" data-search-value="Photos ({{ docs.photos|join(', ') if docs.photos else '0' }}) Photograms ({{ docs.photograms|join(', ') if docs.photograms else '0' }}) Sketches ({{ docs.sketches|join(', ') if docs.sketches else '0' }})">
                   <div>
-                    {{ polygon_doc_group("Photos", "photos", docs.photos) }}
-                    {{ polygon_doc_group("Photograms", "photograms", docs.photograms) }}
+                    {{ polygon_doc_group("Photos", "photos", docs.photos, p) }}
+                    {{ polygon_doc_group("Photograms", "photograms", docs.photograms, p) }}
                   </div>
                   <div>
-                    {{ polygon_doc_group("Sketches", "sketches", docs.sketches) }}
+                    {{ polygon_doc_group("Sketches", "sketches", docs.sketches, p) }}
                   </div>
                 </td>
 
@@ -397,6 +472,9 @@
 
               </tr>
               {% endfor %}
+              <tr id="polygonsNoMatches" hidden>
+                <td colspan="10" class="text-center text-muted py-3">No polygons match the filters.</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -414,122 +492,19 @@
   </div>
 </div>
 
+</div>
 
+{{ items_modal('polygonItemsModal') }}
+
+<script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const table = document.getElementById('polygonsTable');
-  const tbody = document.getElementById('polygonsTableBody');
-  const pager = document.getElementById('polygonsPagination');
-  const pagerWrap = document.getElementById('polygonsPaginationWrap');
-  const summary = document.getElementById('polygonsPaginationSummary');
-
-  if (!table || !tbody || !pager || !pagerWrap || !summary) return;
-
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  const pageSize = Number.parseInt(table.dataset.pageSize || '10', 10);
-  const pageCount = Math.ceil(rows.length / pageSize);
-  let currentPage = 1;
-
-  function renderPagination() {
-    pager.innerHTML = '';
-
-    if (pageCount <= 1) {
-      pagerWrap.style.display = 'none';
-      rows.forEach(row => row.hidden = false);
-      return;
-    }
-
-    pagerWrap.style.display = '';
-
-    const addPageItem = (label, page, options = {}) => {
-      const li = document.createElement('li');
-      li.className = 'page-item';
-      if (options.active) li.classList.add('active');
-      if (options.disabled) li.classList.add('disabled');
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'page-link';
-      btn.textContent = label;
-      btn.disabled = Boolean(options.disabled);
-      btn.addEventListener('click', () => {
-        if (!options.disabled) {
-          currentPage = page;
-          renderPagination();
-        }
-      });
-
-      li.appendChild(btn);
-      pager.appendChild(li);
-    };
-
-    addPageItem('‹', Math.max(1, currentPage - 1), { disabled: currentPage === 1 });
-
-    for (let page = 1; page <= pageCount; page += 1) {
-      addPageItem(String(page), page, { active: page === currentPage });
-    }
-
-    addPageItem('›', Math.min(pageCount, currentPage + 1), { disabled: currentPage === pageCount });
-
-    const start = (currentPage - 1) * pageSize;
-    const end = Math.min(start + pageSize, rows.length);
-
-    rows.forEach((row, index) => {
-      row.hidden = index < start || index >= end;
-    });
-
-    summary.textContent = `Showing ${start + 1}-${end} of ${rows.length}`;
-  }
-
-  renderPagination();
+  ArcheoDBInitListItemsModal('polygonItemsModal');
+  ArcheoDBInitListTable('polygons');
 });
 </script>
 
 
-
-<!-- 3. row ========= GRAPHIC DOCUMENTATION (for polygons) ========= -->
-<div class="container mt-4">
-  <fieldset class="border p-3 bg-success-subtle">
-    <legend class="w-auto px-2">Graphic documentation</legend>
-
-    <!-- Polygon selector -->
-    <div class="row g-2 align-items-end mb-3">
-      <div class="col-md-6">
-        <label class="form-label">Select polygon</label>
-        <select id="polyDocSelect" class="form-select">
-          <option value="" selected>-- select polygon --</option>
-          {% for p in polygons %}
-            <option value="{{ p.name }}">{{ p.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-md-6">
-        <div class="alert alert-light border mb-0 py-2">
-          <span class="text-muted">Selected:</span>
-          <strong id="polyDocSelectedLabel" class="ms-1">—</strong>
-        </div>
-      </div>
-    </div>
-
-    <!-- Action buttons -->
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolyPhotos">
-        Upload photos
-      </button>
-      <button type="button" class="btn btn-secondary polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolySketches">
-        Upload sketches
-      </button>
-      <button type="button" class="btn btn-warning polyDocBtn"
-              data-bs-toggle="modal" data-bs-target="#modalPolyPhotograms">
-        Upload photograms
-      </button>
-    </div>
-
-    <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
-  </fieldset>
-</div>
 
 <!-- Photos modal - opens window for photo selection -->
 <div class="modal fade" id="modalPolyPhotos" tabindex="-1" aria-hidden="true">

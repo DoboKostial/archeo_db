@@ -1,0 +1,148 @@
+<div class="modal fade" id="inhumGraveModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Inhumation grave attributes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zavřít"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-info">
+          This dialogue fills data for table <code>tab_object_inhum_grave</code>.
+        </div>
+
+        <div class="mb-3 form-check">
+          <input class="form-check-input" type="checkbox" id="inhum_present">
+          <label class="form-check-label" for="inhum_present">
+            This object is an <strong>inhumation grave</strong>
+          </label>
+        </div>
+
+        <div id="inhum_fields" class="border rounded p-3">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Preservation</label>
+              <select class="form-select" id="inhum_preservation_ui">
+                <option value="">—</option>
+                <option value="complete">complete</option>
+                <option value="partial">partial</option>
+                <option value="poor">poor</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Orientation (head direction)</label>
+              <select class="form-select" id="inhum_orientation_dir_ui">
+                <option value="">—</option>
+                <option value="N">N</option>
+                <option value="NE">NE</option>
+                <option value="E">E</option>
+                <option value="SE">SE</option>
+                <option value="S">S</option>
+                <option value="SW">SW</option>
+                <option value="W">W</option>
+                <option value="NW">NW</option>
+              </select>
+              <div class="form-text">We will use a simple direction (text).</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Burial box type</label>
+              <select class="form-select" id="inhum_burial_box_type_ui">
+                <option value="">—</option>
+                <option value="coffin">coffin</option>
+                <option value="sarcophagus">sarcophagus</option>
+                <option value="none">none</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="inhum_anthropo_present_ui">
+                <label class="form-check-label" for="inhum_anthropo_present_ui">
+                  Anthropologist present
+                </label>
+              </div>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Notes (grave)</label>
+              <textarea class="form-control" id="inhum_notes_ui" rows="2"></textarea>
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Bone presence map</label>
+	      <div class="form-text mb-2">Check boxes for bone presence (checked = "present").</div>
+
+              {# You can replace the image path with your real static file #}
+              <div class="border rounded p-2">
+                <div class="position-relative d-inline-block" style="max-width: 320px;">
+                  <img
+                    src="{{ url_for('static', filename='../static/images/bone_map.png') }}"
+                    class="img-fluid"
+                    alt="Bone map"
+                  >
+
+                  {# Approximate positions - adjust to your image #}
+                  <input class="form-check-input bonechk" type="checkbox" data-key="skull"
+                         style="position:absolute; left:52%; top:10%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="thorax"
+                         style="position:absolute; left:52%; top:27%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="pelvis"
+                         style="position:absolute; left:52%; top:42%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_arm"
+                         style="position:absolute; left:75%; top:32%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_arm"
+                         style="position:absolute; left:22%; top:32%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_hand"
+                         style="position:absolute; left:82%; top:52%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_hand"
+                         style="position:absolute; left:12%; top:52%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_leg"
+                         style="position:absolute; left:58%; top:72%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_leg"
+                         style="position:absolute; left:38%; top:72%;">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="right_foot"
+                         style="position:absolute; left:40%; top:95%; transform:translate(-50%,-50%);">
+
+                  <input class="form-check-input bonechk" type="checkbox" data-key="left_foot"
+                         style="position:absolute; left:68%; top:95%; transform:translate(-50%,-50%);">
+                </div>
+
+                <div class="mt-2 d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="boneMapAll">
+                    Check all
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="boneMapNone">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-danger d-none mt-3" id="inhum_modal_error"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" id="inhumSave">Save</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+
+    </div>
+  </div>
+</div>

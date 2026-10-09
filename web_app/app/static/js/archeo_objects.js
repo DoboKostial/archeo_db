@@ -141,69 +141,9 @@
     return true;
   }
 
-  function initObjectsPagination() {
-    const table = document.getElementById("objectsTable");
-    const tbody = document.getElementById("objectsTableBody");
-    const pager = document.getElementById("objectsPagination");
-    const pagerWrap = document.getElementById("objectsPaginationWrap");
-    const summary = document.getElementById("objectsPaginationSummary");
-
-    if (!table || !tbody || !pager || !pagerWrap || !summary) return;
-
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const pageSize = Number.parseInt(table.dataset.pageSize || "10", 10);
-    const pageCount = Math.ceil(rows.length / pageSize);
-    let currentPage = 1;
-
-    function addPageItem(label, page, options = {}) {
-      const li = document.createElement("li");
-      li.className = "page-item";
-      if (options.active) li.classList.add("active");
-      if (options.disabled) li.classList.add("disabled");
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "page-link";
-      btn.textContent = label;
-      btn.disabled = Boolean(options.disabled);
-      btn.addEventListener("click", () => {
-        if (options.disabled) return;
-        currentPage = page;
-        renderPage();
-      });
-
-      li.appendChild(btn);
-      pager.appendChild(li);
-    }
-
-    function renderPage() {
-      pager.innerHTML = "";
-
-      if (pageCount <= 1) {
-        pagerWrap.style.display = "none";
-        rows.forEach((row) => { row.hidden = false; });
-        return;
-      }
-
-      pagerWrap.style.display = "";
-
-      addPageItem("‹", Math.max(1, currentPage - 1), { disabled: currentPage === 1 });
-      for (let page = 1; page <= pageCount; page += 1) {
-        addPageItem(String(page), page, { active: page === currentPage });
-      }
-      addPageItem("›", Math.min(pageCount, currentPage + 1), { disabled: currentPage === pageCount });
-
-      const start = (currentPage - 1) * pageSize;
-      const end = Math.min(start + pageSize, rows.length);
-
-      rows.forEach((row, index) => {
-        row.hidden = index < start || index >= end;
-      });
-
-      summary.textContent = `Showing ${start + 1}-${end} of ${rows.length}`;
-    }
-
-    renderPage();
+  function initObjectsList() {
+    ArcheoDBInitListTable("objects");
+    ArcheoDBInitListItemsModal("objectsItemsModal");
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -267,6 +207,18 @@
     // --- Inhumation modal open buttons
     const btnCreateInhumModal = document.getElementById("btnCreateInhumModal");
     const btnEditInhumModal = document.getElementById("btnEditInhumModal");
+    const graveModal = document.getElementById("inhumGraveModal");
+    const objectModal = document.getElementById("editObjectModal");
+    let returnToObject = false;
+
+    if (graveModal && objectModal) {
+      graveModal.addEventListener("hidden.bs.modal", () => {
+        if (returnToObject) {
+          returnToObject = false;
+          bootstrap.Modal.getOrCreateInstance(objectModal).show();
+        }
+      });
+    }
 
     if (btnCreateInhumModal) {
       btnCreateInhumModal.addEventListener("click", () => {
@@ -280,7 +232,16 @@
       btnEditInhumModal.addEventListener("click", () => {
         window.__inhumContext = "edit";
         loadInhumFromHidden("edit");
-        bootstrap.Modal.getOrCreateInstance(document.getElementById("inhumGraveModal")).show();
+        // Bootstrap supports one open modal; return to the editor after the grave dialog.
+        returnToObject = Boolean(objectModal?.classList.contains("show"));
+        if (returnToObject) {
+          objectModal.addEventListener("hidden.bs.modal", () => {
+            bootstrap.Modal.getOrCreateInstance(graveModal).show();
+          }, { once: true });
+          bootstrap.Modal.getOrCreateInstance(objectModal).hide();
+        } else {
+          bootstrap.Modal.getOrCreateInstance(graveModal).show();
+        }
       });
     }
 
@@ -315,7 +276,7 @@
     }
 
     // badges init
-    initObjectsPagination();
+    initObjectsList();
     syncInhumBadge("create");
     syncInhumBadge("edit");
   });
