@@ -59,4 +59,6 @@ for gis_database in "${gis_databases[@]}"; do
     printf 'Applying GIS grants to %s\n' "$gis_database"
     "${GIS_PSQL[@]}" -d "$gis_database" \
         -f "$GIS_SCRIPT_DIR/migrations/20261004_gis_access.sql"
+    "${GIS_PSQL[@]}" -d "$gis_database" \
+        -f "$GIS_SCRIPT_DIR/migrations/20261009_gis_write_access.sql"
 done

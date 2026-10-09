@@ -1592,6 +1592,7 @@ $function$
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO grp_app_terrain_ro;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO grp_app_terrain_rw;
 GRANT SELECT ON tab_geopts, tab_polygons, tab_section, tab_sj, tab_photos TO gis_ro, gis_rw;
+GRANT INSERT, UPDATE, DELETE ON tab_geopts, tab_polygons, tab_section, tab_sj, tab_photos TO gis_rw;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_ro;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO grp_app_terrain_rw;
