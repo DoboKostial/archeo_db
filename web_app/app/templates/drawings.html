@@ -1,3 +1,4 @@
+{% from 'macros/geometry.html' import actions as geometry_actions, button as geometry_button, status as geometry_status %}
 {% extends "base.html" %}
 {% from "_media_entity_links.html" import entity_group %}
 {% block content %}
@@ -152,6 +153,7 @@
     </form>
 
     {% if drawings %}
+      {{ geometry_actions('drawing') }}
       <div class="row g-3">
         {% for g in drawings %}
           <div class="col-12 col-md-6 col-lg-4">
@@ -163,7 +165,8 @@
                 </div>
 
                 <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-sm btn-outline-primary btnEdit" data-id="{{ g.id_drawing }}">Edit</button>
+                  {{ geometry_button('drawing', g.id_drawing) }}
+            <button type="button" class="btn btn-sm btn-outline-primary btnEdit" data-id="{{ g.id_drawing }}">Edit</button>
                   <button type="button" class="btn btn-sm btn-outline-danger btnDelete" data-id="{{ g.id_drawing }}">Delete</button>
                 </div>
               </div>
@@ -179,6 +182,7 @@
 
                 <div class="flex-grow-1">
                   <div class="fw-semibold small text-break">{{ g.id_drawing }}</div>
+            <div>Has geometry: {{ geometry_status('drawing', g.id_drawing) }}</div>
                   <div class="small text-muted">{{ g.author }}</div>
                   <div class="small">{{ g.datum }}</div>
                   {% if g.notes %}

@@ -1,3 +1,4 @@
+{% from 'macros/geometry.html' import actions as geometry_actions, button as geometry_button, status as geometry_status %}
 {# app/templates/sections.html #}
 {% extends "base.html" %}
 {% block title %}Sections{% endblock %}
@@ -89,7 +90,7 @@
 
         <!-- Title + help button aligned in one row -->
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-          <h4 class="mb-0">Define sections manually (with geopoints)</h4>
+          <h4 class="mb-0">Section metadata</h4>
           <button type="button"
                   class="btn btn-sm btn-outline-secondary"
                   data-bs-toggle="modal"
@@ -122,30 +123,7 @@
           </div>
         </div>
 
-        <!-- Point ranges -->
-        <div class="mt-3">
-          <div class="d-flex align-items-center mb-2">
-            <h6 class="mb-0 me-2">Point ranges (FROM–TO)</h6>
-            <small class="text-muted">(tab_geopts id_pts; line is built ascending by points)</small>
-          </div>
-
-          <div id="ranges-container">
-            <div class="row g-2 align-items-end range-row">
-              <div class="col-5">
-                <label class="form-label">FROM</label>
-                <input type="number" class="form-control" name="range_from[]">
-              </div>
-              <div class="col-5">
-                <label class="form-label">TO</label>
-                <input type="number" class="form-control" name="range_to[]">
-              </div>
-              <div class="col-2">
-                <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow()">+</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+        <p class="small text-muted mt-3">Save the entity, then use Define geometry to select the two section endpoints.</p>
         <div class="mt-3">
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
@@ -164,33 +142,7 @@
 </form>
 
 
-  <!-- JS: add/remove range rows -->
-  <script>
-    function addRangeRow() {
-      const container = document.getElementById('ranges-container');
-      const row = document.createElement('div');
-      row.className = 'row g-2 align-items-end range-row mt-2';
-      row.innerHTML = `
-        <div class="col-5">
-          <label class="form-label">FROM</label>
-          <input type="number" class="form-control" name="range_from[]">
-        </div>
-        <div class="col-5">
-          <label class="form-label">TO</label>
-          <input type="number" class="form-control" name="range_to[]">
-        </div>
-        <div class="col-2 d-flex gap-1">
-          <button type="button" class="btn btn-outline-secondary mt-4" onclick="addRangeRow()">+</button>
-          <button type="button" class="btn btn-outline-danger mt-4" onclick="removeRangeRow(this)">−</button>
-        </div>
-      `;
-      container.appendChild(row);
-    }
-    function removeRangeRow(btn) {
-      const row = btn.closest('.range-row');
-      if (row) row.remove();
-    }
-  </script>
+
 
   <!-- Row 2: Attach graphic documentation -->
   <fieldset class="border p-3 bg-success-subtle mt-4">
@@ -261,23 +213,7 @@
           </div>
 
           <div class="d-flex gap-2 flex-wrap">
-            <form method="POST" action="{{ url_for('sections.rebuild_all_sections') }}" class="m-0">
-              <button type="submit" class="btn btn-sm btn-outline-primary">
-                Rebuild geometry
-              </button>
-            </form>
-
-            <button type="button"
-                    class="btn btn-sm btn-outline-success"
-                    data-bs-toggle="modal"
-                    data-bs-target="#modalSectionsMapView">
-              Map view
-            </button>
-
-            <a class="btn btn-sm btn-outline-success"
-               href="{{ url_for('sections.download_sections') }}">
-              Export SHP
-            </a>
+            {{ geometry_actions('section') }}
           </div>
         </div>
 
@@ -292,7 +228,8 @@
                   <th scope="col" class="text-end" style="width:150px;" data-column="ranges" aria-sort="none">{{ column_header("POINT RANGES", "ranges", "sections") }}</th>
                   <th scope="col" style="min-width:160px;" data-column="sus" aria-sort="none">{{ column_header("SUs cut", "sus", "sections") }}</th>
                   <th scope="col" style="min-width:280px;" data-column="documentation" aria-sort="none">{{ column_header("Is documented by:", "documentation", "sections") }}</th>
-                  <th scope="col" class="text-end" style="width:170px;">ACTIONS</th>
+                  <th scope="col">Has geometry</th>
+                <th scope="col" class="text-end" style="width:170px;">ACTIONS</th>
                 </tr>
               </thead>
               <tbody id="sectionsTableBody">
@@ -322,9 +259,11 @@
                     </div>
                   </td>
 
-                  <td class="text-end">
+                  <td>{{ geometry_status('section', s.id) }}</td>
+                <td class="text-end">
                     <div class="d-flex justify-content-end gap-2">
-                      <button type="button"
+                      {{ geometry_button('section', s.id) }}
+                    <button type="button"
                               class="btn btn-sm btn-outline-primary"
                               data-bs-toggle="modal"
                               data-bs-target="#editSectionModal"
@@ -343,7 +282,7 @@
                 </tr>
                 {% endfor %}
                 <tr id="sectionsNoMatches" hidden>
-                  <td colspan="7" class="text-center text-muted py-3">No sections match the filters.</td>
+                  <td colspan="8" class="text-center text-muted py-3">No sections match the filters.</td>
                 </tr>
               </tbody>
             </table>
@@ -398,18 +337,6 @@
           </div>
 
           <div class="mt-3">
-            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-              <div>
-                <h6 class="mb-0">Point ranges (FROM–TO)</h6>
-                <small class="text-muted">tab_geopts id_pts; line is built ascending by points</small>
-              </div>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEditRangeRow()">+ range</button>
-            </div>
-
-            <div id="edit-ranges-container"></div>
-          </div>
-
-          <div class="mt-3">
             {{ cut_su_picker("editSectionSjs", 10) }}
           </div>
         </div>
@@ -423,59 +350,6 @@
   </div>
 
   <script>
-    function addEditRangeRow(fromValue = '', toValue = '') {
-      const container = document.getElementById('edit-ranges-container');
-      if (!container) return;
-
-      const row = document.createElement('div');
-      row.className = 'row g-2 align-items-end range-row mt-2';
-      row.innerHTML = `
-        <div class="col-5">
-          <label class="form-label">FROM</label>
-          <input type="number" class="form-control" name="range_from[]" value="${fromValue}">
-        </div>
-        <div class="col-5">
-          <label class="form-label">TO</label>
-          <input type="number" class="form-control" name="range_to[]" value="${toValue}">
-        </div>
-        <div class="col-2 d-flex gap-1">
-          <button type="button" class="btn btn-outline-secondary" onclick="addEditRangeRow()">+</button>
-          <button type="button" class="btn btn-outline-danger" onclick="removeEditRangeRow(this)">-</button>
-        </div>
-      `;
-      container.appendChild(row);
-    }
-
-    function removeEditRangeRow(btn) {
-      const row = btn.closest('.range-row');
-      if (!row) return;
-
-      const rows = document.querySelectorAll('#edit-ranges-container .range-row');
-      if (rows.length > 1) {
-        row.remove();
-        return;
-      }
-
-      row.querySelectorAll('input').forEach(input => {
-        input.value = '';
-      });
-    }
-
-    function renderEditRanges(ranges) {
-      const container = document.getElementById('edit-ranges-container');
-      if (!container) return;
-
-      container.innerHTML = '';
-      if (!Array.isArray(ranges) || ranges.length === 0) {
-        addEditRangeRow();
-        return;
-      }
-
-      ranges.forEach(range => {
-        addEditRangeRow(range.from ?? '', range.to ?? '');
-      });
-    }
-
     function initEditSectionModal() {
       const editSecModal = document.getElementById('editSectionModal');
       if (!editSecModal) return;
@@ -501,7 +375,6 @@
           typeSelect.value = 'other';
         }
 
-        renderEditRanges(section.ranges || []);
 
         const selectedSjs = new Set((section.sj_ids || []).map(value => String(value)));
         const sjSelect = document.getElementById('editSectionSjs');

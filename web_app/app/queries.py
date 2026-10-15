@@ -999,8 +999,8 @@ def get_polygons_list():
       srid (from first non-null geom; NULL if SRID=0),
       parent (parent_name),
       allocation_reason (text),
-      has_top (binding exists),
-      has_bottom (binding exists),
+      has_top (saved geometry exists),
+      has_bottom (saved geometry exists),
       notes,
       top_ranges,
       bottom_ranges,
@@ -1023,19 +1023,9 @@ def get_polygons_list():
             p.parent_name                               AS parent,
             p.allocation_reason::text                   AS allocation_reason,
 
-            EXISTS (
-              SELECT 1
-              FROM tab_polygon_geopts_binding_top bt
-              WHERE bt.ref_polygon = p.polygon_name
-              LIMIT 1
-            )                                           AS has_top,
+            (p.geom_top IS NOT NULL)                                           AS has_top,
 
-            EXISTS (
-              SELECT 1
-              FROM tab_polygon_geopts_binding_bottom bb
-              WHERE bb.ref_polygon = p.polygon_name
-              LIMIT 1
-            )                                           AS has_bottom,
+            (p.geom_bottom IS NOT NULL)                                           AS has_bottom,
 
             p.notes                                     AS notes,
 
@@ -1184,202 +1174,9 @@ def select_polygons_with_bindings_sql():
     """
 
 def rebuild_geom_sql():
-    """
-    Rebuilds both geom_top and geom_bottom from geodetic points for given polygon.
-    It keeps the measured id order when it forms a valid polygon; otherwise it
-    falls back to the outer hull of the collected points. This supports field
-    measurements where polygon edge points were captured in a zig-zag order.
-    Params: (polygon_name,)
-    """
-    return """
-        WITH params AS (
-            SELECT %s::text AS polygon_name
-        ),
-        top_points AS (
-            SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
-            FROM params p
-            JOIN tab_polygon_geopts_binding_top b
-              ON b.ref_polygon = p.polygon_name
-            JOIN tab_geopts g
-              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
-            WHERE g.pts_geom IS NOT NULL
-            ORDER BY g.id_pts
-        ),
-        top_agg AS (
-            SELECT
-                COUNT(*) AS point_count,
-                CASE
-                  WHEN COUNT(*) >= 3 THEN ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
-                  ELSE NULL
-                END AS ordered_line,
-                CASE
-                  WHEN COUNT(*) >= 3 THEN ST_Collect(pts_geom)
-                  ELSE NULL
-                END AS point_collection
-            FROM top_points
-        ),
-        top_ring AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN ordered_line IS NULL THEN NULL
-                  WHEN ST_Equals(ST_StartPoint(ordered_line), ST_EndPoint(ordered_line))
-                    THEN ST_RemoveRepeatedPoints(ordered_line, 1e-7)
-                  ELSE ST_RemoveRepeatedPoints(
-                    ST_AddPoint(ordered_line, ST_StartPoint(ordered_line)),
-                    1e-7
-                  )
-                END AS ring
-            FROM top_agg
-        ),
-        top_ordered_try AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN ring IS NOT NULL
-                   AND ST_NPoints(ring) >= 4
-                   AND ST_IsSimple(ring)
-                    THEN ST_MakePolygon(ring)
-                  ELSE NULL
-                END AS geom
-            FROM top_ring
-        ),
-        top_ordered AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN geom IS NOT NULL
-                   AND ST_IsValid(geom)
-                   AND NOT ST_IsEmpty(geom)
-                   AND ST_GeometryType(geom) = 'ST_Polygon'
-                    THEN ST_Force3D(geom)
-                  ELSE NULL
-                END AS geom
-            FROM top_ordered_try
-        ),
-        top_hull_try AS (
-            SELECT
-                CASE
-                  WHEN point_count >= 3 THEN ST_ConvexHull(point_collection)
-                  ELSE NULL
-                END AS geom
-            FROM top_ordered
-        ),
-        top_result AS (
-            SELECT
-                COALESCE(
-                    top_ordered.geom,
-                    CASE
-                      WHEN top_hull_try.geom IS NOT NULL
-                       AND ST_IsValid(top_hull_try.geom)
-                       AND NOT ST_IsEmpty(top_hull_try.geom)
-                       AND ST_GeometryType(top_hull_try.geom) = 'ST_Polygon'
-                        THEN ST_Force3D(top_hull_try.geom)
-                      ELSE NULL
-                    END
-                ) AS geom
-            FROM top_ordered
-            CROSS JOIN top_hull_try
-        ),
-        bottom_points AS (
-            SELECT DISTINCT ON (g.id_pts) g.id_pts, g.pts_geom
-            FROM params p
-            JOIN tab_polygon_geopts_binding_bottom b
-              ON b.ref_polygon = p.polygon_name
-            JOIN tab_geopts g
-              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
-            WHERE g.pts_geom IS NOT NULL
-            ORDER BY g.id_pts
-        ),
-        bottom_agg AS (
-            SELECT
-                COUNT(*) AS point_count,
-                CASE
-                  WHEN COUNT(*) >= 3 THEN ST_MakeLine(ARRAY_AGG(pts_geom ORDER BY id_pts))
-                  ELSE NULL
-                END AS ordered_line,
-                CASE
-                  WHEN COUNT(*) >= 3 THEN ST_Collect(pts_geom)
-                  ELSE NULL
-                END AS point_collection
-            FROM bottom_points
-        ),
-        bottom_ring AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN ordered_line IS NULL THEN NULL
-                  WHEN ST_Equals(ST_StartPoint(ordered_line), ST_EndPoint(ordered_line))
-                    THEN ST_RemoveRepeatedPoints(ordered_line, 1e-7)
-                  ELSE ST_RemoveRepeatedPoints(
-                    ST_AddPoint(ordered_line, ST_StartPoint(ordered_line)),
-                    1e-7
-                  )
-                END AS ring
-            FROM bottom_agg
-        ),
-        bottom_ordered_try AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN ring IS NOT NULL
-                   AND ST_NPoints(ring) >= 4
-                   AND ST_IsSimple(ring)
-                    THEN ST_MakePolygon(ring)
-                  ELSE NULL
-                END AS geom
-            FROM bottom_ring
-        ),
-        bottom_ordered AS (
-            SELECT
-                point_count,
-                point_collection,
-                CASE
-                  WHEN geom IS NOT NULL
-                   AND ST_IsValid(geom)
-                   AND NOT ST_IsEmpty(geom)
-                   AND ST_GeometryType(geom) = 'ST_Polygon'
-                    THEN ST_Force3D(geom)
-                  ELSE NULL
-                END AS geom
-            FROM bottom_ordered_try
-        ),
-        bottom_hull_try AS (
-            SELECT
-                CASE
-                  WHEN point_count >= 3 THEN ST_ConvexHull(point_collection)
-                  ELSE NULL
-                END AS geom
-            FROM bottom_ordered
-        ),
-        bottom_result AS (
-            SELECT
-                COALESCE(
-                    bottom_ordered.geom,
-                    CASE
-                      WHEN bottom_hull_try.geom IS NOT NULL
-                       AND ST_IsValid(bottom_hull_try.geom)
-                       AND NOT ST_IsEmpty(bottom_hull_try.geom)
-                       AND ST_GeometryType(bottom_hull_try.geom) = 'ST_Polygon'
-                        THEN ST_Force3D(bottom_hull_try.geom)
-                      ELSE NULL
-                    END
-                ) AS geom
-            FROM bottom_ordered
-            CROSS JOIN bottom_hull_try
-        )
-        UPDATE tab_polygons p
-        SET
-            geom_top = top_result.geom,
-            geom_bottom = bottom_result.geom
-        FROM params, top_result, bottom_result
-        WHERE p.polygon_name = params.polygon_name;
-    """
+    """Legacy entry point; database rules protect manual geometry edits."""
+    return "SELECT public.rebuild_polygon_geoms_from_geopts(%s)"
+
 
 def find_geopts_srid_sql():
     """
@@ -1755,99 +1552,18 @@ def select_sections_with_bindings_sql():
 
 
 def section_line_geojson_by_id_sql():
-    """
-    Returns one row: (line_geojson) for given section id, built from bindings + tab_geopts.
-    Line is built ascending by id_pts, duplicates removed.
-    Params: (id_section,)
-    """
-    return """
-        WITH pts AS (
-            SELECT
-                g.id_pts,
-                g.pts_geom
-            FROM tab_section_geopts_binding b
-            JOIN tab_geopts g
-              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
-            WHERE b.ref_section::int4 = %s
-        ),
-        dpts AS (
-            SELECT DISTINCT ON (id_pts) id_pts, pts_geom
-            FROM pts
-            ORDER BY id_pts
-        )
-        SELECT
-            CASE
-              WHEN COUNT(*) < 2 THEN NULL
-              ELSE ST_AsGeoJSON(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)))
-            END AS line_gj
-        FROM dpts;
-    """
+    """Read the saved section representation, including edits from GIS."""
+    return "SELECT ST_AsGeoJSON(geom) FROM tab_entity_geometries WHERE ref_section=%s"
 
 
 def sections_lines_geojson_sql():
-    """
-    Returns (id_section, line_geojson) for ALL sections, built from bindings + tab_geopts.
-    Line is built ascending by id_pts, duplicates removed.
-    """
-    return """
-        WITH pts AS (
-            SELECT
-                b.ref_section::int4 AS id_section,
-                g.id_pts,
-                g.pts_geom
-            FROM tab_section_geopts_binding b
-            JOIN tab_geopts g
-              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
-        ),
-        dpts AS (
-            SELECT DISTINCT ON (id_section, id_pts)
-                id_section, id_pts, pts_geom
-            FROM pts
-            ORDER BY id_section, id_pts
-        )
-        SELECT
-            id_section,
-            CASE
-              WHEN COUNT(*) < 2 THEN NULL
-              ELSE ST_AsGeoJSON(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)))
-            END AS line_gj
-        FROM dpts
-        GROUP BY id_section
-        ORDER BY id_section;
-    """
+    """Read the saved section representation, including edits from GIS."""
+    return "SELECT ref_section,ST_AsGeoJSON(geom) FROM tab_entity_geometries WHERE ref_section IS NOT NULL AND geom IS NOT NULL ORDER BY ref_section"
 
 
 def sections_lines_geojson_4326_sql():
-    """
-    Returns (id_section, line_geojson) for ALL sections transformed to EPSG:4326 for Leaflet.
-    Line is built ascending by id_pts, duplicates removed.
-    """
-    return """
-        WITH pts AS (
-            SELECT
-                b.ref_section::int4 AS id_section,
-                g.id_pts,
-                g.pts_geom
-            FROM tab_section_geopts_binding b
-            JOIN tab_geopts g
-              ON g.id_pts BETWEEN b.pts_from AND b.pts_to
-        ),
-        dpts AS (
-            SELECT DISTINCT ON (id_section, id_pts)
-                id_section, id_pts, pts_geom
-            FROM pts
-            ORDER BY id_section, id_pts
-        )
-        SELECT
-            id_section,
-            CASE
-              WHEN COUNT(*) < 2 THEN NULL
-              ELSE ST_AsGeoJSON(ST_Transform(ST_Force2D(ST_MakeLine(pts_geom ORDER BY id_pts)), 4326))
-            END AS line_gj
-        FROM dpts
-        GROUP BY id_section
-        ORDER BY id_section;
-    """
+    """Read the saved section representation, including edits from GIS."""
+    return "SELECT ref_section,ST_AsGeoJSON(ST_Transform(geom,4326)) FROM tab_entity_geometries WHERE ref_section IS NOT NULL AND geom IS NOT NULL AND ST_SRID(geom)>0 ORDER BY ref_section"
 
 
 def upsert_geopt_sql():
@@ -2212,7 +1928,7 @@ def update_find_sql():
           description   = NULLIF(%s,''),
           count         = %s,
           ref_sj        = %s,
-          ref_geopt     = %s,
+          ref_geopt     = COALESCE(%s, ref_geopt),
           ref_polygon   = NULLIF(%s,''),
           box           = %s
         WHERE id_find = %s;
@@ -2277,7 +1993,7 @@ def update_sample_sql():
           ref_sample_type = %s,
           description     = NULLIF(%s,''),
           ref_sj          = %s,
-          ref_geopt       = %s,
+          ref_geopt       = COALESCE(%s, ref_geopt),
           ref_polygon     = NULLIF(%s,'')
         WHERE id_sample = %s;
     """
@@ -4729,3 +4445,160 @@ def report_sketches_table_list_all_sql():
         FROM tab_sketches s
         ORDER BY s.id_sketch;
     """
+# Common spatial representations. All identifiers below come from this whitelist.
+SPATIAL_ENTITIES = {
+    'polygon': ('tab_polygons', 'polygon_name', 'ref_polygon'),
+    'su': ('tab_sj', 'id_sj', 'ref_sj'),
+    'section': ('tab_section', 'id_section', 'ref_section'),
+    'find': ('tab_finds', 'id_find', 'ref_find'),
+    'sample': ('tab_samples', 'id_sample', 'ref_sample'),
+    'photogram': ('tab_photograms', 'id_photogram', 'ref_photogram'),
+    'drawing': ('tab_drawings', 'id_drawing', 'ref_drawing'),
+}
+
+
+def spatial_ready_sql():
+    return "SELECT to_regclass('public.tab_entity_geometries') IS NOT NULL AS ready"
+
+
+def spatial_entity_sql(kind):
+    table, key, _ = SPATIAL_ENTITIES[kind]
+    return f"SELECT {key} FROM {table} WHERE {key}::text=%s FOR UPDATE"
+
+
+def spatial_summary_sql(kind):
+    table, key, fk = SPATIAL_ENTITIES[kind]
+    extra = ',e.has_world_file' if kind == 'photogram' else ''
+    group = ',e.has_world_file' if kind == 'photogram' else ''
+    return f"""SELECT e.{key}::text AS entity_id,
+        COALESCE(array_agg(DISTINCT GeometryType(g.geom)) FILTER(WHERE g.geom IS NOT NULL),ARRAY[]::text[]) AS types,
+        count(g.geom) AS count, count(g.id_geometry) FILTER(WHERE g.geom IS NULL) AS pending {extra}
+        FROM {table} e LEFT JOIN tab_entity_geometries g ON g.{fk}=e.{key}
+        GROUP BY e.{key} {group}"""
+
+
+def spatial_geometries_sql(kind):
+    fk = SPATIAL_ENTITIES[kind][2]
+    return f"""SELECT g.*, GeometryType(geom) AS geometry_type, ST_SRID(geom) AS srid,
+        ST_AsGeoJSON(CASE WHEN ST_SRID(geom)>0 THEN ST_Transform(geom,4326) END)::json AS preview,
+        COALESCE((SELECT json_agg(b ORDER BY b.part_no,b.ring_no,b.point_order)
+          FROM tab_geometry_geopts b WHERE b.ref_geometry=g.id_geometry),'[]'::json) AS points
+        FROM tab_entity_geometries g WHERE {fk}::text=%s ORDER BY id_geometry"""
+
+
+def spatial_points_sql():
+    return """SELECT id_pts,code,notes,x,y,h FROM tab_geopts
+        WHERE (id_pts::text ILIKE %s OR COALESCE(notes,'') ILIKE %s)
+        AND (%s='' OR code::text=%s) ORDER BY id_pts LIMIT 100"""
+
+
+def spatial_insert_sql(kind):
+    fk = SPATIAL_ENTITIES[kind][2]
+    return f"""INSERT INTO tab_entity_geometries({fk},geometry_role,is_proxy,notes,build_method,build_geometry_type)
+        VALUES(%s,%s,%s,%s,%s,%s) RETURNING id_geometry"""
+
+
+def spatial_lock_sql(kind):
+    fk = SPATIAL_ENTITIES[kind][2]
+    return f"SELECT * FROM tab_entity_geometries WHERE id_geometry=%s AND {fk}::text=%s FOR UPDATE"
+
+
+def spatial_update_recipe_sql():
+    return """UPDATE tab_entity_geometries SET geometry_role=%s,is_proxy=%s,notes=%s,
+        build_method=%s,build_geometry_type=%s,legacy_point_ranges=NULL WHERE id_geometry=%s"""
+
+
+def spatial_delete_points_sql():
+    return 'DELETE FROM tab_geometry_geopts WHERE ref_geometry=%s'
+
+
+def spatial_insert_point_sql():
+    return 'INSERT INTO tab_geometry_geopts(ref_geometry,part_no,ring_no,point_order,ref_geopt) VALUES(%s,%s,%s,%s,%s)'
+
+
+def spatial_build_sql():
+    return 'SELECT public.build_entity_geometry(%s,%s)'
+
+
+def spatial_delete_sql():
+    return 'DELETE FROM tab_entity_geometries WHERE id_geometry=%s'
+
+
+def spatial_bulk_sql(kind):
+    fk = SPATIAL_ENTITIES[kind][2]
+    return f"""SELECT id_geometry, {fk}::text AS entity_id,build_method,source_method,
+        geom IS NOT NULL AS has_geometry FROM tab_entity_geometries WHERE {fk} IS NOT NULL
+        AND (%s::text[] IS NULL OR {fk}::text=ANY(%s::text[])) ORDER BY id_geometry"""
+
+
+def spatial_savepoint_sql(action):
+    return {'start':'SAVEPOINT geometry_build','rollback':'ROLLBACK TO SAVEPOINT geometry_build',
+            'release':'RELEASE SAVEPOINT geometry_build'}[action]
+
+
+def spatial_features_sql(kind=None, web=True):
+    clauses = ['geom IS NOT NULL']
+    if kind:
+        fk = SPATIAL_ENTITIES[kind][2]
+        clauses.append(f'{fk} IS NOT NULL')
+    clauses.append('(%s::text[] IS NULL OR COALESCE(ref_polygon,ref_sj::text,ref_section::text,ref_find::text,ref_sample::text,ref_photogram,ref_drawing)=ANY(%s::text[]))')
+    geometry = 'ST_Transform(geom,4326)' if web else 'geom'
+    if web:
+        clauses.append('ST_SRID(geom)>0')
+    return f"""SELECT id_geometry,CASE WHEN ref_polygon IS NOT NULL THEN 'polygon' WHEN ref_sj IS NOT NULL THEN 'su'
+        WHEN ref_section IS NOT NULL THEN 'section' WHEN ref_find IS NOT NULL THEN 'find'
+        WHEN ref_sample IS NOT NULL THEN 'sample' WHEN ref_photogram IS NOT NULL THEN 'photogram' ELSE 'drawing' END AS kind,
+        COALESCE(ref_polygon,ref_sj::text,ref_section::text,ref_find::text,ref_sample::text,ref_photogram,ref_drawing) AS entity_id,
+        geometry_role,source_method,is_proxy,ST_SRID(geom) AS srid,ST_AsGeoJSON({geometry})::json AS geometry
+        FROM tab_entity_geometries WHERE {' AND '.join(clauses)} ORDER BY id_geometry"""
+
+
+def spatial_measured_features_sql():
+    return """SELECT 'geopt' AS kind,id_pts::text AS entity_id,code::text AS geometry_role,false AS is_proxy,
+        ST_AsGeoJSON(ST_Transform(pts_geom,4326))::json AS geometry FROM tab_geopts WHERE pts_geom IS NOT NULL AND ST_SRID(pts_geom)>0
+        UNION ALL SELECT 'photo',id_photo,'camera_location',false,
+        ST_AsGeoJSON(ST_Transform(photo_centroid,4326))::json FROM tab_photos WHERE photo_centroid IS NOT NULL AND ST_SRID(photo_centroid)>0"""
+
+
+def spatial_files_sql(kind, geometry=False):
+    if geometry:
+        return "SELECT f.* FROM tab_spatial_files f JOIN tabaid_geometry_files l ON l.ref_file=f.id_file WHERE l.ref_geometry=%s ORDER BY f.id_file"
+    if kind == 'su':
+        return 'SELECT f.* FROM tab_spatial_files f JOIN tabaid_sj_spatial_files l ON l.ref_file=f.id_file WHERE l.ref_sj=%s ORDER BY f.id_file'
+    return "SELECT f.* FROM tab_spatial_files f JOIN tab_photograms p ON p.ref_world_file=f.id_file WHERE p.id_photogram=%s"
+
+
+def spatial_file_insert_sql():
+    return """INSERT INTO tab_spatial_files(file_kind,original_name,storage_key,mime_type,file_size,checksum_sha256,
+        source_software,source_software_version,notes) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id_file"""
+
+
+def spatial_file_link_sql(geometry=False, remove=False):
+    table, fk = ('tabaid_geometry_files','ref_geometry') if geometry else ('tabaid_sj_spatial_files','ref_sj')
+    if remove:
+        return f'DELETE FROM {table} WHERE {fk}=%s AND ref_file=%s'
+    return f'INSERT INTO {table}({fk},ref_file) VALUES(%s,%s) ON CONFLICT DO NOTHING'
+
+
+def spatial_file_sql():
+    return 'SELECT * FROM tab_spatial_files WHERE id_file=%s'
+
+
+def spatial_world_update_sql():
+    return 'UPDATE tab_photograms SET ref_world_file=%s WHERE id_photogram=%s'
+
+
+def spatial_prj_sql():
+    return 'SELECT srtext FROM spatial_ref_sys WHERE srid=%s'
+
+
+def spatial_polygon_import_sql(side):
+    if side not in {'top','bottom'}:
+        raise ValueError('Invalid polygon side.')
+    return f"""INSERT INTO tab_entity_geometries(ref_polygon,geometry_role,is_proxy,build_method,build_geometry_type,legacy_point_ranges)
+        SELECT %s,%s,false,'ordered_polygon','Polygon',
+        jsonb_agg(jsonb_build_object('from',pts_from,'to',pts_to) ORDER BY pts_from,pts_to)
+        FROM tab_polygon_geopts_binding_{side} WHERE ref_polygon=%s
+        ON CONFLICT (ref_polygon,geometry_role) WHERE ref_polygon IS NOT NULL
+        DO UPDATE SET build_method=EXCLUDED.build_method,build_geometry_type=EXCLUDED.build_geometry_type,
+        legacy_point_ranges=EXCLUDED.legacy_point_ranges RETURNING id_geometry"""

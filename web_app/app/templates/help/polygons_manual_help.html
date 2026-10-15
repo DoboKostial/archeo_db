@@ -14,5 +14,7 @@
 <ul class="mb-0">
   <li>You can define only TOP or only BOTTOM (at least one side is required).</li>
   <li>Ranges may overlap; points are deduplicated by point ID during rebuild.</li>
+  <li>Points are connected in ascending ID order. Use Define geometry in the listing for a custom vertex order.</li>
+  <li>An omitted side keeps its existing geometry. Replacing manual/GIS edits requires explicit confirmation.</li>
   <li>If geometry is not created, check that points exist in <code>tab_geopts</code> and form a valid polygon.</li>
 </ul>

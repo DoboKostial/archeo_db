@@ -22,8 +22,9 @@ from app.utils.images import detect_mime, make_thumbnail, extract_exif
 
 # SQLs from app/queries.py
 from app.queries import (
+    spatial_polygon_import_sql, spatial_build_sql, spatial_delete_points_sql,
     insert_polygon_manual_sql, delete_bindings_top_sql, delete_bindings_bottom_sql,
-    insert_binding_top_sql, insert_binding_bottom_sql, rebuild_geom_sql, select_polygons_with_bindings_sql,
+    insert_binding_top_sql, insert_binding_bottom_sql,
     srtext_by_srid_sql, get_polygons_list, list_authors_sql, find_geopts_srid_sql, upsert_geopt_sql, 
     polygon_geoms_geojson_sql, find_polygons_srid_sql, polygons_geojson_top_bottom_sql, srtext_by_srid_sql, get_polygon_parent_sql, reparent_children_sql, delete_polygon_sql,
     polygon_exists_sql, insert_photo_sql, insert_sketch_sql, insert_photogram_sql, link_polygon_photo_sql, link_polygon_sketch_sql, link_polygon_photogram_sql,
@@ -133,6 +134,8 @@ def polygons():
 
 def _prep_ranges(arr_from, arr_to):
     """Validate and normalize ranges; returns list[(int from, int to)]."""
+    if len(arr_from) != len(arr_to):
+        raise ValueError("Each range row must have BOTH FROM and TO.")
     out = []
     for f, t in zip(arr_from, arr_to):
         f = (f or "").strip()
@@ -159,14 +162,6 @@ def new_polygon_manual():
     allocation   = (request.form.get('allocation_reason') or '').strip()  # ENUM allocation_reason
     notes        = (request.form.get('notes') or '').strip()
 
-    # TOP ranges
-    top_from = request.form.getlist('top_range_from[]')
-    top_to   = request.form.getlist('top_range_to[]')
-
-    # BOTTOM ranges
-    bot_from = request.form.getlist('bottom_range_from[]')
-    bot_to   = request.form.getlist('bottom_range_to[]')
-
     try:
         if not polygon_name:
             raise ValueError("Polygon name is required.")
@@ -179,11 +174,15 @@ def new_polygon_manual():
         if parent_name and parent_name == polygon_name:
             raise ValueError("Parent polygon cannot be the same as polygon name.")
 
-        top_ranges = _prep_ranges(top_from, top_to)
-        bot_ranges = _prep_ranges(bot_from, bot_to)
-
-        if not top_ranges and not bot_ranges:
+        top_ranges = _prep_ranges(
+            request.form.getlist('top_range_from[]'), request.form.getlist('top_range_to[]')
+        )
+        bottom_ranges = _prep_ranges(
+            request.form.getlist('bottom_range_from[]'), request.form.getlist('bottom_range_to[]')
+        )
+        if not top_ranges and not bottom_ranges:
             raise ValueError("Provide at least one TOP or BOTTOM range of points.")
+        replace_geometry = request.form.get('replace_geometry') == 'yes'
 
         conn = get_terrain_connection(selected_db)
         conn.autocommit = False
@@ -192,24 +191,24 @@ def new_polygon_manual():
                 # 1) Insert/Upsert polygon metadata
                 cur.execute(insert_polygon_manual_sql(), (polygon_name, parent_name, allocation, notes))
 
-                # 2) Replace bindings idempotently (clear then insert)
-                cur.execute(delete_bindings_top_sql(), (polygon_name,))
-                cur.execute(delete_bindings_bottom_sql(), (polygon_name,))
-
-                for f_i, t_i in top_ranges:
-                    cur.execute(insert_binding_top_sql(), (polygon_name, f_i, t_i))
-                for f_i, t_i in bot_ranges:
-                    cur.execute(insert_binding_bottom_sql(), (polygon_name, f_i, t_i))
-
-                # 3) Rebuild geom_top / geom_bottom from tab_geopts
-                cur.execute(rebuild_geom_sql(), (polygon_name,))
+                # Replace and rebuild only the sides supplied in this form.
+                for side, ranges, delete_sql, insert_sql in (
+                    ('top', top_ranges, delete_bindings_top_sql(), insert_binding_top_sql()),
+                    ('bottom', bottom_ranges, delete_bindings_bottom_sql(), insert_binding_bottom_sql()),
+                ):
+                    if not ranges:
+                        continue
+                    cur.execute(delete_sql, (polygon_name,))
+                    for start, end in ranges:
+                        cur.execute(insert_sql, (polygon_name, start, end))
+                    cur.execute(spatial_polygon_import_sql(side), (polygon_name, side, polygon_name))
+                    geometry_id = cur.fetchone()[0]
+                    cur.execute(spatial_delete_points_sql(), (geometry_id,))
+                    cur.execute(spatial_build_sql(), (geometry_id, replace_geometry))
 
             conn.commit()
             flash(f'Polygon “{polygon_name}” saved and geometry rebuilt.', 'success')
-            logger.info(
-                f'[{selected_db}] polygon "{polygon_name}" saved: '
-                f'{len(top_ranges)} TOP range(s), {len(bot_ranges)} BOTTOM range(s), allocation={allocation}.'
-            )
+            logger.info(f'[{selected_db}] polygon "{polygon_name}" saved with point ranges and geometry.')
         except Exception as e:
             conn.rollback()
             logger.error(f'[{selected_db}] manual polygon create error: {e}')
@@ -238,11 +237,6 @@ def edit_polygon():
     allocation = (request.form.get('allocation_reason') or '').strip()
     notes = (request.form.get('notes') or '').strip()
 
-    top_from = request.form.getlist('top_range_from[]')
-    top_to = request.form.getlist('top_range_to[]')
-    bot_from = request.form.getlist('bottom_range_from[]')
-    bot_to = request.form.getlist('bottom_range_to[]')
-
     try:
         if not polygon_name:
             raise ValueError("Polygon name is required.")
@@ -250,11 +244,6 @@ def edit_polygon():
             raise ValueError("Invalid allocation reason.")
         if parent_name and parent_name == polygon_name:
             raise ValueError("Parent polygon cannot be the same as polygon name.")
-
-        top_ranges = _prep_ranges(top_from, top_to)
-        bot_ranges = _prep_ranges(bot_from, bot_to)
-        if not top_ranges and not bot_ranges:
-            raise ValueError("Provide at least one TOP or BOTTOM range of points.")
 
         conn = get_terrain_connection(selected_db)
         conn.autocommit = False
@@ -266,22 +255,10 @@ def edit_polygon():
 
                 cur.execute(insert_polygon_manual_sql(), (polygon_name, parent_name, allocation, notes))
 
-                cur.execute(delete_bindings_top_sql(), (polygon_name,))
-                cur.execute(delete_bindings_bottom_sql(), (polygon_name,))
-
-                for f_i, t_i in top_ranges:
-                    cur.execute(insert_binding_top_sql(), (polygon_name, f_i, t_i))
-                for f_i, t_i in bot_ranges:
-                    cur.execute(insert_binding_bottom_sql(), (polygon_name, f_i, t_i))
-
-                cur.execute(rebuild_geom_sql(), (polygon_name,))
 
             conn.commit()
-            flash(f'Polygon "{polygon_name}" updated and geometry rebuilt.', 'success')
-            logger.info(
-                f'[{selected_db}] polygon "{polygon_name}" edited: '
-                f'{len(top_ranges)} TOP range(s), {len(bot_ranges)} BOTTOM range(s), allocation={allocation}.'
-            )
+            flash(f'Polygon "{polygon_name}" updated.', 'success')
+            logger.info(f'[{selected_db}] polygon "{polygon_name}" metadata saved.')
             return redirect(url_for('polygons.polygons'))
         except Exception as e:
             conn.rollback()
@@ -383,8 +360,11 @@ def upload_polygons():
                     cur.execute(insert_binding_sql, (polygon_name, f_i, t_i))
                     ranges_done += 1
 
-                # Rebuild both geom_top/geom_bottom (function handles missing side gracefully)
-                cur.execute(rebuild_geom_sql(), (polygon_name,))
+                # Rebuild only the imported side, with explicit consent for existing edits.
+                cur.execute(spatial_polygon_import_sql(side), (polygon_name, side, polygon_name))
+                geometry_id = cur.fetchone()[0]
+                cur.execute(spatial_delete_points_sql(), (geometry_id,))
+                cur.execute(spatial_build_sql(), (geometry_id, request.form.get('replace_geometry') == 'yes'))
                 polygons_done += 1
 
         conn.commit()
@@ -536,34 +516,8 @@ def delete_polygon():
 @polygons_bp.route('/polygons/rebuild-all', methods=['POST'])
 @require_selected_db
 def rebuild_all_polygons():
-    selected_db = session.get('selected_db')
-    conn = get_terrain_connection(selected_db)
-    rebuilt = 0
-    try:
-        with conn.cursor() as cur:
-            # polygons that have at least one TOP/BOTTOM binding
-            cur.execute(select_polygons_with_bindings_sql())
-            names = [r[0] for r in cur.fetchall()]
-
-            for polygon_name in names:
-                cur.execute(rebuild_geom_sql(), (polygon_name,))
-                rebuilt += 1
-
-        conn.commit()
-        flash(f"Geometry rebuilt for {rebuilt} polygon(s).", "success")
-        logger.info(f"[{selected_db}] rebuilt geometry for {rebuilt} polygons.")
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"[{selected_db}] rebuild-all error: {e}")
-        flash(f"Error during geometry rebuild: {e}", "danger")
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
+    flash('Use Rebuild geometry (all) in the listing and confirm replacing geometry edits.', 'warning')
     return redirect(url_for('polygons.polygons'))
-
 
 
 # ---------- SHP EXPORT ----------

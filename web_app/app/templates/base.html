@@ -64,6 +64,17 @@
 
     {% block scripts %}{% endblock %}
 
+    {% if selected_db or session.get('selected_db') %}
+      {% include 'partials/geometry_modal.html' %}
+      <script>
+        window.ArcheoSpatialConfig = {
+          root: {{ url_for('spatial.map_view').rsplit('/',1)[0]|tojson }},
+          canWrite: {{ (g.user_role in ['archeolog','documentator'])|tojson }}
+        };
+      </script>
+      <script src="{{ url_for('static',filename='js/spatial.js',v='spatial-1') }}"></script>
+    {% endif %}
+
 
 
 <script>

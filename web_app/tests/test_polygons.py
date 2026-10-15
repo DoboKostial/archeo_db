@@ -52,6 +52,11 @@ def test_polygons_list_links_sus_and_exposes_all_documentation_to_filters(client
 
     assert response.status_code == 200
     assert connection.closed
+    assert 'Define polygon manualy' in html
+    for side in ('top', 'bottom'):
+        assert f'name="{side}_range_from[]"' in html
+        assert f'name="{side}_range_to[]"' in html
+    assert 'id="replaceManualGeometry"' in html
     assert "SRID / EPSG" not in html
     assert 'data-column="sus"' in html
     with client.application.test_request_context():

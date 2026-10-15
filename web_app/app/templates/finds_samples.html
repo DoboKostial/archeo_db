@@ -1,3 +1,4 @@
+{% from 'macros/geometry.html' import actions as geometry_actions %}
 {# app/templates/finds_samples.html #}
 {% extends "base.html" %}
 {% block content %}
@@ -78,8 +79,7 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">Geopt (optional)</label>
-                  <input name="ref_geopt" type="number" class="form-control">
+                  <span class="small text-muted">Define geometry after saving.</span>
                 </div>
 
                 <div class="col-md-8">
@@ -102,11 +102,12 @@
             <button id="btnReloadFinds" class="btn btn-sm btn-outline-secondary ms-auto">Reload</button>
           </div>
           <div class="card-body">
+            {{ geometry_actions('find') }}
             <div class="table-responsive">
               <table class="table table-sm table-striped table-bordered table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Geopt</th>
+                    <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Has geometry</th>
                     <th style="width:240px;">Actions</th>
                   </tr>
                 </thead>
@@ -223,8 +224,7 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">Geopt (optional)</label>
-                  <input name="ref_geopt" type="number" class="form-control">
+                  <span class="small text-muted">Define geometry after saving.</span>
                 </div>
 
                 <div class="col-md-8">
@@ -247,11 +247,12 @@
             <button id="btnReloadSamples" class="btn btn-sm btn-outline-secondary ms-auto">Reload</button>
           </div>
           <div class="card-body">
+            {{ geometry_actions('sample') }}
             <div class="table-responsive">
               <table class="table table-sm table-striped table-bordered table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Geopt</th>
+                    <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Has geometry</th>
                     <th style="width:240px;">Actions</th>
                   </tr>
                 </thead>
@@ -466,8 +467,7 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">Geopt</label>
-            <input id="editFindGeopt" type="number" class="form-control">
+            <input id="editFindGeopt" type="hidden">
           </div>
 
           <div class="col-md-8">
@@ -534,8 +534,7 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">Geopt</label>
-            <input id="editSampleGeopt" type="number" class="form-control">
+            <input id="editSampleGeopt" type="hidden">
           </div>
 
           <div class="col-md-8">
@@ -941,8 +940,8 @@
         <td>${displayValue(r.count)}</td>
         <td>${displayValue(r.box)}</td>
         <td>${r.ref_polygon || ""}</td>
-        <td>${r.ref_geopt || ""}</td>
-        <td>${btnsFind(r)}</td>
+        <td><span data-geometry-status="find" data-geometry-key="${r.id_find}">…</span></td>
+        <td><button type="button" class="btn btn-sm btn-outline-secondary" data-geometry-kind="find" data-geometry-key="${r.id_find}">Define geometry</button> ${btnsFind(r)}</td>
       `;
       tb.appendChild(tr);
     });
@@ -994,8 +993,8 @@
         <td>${r.ref_sample_type}</td>
         <td>${r.ref_sj}</td>
         <td>${r.ref_polygon || ""}</td>
-        <td>${r.ref_geopt || ""}</td>
-        <td>${btnsSample(r)}</td>
+        <td><span data-geometry-status="sample" data-geometry-key="${r.id_sample}">…</span></td>
+        <td><button type="button" class="btn btn-sm btn-outline-secondary" data-geometry-kind="sample" data-geometry-key="${r.id_sample}">Define geometry</button> ${btnsSample(r)}</td>
       `;
       tb.appendChild(tr);
     });
@@ -1093,7 +1092,6 @@
       count: document.getElementById("editFindCount").value,
       box: document.getElementById("editFindBox").value,
       ref_polygon: document.getElementById("editFindPolygon").value,
-      ref_geopt: document.getElementById("editFindGeopt").value,
       description: document.getElementById("editFindDescription").value
     };
 
@@ -1156,7 +1154,6 @@
       ref_sample_type: document.getElementById("editSampleType").value,
       ref_sj: document.getElementById("editSampleSj").value,
       ref_polygon: document.getElementById("editSamplePolygon").value,
-      ref_geopt: document.getElementById("editSampleGeopt").value,
       description: document.getElementById("editSampleDescription").value
     };
 

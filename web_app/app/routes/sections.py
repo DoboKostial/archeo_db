@@ -28,12 +28,8 @@ from app.queries import (
 
     # section + bindings
     upsert_section_manual_sql,
-    delete_section_geopts_bindings_sql,
-    insert_section_geopts_binding_sql,
     delete_section_sj_links_sql,
     insert_section_sj_link_sql,
-    select_sections_with_bindings_sql,
-    section_line_geojson_by_id_sql,
     find_geopts_srid_sql,
     srtext_by_srid_sql,
     sections_lines_geojson_sql,
@@ -55,24 +51,6 @@ SUPPORTED_SECTION_MEDIA = set(LINK_TABLES_SECTION.keys())
 # -------------------------
 # Helpers
 # -------------------------
-def _prep_ranges(arr_from, arr_to):
-    """Validate and normalize ranges; returns list[(int from, int to)]."""
-    out = []
-    for f, t in zip(arr_from, arr_to):
-        f = (f or "").strip()
-        t = (t or "").strip()
-        if not f and not t:
-            continue
-        if not f or not t:
-            raise ValueError("Each range row must have BOTH FROM and TO.")
-        f_i = int(f)
-        t_i = int(t)
-        if f_i > t_i:
-            raise ValueError(f"Invalid range: {f_i} > {t_i}.")
-        out.append((f_i, t_i))
-    return out
-
-
 def _parse_int_list(values):
     out = []
     for v in values:
@@ -243,8 +221,6 @@ def new_section_manual():
     section_type = (request.form.get("section_type") or "").strip()
     description = (request.form.get("description") or "").strip()
 
-    pts_from = request.form.getlist("range_from[]")
-    pts_to = request.form.getlist("range_to[]")
     sj_list_raw = request.form.getlist("ref_sj[]")
 
     try:
@@ -256,10 +232,6 @@ def new_section_manual():
         if section_type not in allowed_types:
             raise ValueError("Invalid section type.")
 
-        ranges = _prep_ranges(pts_from, pts_to)
-        if not ranges:
-            raise ValueError("Provide at least one range of points (FROM–TO).")
-
         sj_ids = _parse_int_list(sj_list_raw)
 
         conn = get_terrain_connection(selected_db)
@@ -269,12 +241,7 @@ def new_section_manual():
                 # 1) upsert section
                 cur.execute(upsert_section_manual_sql(), (id_section, section_type, description))
 
-                # 2) replace geopts bindings
-                cur.execute(delete_section_geopts_bindings_sql(), (id_section,))
-                for f_i, t_i in ranges:
-                    cur.execute(insert_section_geopts_binding_sql(), (id_section, f_i, t_i))
-
-                # 3) replace SJ links
+                # Replace SU links without changing geometry.
                 cur.execute(delete_section_sj_links_sql(), (id_section,))
                 for sj in sj_ids:
                     cur.execute(insert_section_sj_link_sql(), (sj, id_section))
@@ -283,7 +250,7 @@ def new_section_manual():
             flash(f'Section "{id_section}" saved.', "success")
             logger.info(
                 f'[{selected_db}] section "{id_section}" saved: '
-                f"type={section_type}, ranges={len(ranges)}, sj_links={len(sj_ids)}"
+                f"type={section_type}, sj_links={len(sj_ids)}"
             )
 
         except Exception as e:
@@ -533,45 +500,10 @@ def upload_section_media(media_type):
 @sections_bp.route("/sections/rebuild-all", methods=["POST"])
 @require_selected_db
 def rebuild_all_sections():
-    selected_db = session.get("selected_db")
-    conn = get_terrain_connection(selected_db)
+    flash('Use Rebuild geometry (all) in the listing and confirm replacing geometry edits.', 'warning')
+    return redirect(url_for('sections.sections'))
 
-    validated = 0
-    skipped = 0
 
-    try:
-        with conn.cursor() as cur:
-            cur.execute(select_sections_with_bindings_sql())
-            ids = [r[0] for r in cur.fetchall()]
-
-            for sid in ids:
-                cur.execute(section_line_geojson_by_id_sql(), (sid,))
-                gj = (cur.fetchone() or [None])[0]
-                if gj:
-                    validated += 1
-                else:
-                    skipped += 1
-
-        conn.commit()
-        flash(
-            f"Geometry validated for {validated} section(s). "
-            f"Skipped {skipped} (not enough points).",
-            "success" if validated else "warning",
-        )
-        logger.info(f"[{selected_db}] sections validate: ok={validated} skipped={skipped}")
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"[{selected_db}] sections rebuild-all/validate error: {e}")
-        flash(f"Error during geometry validation: {e}", "danger")
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-    return redirect(url_for("sections.sections"))
-
-## This constructs SHP and provide it for donwload
 @sections_bp.route("/download-sections")
 @require_selected_db
 def download_sections():

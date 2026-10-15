@@ -14,3 +14,5 @@ from .sketches import sketches_bp
 from .drawings import drawings_bp
 from .analyze import analyze_bp
 from .reports import reports_bp
+
+from .spatial import spatial_bp

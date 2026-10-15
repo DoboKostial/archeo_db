@@ -1,3 +1,4 @@
+{% from 'macros/geometry.html' import actions as geometry_actions, button as geometry_button, status as geometry_status %}
 {# app/templates/polygons.html #}
 {% extends "base.html" %}
 {% block title %}Polygons{% endblock %}
@@ -65,7 +66,7 @@
 <div class="col-md-6">
   <div class="p-3 rounded-3 border bg-light">
     <h4 class="mb-3 d-flex align-items-center gap-2">
-  Manual polygon (by point ranges in DB)
+  Define polygon manualy
   <button type="button"
           class="btn btn-sm btn-outline-secondary"
           data-bs-toggle="modal"
@@ -75,7 +76,8 @@
   </button>
 </h4>
 
-    <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}">
+    <form method="POST" action="{{ url_for('polygons.new_polygon_manual') }}"
+          onsubmit="return confirmManualPolygonRebuild(this)">
       <!-- Polygon metadata -->
       <div class="row g-2">
         <div class="col-md-8">
@@ -112,100 +114,61 @@
         </div>
       </div>
 
-      <!-- TOP ranges -->
+      {% for side, label in [('top', 'TOP (upper polygon)'), ('bottom', 'BOTTOM (lower polygon)')] %}
       <div class="mt-3">
-        <div class="d-flex align-items-center mb-2">
-          <h6 class="mb-0 me-2">TOP ranges (FROM–TO)</h6>
-          <small class="text-muted">(upper/top polygon points)</small>
-        </div>
-
-        <div id="top-ranges-container">
+        <h6 class="mb-2">{{ label }} ranges (FROM–TO)</h6>
+        <div id="{{ side }}-ranges-container">
           <div class="row g-2 align-items-end range-row">
             <div class="col-5">
               <label class="form-label">FROM</label>
-              <input type="number" class="form-control" name="top_range_from[]">
+              <input type="number" class="form-control" name="{{ side }}_range_from[]" step="1">
             </div>
             <div class="col-5">
               <label class="form-label">TO</label>
-              <input type="number" class="form-control" name="top_range_to[]">
+              <input type="number" class="form-control" name="{{ side }}_range_to[]" step="1">
             </div>
-            <div class="col-2">
-              <button type="button" class="btn btn-outline-secondary mt-4" onclick="addPolygonRangeRow('top')">+</button>
+            <div class="col-2 d-flex gap-1">
+              <button type="button" class="btn btn-outline-secondary" onclick="addPolygonRangeRow('{{ side }}')" aria-label="Add {{ side }} range">+</button>
+              <button type="button" class="btn btn-outline-danger" onclick="removePolygonRangeRow(this)" aria-label="Remove {{ side }} range">−</button>
             </div>
           </div>
         </div>
       </div>
-
-      <!-- BOTTOM ranges -->
-      <div class="mt-3">
-        <div class="d-flex align-items-center mb-2">
-          <h6 class="mb-0 me-2">BOTTOM ranges (FROM–TO)</h6>
-          <small class="text-muted">(lower/bottom polygon points)</small>
-        </div>
-
-        <div id="bottom-ranges-container">
-          <div class="row g-2 align-items-end range-row">
-            <div class="col-5">
-              <label class="form-label">FROM</label>
-              <input type="number" class="form-control" name="bottom_range_from[]">
-            </div>
-            <div class="col-5">
-              <label class="form-label">TO</label>
-              <input type="number" class="form-control" name="bottom_range_to[]">
-            </div>
-            <div class="col-2">
-              <button type="button" class="btn btn-outline-secondary mt-4" onclick="addPolygonRangeRow('bottom')">+</button>
-            </div>
-          </div>
-        </div>
-
-        <small class="text-muted d-block mt-2">
-          Tip: You can define only TOP or only BOTTOM ranges (at least one is required).
-        </small>
+      {% endfor %}
+      <div class="form-text mt-2">Enter at least one TOP or BOTTOM range. Points are ordered by ID. An omitted side keeps its existing geometry.</div>
+      <div class="form-check mt-3">
+        <input class="form-check-input" type="checkbox" name="replace_geometry" value="yes" id="replaceManualGeometry">
+        <label class="form-check-label" for="replaceManualGeometry">Allow replacing existing geometry edits and changing their source method to measured points.</label>
       </div>
-
       <div class="mt-3">
-        <button type="submit" class="btn btn-primary">Save & Rebuild</button>
+        <button type="submit" class="btn btn-primary">Save &amp; Rebuild</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- JS adding another row/points bulk -->
 <script>
   function addPolygonRangeRow(side) {
-    const containerId = (side === 'top') ? 'top-ranges-container' : 'bottom-ranges-container';
-    const fromName = (side === 'top') ? 'top_range_from[]' : 'bottom_range_from[]';
-    const toName   = (side === 'top') ? 'top_range_to[]'   : 'bottom_range_to[]';
-
-    const container = document.getElementById(containerId);
-
-    const row = document.createElement('div');
-    row.className = 'row g-2 align-items-end range-row mt-2';
-
-    row.innerHTML = `
-      <div class="col-5">
-        <label class="form-label">FROM</label>
-        <input type="number" class="form-control" name="${fromName}">
-      </div>
-      <div class="col-5">
-        <label class="form-label">TO</label>
-        <input type="number" class="form-control" name="${toName}">
-      </div>
-      <div class="col-2 d-flex gap-1">
-        <button type="button" class="btn btn-outline-secondary mt-4" onclick="addPolygonRangeRow('${side}')">+</button>
-        <button type="button" class="btn btn-outline-danger mt-4" onclick="removePolygonRangeRow(this)">−</button>
-      </div>
-    `;
-
+    const container = document.getElementById(side + '-ranges-container');
+    const row = container.firstElementChild.cloneNode(true);
+    row.classList.add('mt-2');
+    row.querySelectorAll('input').forEach(input => { input.value = ''; });
     container.appendChild(row);
   }
 
-  function removePolygonRangeRow(btn) {
-    const row = btn.closest('.range-row');
-    if (row) row.remove();
+  function removePolygonRangeRow(button) {
+    const row = button.closest('.range-row');
+    if (row.parentElement.children.length > 1) row.remove();
+    else row.querySelectorAll('input').forEach(input => { input.value = ''; });
+  }
+
+  function confirmManualPolygonRebuild(form) {
+    return !form.elements.replace_geometry.checked || window.confirm(
+      'Rebuild the supplied polygon sides from measured points? Existing GIS edits will be overwritten and their source method will change to measured points.'
+    );
   }
 </script>
+
 
 
 
@@ -284,6 +247,7 @@
         <input type="text" class="form-control" name="notes" placeholder="optional">
       </div>
 
+      <div class="form-check mt-3"><input class="form-check-input" type="checkbox" name="replace_geometry" value="yes" id="replaceImportedGeometry"><label class="form-check-label" for="replaceImportedGeometry">Allow replacing existing geometry edits and changing their source method to measured points.</label></div>
       <button type="submit" class="btn btn-primary mt-3">Upload → Save → Rebuild</button>
     </form>
   </div>
@@ -354,19 +318,8 @@
         </div>
         <!-- Here buttons for actions -->
         <div class="d-flex flex-wrap gap-2">
-          <form action="{{ url_for('polygons.rebuild_all_polygons') }}" method="post" class="me-2">
-            <button type="submit" class="btn btn-outline-warning btn-sm">Rebuild geometry (all)</button>
-          </form>
-
-          <button type="button" class="btn btn-success btn-sm" 
-          data-bs-toggle="modal"  data-bs-target="#modalShowAllPolygons"> Show all
-          </button>
-          
-          <button type="button" class="btn btn-success btn-sm"
-          data-bs-toggle="modal" data-bs-target="#modalShowPolygonHierarchy"> Show hierarchy
-          </button>
-                       
-          <a href="{{ url_for('polygons.download_polygons') }}" class="btn btn-success btn-sm">Export SHP</a>
+          {{ geometry_actions('polygon') }}
+          <button type="button" class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalShowPolygonHierarchy">Show hierarchy</button>
         </div>
       
       </div>
@@ -385,6 +338,7 @@
                 <th scope="col" class="text-end" style="width:72px;" data-column="points" data-sort-type="number" aria-sort="none">{{ polygon_column_header("POINTS NR.", "points") }}</th>
                 <th scope="col" style="width:120px;" data-column="sus" aria-sort="none">{{ polygon_column_header("SUs", "sus") }}</th>
                 <th scope="col" style="width:260px;" data-column="documentation" aria-sort="none">{{ polygon_column_header("Is documented by:", "documentation") }}</th>
+                <th scope="col">Has geometry</th>
                 <th scope="col" class="text-end" style="width:150px;">ACTIONS</th>
               </tr>
             </thead>
@@ -451,8 +405,10 @@
                   </div>
                 </td>
 
+                <td>{{ geometry_status('polygon', p.name) }}</td>
                 <td class="text-end">
                   <div class="d-inline-flex gap-1">
+                    {{ geometry_button('polygon', p.name) }}
                     <button type="button"
                             class="btn btn-sm btn-outline-primary"
                             data-bs-toggle="modal"
@@ -473,7 +429,7 @@
               </tr>
               {% endfor %}
               <tr id="polygonsNoMatches" hidden>
-                <td colspan="10" class="text-center text-muted py-3">No polygons match the filters.</td>
+                <td colspan="11" class="text-center text-muted py-3">No polygons match the filters.</td>
               </tr>
             </tbody>
           </table>
@@ -852,33 +808,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <input type="text" class="form-control" name="notes" id="editPolygonNotes" placeholder="optional">
         </div>
 
-        <div class="row g-3 mt-2">
-          <div class="col-md-6">
-            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-              <div>
-                <h6 class="mb-0">TOP ranges (FROM–TO)</h6>
-                <small class="text-muted">upper/top polygon points</small>
-              </div>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEditPolygonRangeRow('top')">+ range</button>
-            </div>
-            <div id="edit-top-ranges-container"></div>
-          </div>
-
-          <div class="col-md-6">
-            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-              <div>
-                <h6 class="mb-0">BOTTOM ranges (FROM–TO)</h6>
-                <small class="text-muted">lower/bottom polygon points</small>
-              </div>
-              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEditPolygonRangeRow('bottom')">+ range</button>
-            </div>
-            <div id="edit-bottom-ranges-container"></div>
-          </div>
-        </div>
-
-        <small class="text-muted d-block mt-3">
-          At least one TOP or BOTTOM range is required. Saving replaces the ranges and rebuilds polygon geometry.
-        </small>
+        <p class="small text-muted mt-3">Manage measured points and geometry with Define geometry in the listing.</p>
       </div>
 
       <div class="modal-footer">
@@ -890,65 +820,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <script>
-  function addEditPolygonRangeRow(side, fromValue = '', toValue = '') {
-    const containerId = side === 'top' ? 'edit-top-ranges-container' : 'edit-bottom-ranges-container';
-    const fromName = side === 'top' ? 'top_range_from[]' : 'bottom_range_from[]';
-    const toName = side === 'top' ? 'top_range_to[]' : 'bottom_range_to[]';
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    const row = document.createElement('div');
-    row.className = 'row g-2 align-items-end range-row mt-2';
-    row.innerHTML = `
-      <div class="col-5">
-        <label class="form-label">FROM</label>
-        <input type="number" class="form-control" name="${fromName}" value="${fromValue}">
-      </div>
-      <div class="col-5">
-        <label class="form-label">TO</label>
-        <input type="number" class="form-control" name="${toName}" value="${toValue}">
-      </div>
-      <div class="col-2 d-flex gap-1">
-        <button type="button" class="btn btn-outline-secondary" onclick="addEditPolygonRangeRow('${side}')">+</button>
-        <button type="button" class="btn btn-outline-danger" onclick="removeEditPolygonRangeRow(this)">-</button>
-      </div>
-    `;
-    container.appendChild(row);
-  }
-
-  function removeEditPolygonRangeRow(btn) {
-    const row = btn.closest('.range-row');
-    if (!row) return;
-
-    const container = row.parentElement;
-    const rows = container ? Array.from(container.querySelectorAll('.range-row')) : [];
-    if (rows.length > 1) {
-      row.remove();
-      return;
-    }
-
-    row.querySelectorAll('input').forEach(input => {
-      input.value = '';
-    });
-  }
-
-  function renderEditPolygonRanges(side, ranges) {
-    const containerId = side === 'top' ? 'edit-top-ranges-container' : 'edit-bottom-ranges-container';
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    container.innerHTML = '';
-    const rows = Array.isArray(ranges) ? ranges : [];
-    if (!rows.length) {
-      addEditPolygonRangeRow(side);
-      return;
-    }
-
-    rows.forEach(range => {
-      addEditPolygonRangeRow(side, range.from ?? '', range.to ?? '');
-    });
-  }
-
   function initEditPolygonModal() {
     const editPolygonModal = document.getElementById('editPolygonModal');
     if (!editPolygonModal) return;
@@ -974,9 +845,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (allocation.value !== (polygon.allocation_reason || 'other')) {
         allocation.value = 'other';
       }
-
-      renderEditPolygonRanges('top', polygon.top_ranges || []);
-      renderEditPolygonRanges('bottom', polygon.bottom_ranges || []);
     });
 
     const requestedName = {{ open_edit_polygon_name|tojson }};

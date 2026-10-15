@@ -5,7 +5,6 @@ import json
 import os
 import uuid
 from datetime import date
-from typing import Any
 
 from flask import (
     Blueprint, abort, render_template, request, redirect, url_for, flash,
@@ -29,6 +28,8 @@ from app.utils.media_bulk import build_media_zip
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
 
 from app.queries import (
+    spatial_ready_sql,
+    spatial_world_update_sql,
     # INSERT/UPDATE/DELETE
     insert_photogram_sql,
     update_photogram_sql,
@@ -46,9 +47,7 @@ from app.queries import (
     link_photogram_section_sql,
     unlink_photogram_section_sql,
 
-    # GEOPTS ranges
-    insert_photogram_geopts_range_sql,
-    delete_photogram_geopts_ranges_sql,
+    # Historical point ranges
     select_photogram_geopts_ranges_sql,
 
     # LIST/DETAIL/STATS
@@ -117,26 +116,6 @@ def _parse_text_list(vals: list[str]) -> list[str]:
             uniq.append(x)
             seen.add(x)
     return uniq
-
-
-def _read_range_pairs(form: Any, from_name: str, to_name: str) -> list[tuple[int, int]]:
-    from_list = form.getlist(from_name)
-    to_list = form.getlist(to_name)
-
-    pairs: list[tuple[int, int]] = []
-    for f, t in zip(from_list, to_list):
-        a = _as_int(f)
-        b = _as_int(t)
-        if a is None and b is None:
-            continue
-        if a is None or b is None:
-            raise ValueError("Invalid geopts range (FROM/TO must be integers).")
-        if a <= 0 or b <= 0:
-            raise ValueError("Invalid geopts range (IDs must be positive).")
-        if a > b:
-            raise ValueError("Invalid geopts range (FROM must be <= TO).")
-        pairs.append((a, b))
-    return pairs
 
 
 def _human_bytes(n: int | None) -> str:
@@ -303,11 +282,6 @@ def upload_photograms():
     polygons = request.form.getlist("ref_polygon")
     sections = request.form.getlist("ref_section")
 
-    try:
-        ranges = _read_range_pairs(request.form, "geopt_from[]", "geopt_to[]")
-    except Exception as e:
-        flash(f"Upload failed: {e}", "danger")
-        return redirect(url_for("photograms.photograms"))
 
     if typ not in PHOTOGRAM_TYP_CHOICES:
         flash("Upload failed: Invalid photogram_typ.", "danger")
@@ -444,8 +418,6 @@ def upload_photograms():
                     if s_i is not None:
                         cur.execute(link_photogram_section_sql(), (s_i, it["pk_name"]))
 
-                for a, b in ranges:
-                    cur.execute(insert_photogram_geopts_range_sql(), (it["pk_name"], a, b))
 
             conn.commit()
             flash(f"Uploaded {len(items)} photogram(s).", "success")
@@ -692,11 +664,6 @@ def edit_photogram(id_photogram: str):
     sj_ids = request.form.getlist("ref_sj")
     polygons = request.form.getlist("ref_polygon")
     sections = request.form.getlist("ref_section")
-    try:
-        ranges = _read_range_pairs(request.form, "geopt_from[]", "geopt_to[]")
-    except Exception as e:
-        flash(f"Edit failed: {e}", "danger")
-        return redirect(url_for("photograms.photograms"))
 
     repl = request.files.get("replace_file")
     replace = bool(repl and repl.filename)
@@ -780,10 +747,14 @@ def edit_photogram(id_photogram: str):
                     ),
                 )
 
+                if replace and request.form.get('keep_world_file') != 'yes':
+                    cur.execute(spatial_ready_sql())
+                    if cur.fetchone()[0]:
+                        cur.execute(spatial_world_update_sql(), (None, pid))
+
                 cur.execute("DELETE FROM tabaid_photogram_sj WHERE ref_photogram=%s", (pid,))
                 cur.execute("DELETE FROM tabaid_polygon_photograms WHERE ref_photogram=%s", (pid,))
                 cur.execute("DELETE FROM tabaid_section_photograms WHERE ref_photogram=%s", (pid,))
-                cur.execute(delete_photogram_geopts_ranges_sql(), (pid,))
 
                 for sj in sj_ids:
                     sj_i = _as_int(sj)
@@ -802,8 +773,6 @@ def edit_photogram(id_photogram: str):
                         continue
                     cur.execute(link_photogram_section_sql(), (s_i, pid))
 
-                for a, b in ranges:
-                    cur.execute(insert_photogram_geopts_range_sql(), (pid, a, b))
 
                 if replace and tmp_final_path:
                     backup_id = uuid.uuid4().hex

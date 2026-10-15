@@ -236,7 +236,7 @@ def add_find():
         count = _optional_positive_int(request.form.get("count"), "Count")
         box = _optional_positive_int(request.form.get("box"), "Box")
 
-        ref_geopt = _optional_int(request.form.get("ref_geopt"))
+        ref_geopt = None
         ref_polygon = (request.form.get("ref_polygon") or "").strip() or None
         description = (request.form.get("description") or "").strip() or ""
 
@@ -343,8 +343,7 @@ def update_find(id_find: int):
         count = _optional_positive_int(payload.get("count"), "Count")
         box = _optional_positive_int(payload.get("box"), "Box")
 
-        ref_geopt = payload.get("ref_geopt")
-        ref_geopt = int(ref_geopt) if str(ref_geopt).strip() != "" else None
+        ref_geopt = None  # Geometry and its source measurements are edited separately.
 
         ref_polygon = (payload.get("ref_polygon") or "").strip() or None
         description = (payload.get("description") or "").strip() or ""
@@ -387,7 +386,7 @@ def add_sample():
         ref_sample_type = (request.form.get("ref_sample_type") or "").strip().lower()
         ref_sj = _require_int(request.form.get("ref_sj"), "SJ")
 
-        ref_geopt = _optional_int(request.form.get("ref_geopt"))
+        ref_geopt = None
         ref_polygon = (request.form.get("ref_polygon") or "").strip() or None
         description = (request.form.get("description") or "").strip() or ""
 
@@ -490,8 +489,7 @@ def update_sample(id_sample: int):
         ref_sample_type = (payload.get("ref_sample_type") or "").strip().lower()
         ref_sj = int(payload.get("ref_sj"))
 
-        ref_geopt = payload.get("ref_geopt")
-        ref_geopt = int(ref_geopt) if str(ref_geopt).strip() != "" else None
+        ref_geopt = None  # Geometry and its source measurements are edited separately.
 
         ref_polygon = (payload.get("ref_polygon") or "").strip() or None
         description = (payload.get("description") or "").strip() or ""

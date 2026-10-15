@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h2>Spatial overview · {{ selected_db }}</h2><a class="btn btn-outline-success" href="{{ url_for('spatial.export',kind=kind) }}">Export SHP</a></div>
+<div id="spatialMapStatus" class="small text-muted mb-2" role="status">Loading geometry…</div>
+<div id="spatialMap" style="height:70vh;min-height:420px" class="border rounded"></div>
+<p class="small text-muted mt-2">Dashed outlines / hollow markers denote approximate representations. Photo points show the camera position. Vertical surfaces are displayed in plan view.</p>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async function () {
+  const status = document.getElementById('spatialMapStatus');
+  const map = L.map('spatialMap').setView([49.8,15.5],7);
+  const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:22}).addTo(map);
+  try {
+    const response = await fetch({{ url_for('spatial.geojson',kind=kind)|tojson }},{headers:{Accept:'application/json'}});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Map loading failed.');
+    const colors = {polygon:'#3366cc',su:'#9933cc',section:'#cc3333',find:'#e68a00',sample:'#1b8040',photogram:'#009999',drawing:'#995522',geopt:'#555555',photo:'#bb4466'};
+    const groups = {};
+    data.features.forEach(function (feature) {
+      const p = feature.properties;
+      const label = p.kind;
+      if (!groups[label]) groups[label] = L.featureGroup().addTo(map);
+      const style = {color:colors[label],weight:2,dashArray:p.is_proxy?'5 5':null,fillOpacity:p.is_proxy?0.08:0.2};
+      L.geoJSON(feature,{style:style,pointToLayer:(_,latlng)=>L.circleMarker(latlng,{...style,radius:5,fillOpacity:p.is_proxy?0:0.8}),onEachFeature:(_,layer)=>{
+        const popup = document.createElement('div');
+        popup.textContent = label+' '+p.entity_id+' · '+p.geometry_role+(p.is_proxy?' · proxy':'');
+        layer.bindPopup(popup);
+      }}).addTo(groups[label]);
+    });
+    L.control.layers({'OpenStreetMap':tiles},groups).addTo(map);
+    const bounds = L.featureGroup(Object.values(groups)).getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds.pad(0.1),{maxZoom:20});
+    status.textContent = data.features.length+' representations. Geometry without a configured project EPSG is omitted.';
+  } catch(error) { status.textContent = error.message; }
+});
+</script>
+{% endblock %}

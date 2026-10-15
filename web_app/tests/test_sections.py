@@ -73,15 +73,17 @@ def test_sections_page_renders_edit_controls_and_prefill_payload(client, monkeyp
     assert "border list-panel" in html
     assert 'data-bs-target="#editSectionModal"' in html
     assert 'id="editSectionModal"' in html
-    assert 'id="edit-ranges-container"' in html
+    assert 'id="edit-ranges-container"' not in html
+    assert 'id="geometryModal"' in html
+    assert 'data-geometry-kind="section"' in html
     assert 'id="editSectionSjs"' in html
     assert 'id="sectionSjs"' in html
     assert html.count("data-su-search-button\n") == 2
     assert html.count("data-su-search-status") == 3
     assert 'data-column="srid"' not in html
-    assert 'colspan="7"' in html
-    assert "Map view" in html
-    assert 'data-bs-target="#modalSectionsMapView"' in html
+    assert 'colspan="8"' in html
+    assert "Show all on map" in html
+    assert '/spatial/map?kind=section' in html
     assert 'id="sectionsMapView"' in html
     assert 'id="chkSectionsPolygons"' in html
     assert "/sections/geojson" in html

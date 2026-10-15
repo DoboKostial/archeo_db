@@ -29,7 +29,7 @@ def create_app():
     from app.routes import (
         main_bp, auth_bp, admin_bp, su_bp, archeo_objects_bp, polygons_bp,
         sections_bp, geodesy_bp, finds_samples_bp, photos_bp, photograms_bp,
-        sketches_bp, drawings_bp, analyze_bp, reports_bp
+        sketches_bp, drawings_bp, analyze_bp, reports_bp, spatial_bp
     )
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
@@ -46,6 +46,7 @@ def create_app():
     app.register_blueprint(drawings_bp)
     app.register_blueprint(analyze_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(spatial_bp)
 
 
     PUBLIC_ENDPOINTS = {"auth.login", "auth.forgot_password"}

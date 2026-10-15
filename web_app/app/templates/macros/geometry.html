@@ -1,0 +1,14 @@
+{% macro actions(kind) %}
+<div class="d-flex flex-wrap gap-2 mb-2" data-spatial-actions="{{ kind }}">
+  <button class="btn btn-sm btn-outline-warning" type="button" data-spatial-rebuild="{{ kind }}" data-spatial-write>Rebuild geometry (all)</button>
+  <a class="btn btn-sm btn-outline-success" href="{{ url_for('spatial.map_view',kind=kind) }}">Show all on map</a>
+  <a class="btn btn-sm btn-outline-success" href="{{ url_for('spatial.export',kind=kind) }}">Export SHP</a>
+  <span class="small text-muted align-self-center">All {{ kind }} entities in this database, across pages and filters.</span>
+</div>
+{% endmacro %}
+{% macro button(kind,key) %}
+<button type="button" class="btn btn-sm btn-outline-secondary" data-geometry-kind="{{ kind }}" data-geometry-key="{{ key }}">Define geometry</button>
+{% endmacro %}
+{% macro status(kind,key) %}
+<span class="small" data-geometry-status="{{ kind }}" data-geometry-key="{{ key }}">…</span>
+{% endmacro %}

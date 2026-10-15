@@ -8,7 +8,6 @@ import app as app_package
 from app import database
 from app.queries import (
     list_photos_sql,
-    rebuild_geom_sql,
     report_finds_list_all_sql,
     report_samples_list_all_sql,
 )
@@ -267,14 +266,6 @@ def test_report_queries_include_media_arrays():
     assert "AS sketch_ids" in report_finds_list_all_sql()
     assert "AS photo_ids" in report_samples_list_all_sql()
     assert "AS sketch_ids" in report_samples_list_all_sql()
-
-
-def test_polygon_rebuild_sql_falls_back_to_outer_hull():
-    query = rebuild_geom_sql()
-
-    assert "ST_IsSimple" in query
-    assert "ST_ConvexHull" in query
-    assert "ST_Collect" in query
 
 
 def test_password_reset_response_does_not_enumerate_accounts(app, monkeypatch):

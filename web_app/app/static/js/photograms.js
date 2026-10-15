@@ -180,29 +180,6 @@
   }
 
   // ---------------------------
-  // Ranges helpers
-  // ---------------------------
-  function makeRangeRow(fromVal = "", toVal = "", allowRemove = true) {
-    const row = document.createElement("div");
-    row.className = "row g-2 align-items-end range-row mt-2";
-
-    row.innerHTML = `
-      <div class="col-5">
-        <label class="form-label">FROM</label>
-        <input type="number" class="form-control" name="geopt_from[]" min="1" value="${fromVal}">
-      </div>
-      <div class="col-5">
-        <label class="form-label">TO</label>
-        <input type="number" class="form-control" name="geopt_to[]" min="1" value="${toVal}">
-      </div>
-      <div class="col-2 d-grid">
-        ${allowRemove ? `<button type="button" class="btn btn-outline-danger btnRemoveRange">-</button>` : `<span></span>`}
-      </div>
-    `;
-    return row;
-  }
-
-  // ---------------------------
   // Edit / Delete modals
   // ---------------------------
   async function openEdit(id) {
@@ -212,7 +189,6 @@
     const typSel = qs("#editTyp");
     const datumInp = qs("#editDatum");
     const notesInp = qs("#editNotes");
-    const rangesWrap = qs("#editRanges");
 
     if (!modalEl || !form) return;
 
@@ -231,7 +207,6 @@
     if (editIdEl) editIdEl.textContent = id;
     if (datumInp) datumInp.value = "";
     if (notesInp) notesInp.value = "";
-    if (rangesWrap) rangesWrap.innerHTML = "";
 
     // IMPORTANT: SearchSelect inside modal must be initialized
     initAllSearchSelect(form);
@@ -275,26 +250,6 @@
     setMulti("ref_polygon", links.polygon_names || [], "");
     setMulti("ref_section", links.section_ids || [], "Section");
 
-    // ranges
-    const ranges = data.geopts_ranges || [];
-    if (rangesWrap) {
-      rangesWrap.innerHTML = "";
-      if (!ranges.length) {
-        rangesWrap.appendChild(makeRangeRow("", "", false));
-      } else {
-        ranges.forEach((r, idx) => {
-          const row = makeRangeRow(r.from ?? "", r.to ?? "", idx !== 0);
-          if (idx === 0) {
-            const btn = qs(".btnRemoveRange", row);
-            if (btn) btn.remove();
-            const col2 = qs(".col-2", row);
-            if (col2) col2.innerHTML = `<button type="button" class="btn btn-outline-secondary btnAddRangeInEdit">+</button>`;
-          }
-          rangesWrap.appendChild(row);
-        });
-      }
-    }
-
     modal.show();
   }
 
@@ -314,50 +269,6 @@
     if (idEl) idEl.textContent = id;
 
     modal.show();
-  }
-
-  // ---------------------------
-  // Ranges wiring
-  // ---------------------------
-  function wireRanges() {
-    // UPLOAD ranges
-    const uploadWrap = qs("#geoptsRanges");
-    if (uploadWrap) {
-      uploadWrap.addEventListener("click", (e) => {
-        const addBtn = e.target.closest(".btnAddRange");
-        const remBtn = e.target.closest(".btnRemoveRange");
-        if (addBtn) {
-          uploadWrap.appendChild(makeRangeRow("", "", true));
-        }
-        if (remBtn) {
-          const row = remBtn.closest(".range-row");
-          if (row) row.remove();
-        }
-      });
-    }
-
-    // EDIT ranges
-    const editWrap = qs("#editRanges");
-    const btnEditAdd = qs("#btnEditAddRange");
-    if (btnEditAdd && editWrap) {
-      btnEditAdd.addEventListener("click", () => {
-        editWrap.appendChild(makeRangeRow("", "", true));
-      });
-    }
-
-    if (editWrap) {
-      editWrap.addEventListener("click", (e) => {
-        const remBtn = e.target.closest(".btnRemoveRange");
-        const addBtn = e.target.closest(".btnAddRangeInEdit");
-        if (remBtn) {
-          const row = remBtn.closest(".range-row");
-          if (row) row.remove();
-        }
-        if (addBtn) {
-          editWrap.appendChild(makeRangeRow("", "", true));
-        }
-      });
-    }
   }
 
   // ---------------------------
@@ -423,7 +334,6 @@
     // THIS was missing -> without it SearchSelect never appears
     initAllSearchSelect(document);
 
-    wireRanges();
     wireBulkSelection();
     wireGalleryButtons();
 

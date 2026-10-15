@@ -3,7 +3,7 @@
 # For support contact author: dobo@dobo.sk
 class Config:
 
-    APP_VERSION = "1.0.0"
+    APP_VERSION = "2.0.0"
     BASE_URL = "https://FQDN" # FQDN address of Your app
     MOBILE_API_BASE_URL = "https://FQDN/mobile_api/"  # FQDN address of mobile API used by Android app
     MOBILE_LOGIN_GRANT_SECONDS = 120  # Clamped to 30-300 seconds by the web app

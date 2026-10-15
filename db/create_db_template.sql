@@ -504,7 +504,7 @@ CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms USING btree (ref_sk
 -- tab_finds definition
 -- mostly is it sack/bag as primary identificator - container for finds
 -- -------------------------
--- Finds (one record = one bag of a given type from one SJ)
+-- Finds (one record = one bag of a given type from one SU)
 -- -------------------------
 CREATE TABLE IF NOT EXISTS tab_finds (
   id_find        int4  NOT NULL,                 -- manual ID (entered by user)
@@ -656,7 +656,7 @@ CREATE INDEX IF NOT EXISTS tabaid_sj_section_idx ON tabaid_sj_section(ref_sectio
 
 
 -- tabaid_photogram_sj definition
--- this table is clue between SJs and photograms (m:n)
+-- this table is clue between SUs and photograms (m:n)
 CREATE TABLE tabaid_photogram_sj (
 	id_aut serial4 NOT NULL,
 	ref_photogram TEXT NOT NULL,
@@ -668,7 +668,7 @@ CREATE TABLE tabaid_photogram_sj (
 
 
 -- tabaid_sj_sketch definition
--- this tabaid clues SJs and Sketches (m:n)
+-- this tabaid clues SUs and Sketches (m:n)
 CREATE TABLE tabaid_sj_sketch (
 	id_aut serial4 NOT NULL,
 	ref_sj int4 NOT NULL,
@@ -682,7 +682,7 @@ CREATE INDEX tabaid_sj_sketch_ref_sketch_idx ON tabaid_sj_sketch(ref_sketch);
 
 
 -- tabaid_sj_polygon definition
--- this clues SJs and polygons (m:n)
+-- this clues SUs and polygons (m:n)
 CREATE TABLE tabaid_sj_polygon (
   ref_sj       int  NOT NULL REFERENCES tab_sj(id_sj) ON UPDATE CASCADE ON DELETE CASCADE,
   ref_polygon  text NOT NULL REFERENCES tab_polygons(polygon_name) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -1110,7 +1110,7 @@ EXECUTE FUNCTION tab_geopts_set_geom();
 --GET FUNCTIONS
 --###################
 
--- this fnc loops over all SJs and returns related photos
+-- this fnc loops over all SUs and returns related photos
 CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_photo()
  RETURNS TABLE(sj_id INTEGER, photo_id CHARACTER VARYING, photo_typ CHARACTER VARYING, photo_datum date)
  LANGUAGE plpgsql
@@ -1135,7 +1135,7 @@ $function$
 
 
 -- 
--- this fnc loops over all SJs and returns related photograms
+-- this fnc loops over all SUs and returns related photograms
 CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_photogram()
  RETURNS TABLE(sj_id INTEGER, id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING)
  LANGUAGE plpgsql
@@ -1158,7 +1158,7 @@ $function$
 ;
 
 --
--- this fnc loops over all SJs and returns related sketches
+-- this fnc loops over all SUs and returns related sketches
 CREATE OR REPLACE FUNCTION fnc_get_all_sjs_and_related_sketch()
  RETURNS TABLE(sj_id INTEGER, id_sketch CHARACTER VARYING, sketch_typ CHARACTER VARYING, datum date)
  LANGUAGE plpgsql
@@ -1181,7 +1181,7 @@ END;
 $function$
 ;
 
--- this function requires the ID of section and lists all SJs cut by this section
+-- this function requires the ID of section and lists all SUs cut by this section
 CREATE OR REPLACE FUNCTION fnc_get_section_and_related_sjs(choose_section INTEGER)
  RETURNS TABLE(id_section INTEGER, id_sj INTEGER, docu_plan BOOLEAN, docu_vertical BOOLEAN)
  LANGUAGE plpgsql
@@ -1205,7 +1205,7 @@ END;
 $function$
 ;
 
--- this function takes ID of SJ and list all sections cutting this SJ 
+-- this function takes ID of SU and list all sections cutting this SU 
 CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_sections(choose_sj INTEGER)
  RETURNS TABLE(sj_id INTEGER, id_section INTEGER, description CHARACTER VARYING)
  LANGUAGE plpgsql
@@ -1228,7 +1228,7 @@ END;
 $function$
 ;
 
--- this function takes SJ id and returns list of all related photos
+-- this function takes SU id and returns list of all related photos
 CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_photo(choose_sj INTEGER)
  RETURNS TABLE(sj_id INTEGER, photo_id CHARACTER VARYING, photo_typ CHARACTER VARYING, photo_datum DATE)
  LANGUAGE plpgsql
@@ -1252,7 +1252,7 @@ END;
 $function$
 ;
 
--- this function requires SJ id and returns list of referenced photograms
+-- this function requires SU id and returns list of referenced photograms
 CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_photogram(strat_j INTEGER)
  RETURNS TABLE(sj_id INTEGER, id_photogram CHARACTER VARYING, photogram_typ CHARACTER VARYING)
  LANGUAGE plpgsql
@@ -1275,7 +1275,7 @@ END;
 $function$
 ;
 
--- this function use SJ is as an argument and prints all sketches associated with
+-- this function use SU is as an argument and prints all sketches associated with
 CREATE OR REPLACE FUNCTION fnc_get_sj_and_related_sketch(strat_j INTEGER)
  RETURNS TABLE(sj_id INTEGER, id_sketch CHARACTER VARYING, sketch_typ CHARACTER VARYING, datum DATE)
  LANGUAGE plpgsql
@@ -1319,7 +1319,7 @@ BEGIN
             JOIN tab_photos tf ON tafs.ref_photo = tf.id_photo
             WHERE tafs.ref_sj = sj_record.id_sj
         ) LOOP
-            RAISE NOTICE 'For SJ %, Associated Photo: %', sj_record.id_sj, photo_info;
+            RAISE NOTICE 'For SU %, Associated Photo: %', sj_record.id_sj, photo_info;
         END LOOP;
     END LOOP;
 END;
@@ -1378,7 +1378,7 @@ END;
    $function$
 ;
 
--- this function takes object/feature as argument and prints all SJs it consists of
+-- this function takes object/feature as argument and prints all SUs it consists of
 CREATE OR REPLACE FUNCTION fnc_get_sj_by_object(objekt INTEGER)
  RETURNS TABLE(strat_j_id INTEGER, interpretace CHARACTER VARYING)
  LANGUAGE plpgsql
@@ -1395,7 +1395,7 @@ $function$
 ;
 
 -- ATTENTION!!! SUPERFUNCTION
--- this function loops over all SJs and prints all
+-- this function loops over all SUs and prints all
 -- graphical documentation related to it. It uses
 -- 3 functions defined above
 CREATE OR REPLACE FUNCTION superfnc_get_all_sjs_and_related_docu_entities()
@@ -1411,7 +1411,7 @@ BEGIN
         loop_sj_id := sj_id; -- Assign sj_id to a separate variable
 
         -- Initialize the output text for this sj_id
-        output_text := 'For SJ ID=' || loop_sj_id || ' we have following items:';
+        output_text := 'For SU ID=' || loop_sj_id || ' we have following items:';
 
         -- Call the function to retrieve fotos
         FOR record_row IN
@@ -1439,7 +1439,7 @@ $function$
 ;
 
 -- another SUPERFUNCTION
--- this superfunction works same as previous but not for all SJs
+-- this superfunction works same as previous but not for all SUs
 -- but only for one particular (as an argument)
 CREATE OR REPLACE FUNCTION superfnc_get_sj_and_related_docu_entities(target_sj_id INTEGER)
  RETURNS TABLE(output_text text)
@@ -1450,7 +1450,7 @@ DECLARE
     record_row record;
 BEGIN
     -- Initialize the output text for the specified sj_id
-    output_text := 'For SJ ID=' || target_sj_id || ' we have following items:';
+    output_text := 'For SU ID=' || target_sj_id || ' we have following items:';
 
     loop_sj_id := target_sj_id; -- Assign the specified sj_id to a separate variable
 
@@ -1486,7 +1486,7 @@ $function$
 --------------
 
 
--- this function checks if all objects are created by SJs (has reference)
+-- this function checks if all objects are created by SUs (has reference)
 CREATE OR REPLACE FUNCTION fnc_check_objects_have_sj()
  RETURNS void
  LANGUAGE plpgsql
@@ -1506,16 +1506,16 @@ BEGIN
 
     -- Check if all objects have corresponding sj_id values
     IF missing_objects IS NULL THEN
-        RAISE NOTICE 'All objects are fine, having SJs';
+        RAISE NOTICE 'All objects are fine, having SUs';
     ELSE
-        RAISE NOTICE 'Objects with missing SJs:%', E'\n' || missing_objects;
+        RAISE NOTICE 'Objects with missing SUs:%', E'\n' || missing_objects;
     END IF;
 END;
 $function$
 ;
 
 
--- this function checks if all SJs have at least one photo
+-- this function checks if all SUs have at least one photo
 CREATE OR REPLACE FUNCTION fnc_check_all_sjs_has_photo()
  RETURNS void
  LANGUAGE plpgsql
@@ -1533,22 +1533,22 @@ BEGIN
             WHERE foto.ref_sj = sj.id_sj
         )
     ) THEN
-        -- Print SJ records without foto records
-        RAISE NOTICE 'Following SJs have no foto entry:';
+        -- Print SU records without foto records
+        RAISE NOTICE 'Following SUs have no foto entry:';
         FOR sj_id IN (SELECT id_sj FROM tab_sj sj WHERE NOT EXISTS (
             SELECT 1 FROM tabaid_photo_sj foto WHERE foto.ref_sj = sj.id_sj
         )) LOOP
             RAISE NOTICE '%', sj_id;
         END LOOP;
     ELSE
-        -- All SJ records have corresponding foto records
+        -- All SU records have corresponding foto records
         RAISE NOTICE 'Check OK, all SUs have appropriate fotorecord';
     END IF;
 END;
 $function$
 ;
 
--- this function checks if SJs have or not sketches
+-- this function checks if SUs have or not sketches
 CREATE OR REPLACE FUNCTION fnc_check_all_sjs_has_sketch()
  RETURNS void
  LANGUAGE plpgsql
@@ -1556,7 +1556,7 @@ AS $function$
 DECLARE
     sj_id INT;
 BEGIN
-    -- Check if there are SJ records without corresponding sketch records
+    -- Check if there are SU records without corresponding sketch records
     IF EXISTS (
         SELECT 1
         FROM tab_sj
@@ -1566,16 +1566,16 @@ BEGIN
             WHERE tabaid_sj_sketch.ref_sj = tab_sj.id_sj
         )
     ) THEN
-        -- Print SJ records without sketch records
-        RAISE NOTICE 'Following SJs have no sketch entry:';
+        -- Print SU records without sketch records
+        RAISE NOTICE 'Following SUs have no sketch entry:';
         FOR sj_id IN (SELECT id_sj FROM tab_sj WHERE NOT EXISTS (
             SELECT 1 FROM tabaid_sj_sketch WHERE tabaid_sj_sketch.ref_sj = tab_sj.id_sj
         )) LOOP
             RAISE NOTICE '%', sj_id;
         END LOOP;
     ELSE
-        -- All SJ records have corresponding foto records
-        RAISE NOTICE 'Check OK, all SJs have appropriate sketch:';
+        -- All SU records have corresponding foto records
+        RAISE NOTICE 'Check OK, all SUs have appropriate sketch:';
     END IF;
 END;
 $function$
@@ -1604,6 +1604,11 @@ GRANT USAGE ON TYPE public.section_type TO grp_app_terrain_ro, grp_app_terrain_r
 GRANT USAGE ON TYPE public.geopt_code TO grp_app_terrain_ro, grp_app_terrain_rw;
 GRANT USAGE ON TYPE public.allocation_reason TO grp_app_terrain_ro, grp_app_terrain_rw;
 
+RESET ROLE;
+
+-- Use the same spatial definitions for new and upgraded terrain databases.
+SET ROLE own_terrain_db;
+\ir spatial_model.sql
 RESET ROLE;
 
 /*

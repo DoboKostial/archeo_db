@@ -1,3 +1,4 @@
+{% from 'macros/geometry.html' import actions as geometry_actions, button as geometry_button, status as geometry_status %}
 {% extends 'base.html' %}
 {% block title %}Stratigraphic units{% endblock %}
 {% from "macros/list_table.html" import column_header as su_column_header, items_modal %}
@@ -639,6 +640,7 @@
       {% endif %}
     </legend>
 
+    {{ geometry_actions('su') }}
     <div class="d-flex flex-wrap align-items-center gap-3 bg-white border rounded px-3 py-2 mb-2 small">
       <span><span class="text-muted">Total</span> <strong class="fs-6">{{ sj_count_total }}</strong></span>
       <span><span class="text-muted">Deposits</span> <strong class="fs-6">{{ sj_count_deposit }}</strong></span>
@@ -658,7 +660,8 @@
               <th scope="col" style="min-width:160px;" data-column="author" aria-sort="none">{{ su_column_header("Author", "author", "su") }}</th>
               <th scope="col" style="min-width:140px;" data-column="polygon" aria-sort="none">{{ su_column_header("Polygon", "polygon", "su") }}</th>
               <th scope="col" style="min-width:250px;" data-column="documentation" aria-sort="none">{{ su_column_header("Is documented by:", "documentation", "su") }}</th>
-              <th scope="col" class="text-end">Action</th>
+              <th scope="col">Has geometry</th>
+                <th scope="col" class="text-end">Action</th>
             </tr>
           </thead>
           <tbody id="suTableBody">
@@ -688,8 +691,10 @@
                     {{ su_doc_group("Sketches", "sketches", docs.sketches, su) }}
                   </div>
                 </td>
+                <td>{{ geometry_status('su', su.id) }}</td>
                 <td class="text-end">
                   <div class="d-inline-flex gap-1">
+                    {{ geometry_button('su', su.id) }}
                     <button type="button"
                             class="btn btn-sm btn-outline-primary"
                             data-bs-toggle="modal"
@@ -709,7 +714,7 @@
               </tr>
             {% endfor %}
             <tr id="suNoMatches" hidden>
-              <td colspan="8" class="text-center text-muted py-3">No SUs match the filters.</td>
+              <td colspan="9" class="text-center text-muted py-3">No SUs match the filters.</td>
             </tr>
           </tbody>
         </table>
