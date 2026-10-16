@@ -63,6 +63,8 @@ from app.queries import (
     search_sections_sql,
     search_sketches_sql,
     search_photos_sql,
+    search_authors_sql,
+    personalia_exists_sql,
 )
 
 photograms_bp = Blueprint("photograms", __name__)
@@ -206,6 +208,7 @@ def photograms():
             "notes": r[4],
             "ref_photo_from": r[5],
             "ref_photo_to": r[6],
+            "author": r[8],
             "link_counts": {
                 "sj": int(lc.get("sj", 0)) if isinstance(lc, dict) else 0,
                 "polygon": int(lc.get("polygon", 0)) if isinstance(lc, dict) else 0,
@@ -266,7 +269,12 @@ def upload_photograms():
     selected_db = session["selected_db"]
 
     typ = (request.form.get("photogram_typ") or "").strip()
+    author = (request.form.get("author") or "").strip()
     notes = (request.form.get("notes") or "").strip() or None
+
+    if not author:
+        flash("Upload failed: Author is required.", "danger")
+        return redirect(url_for("photograms.photograms"))
 
     try:
         datum = date.fromisoformat((request.form.get("datum") or "").strip())
@@ -307,6 +315,8 @@ def upload_photograms():
                 cur.execute(sql, (value,))
                 if not cur.fetchone():
                     raise ValueError(err)
+
+            _assert_exists(personalia_exists_sql(), author, f"Author not found: {author}")
 
             if ref_sketch:
                 _assert_exists("SELECT 1 FROM tab_sketches WHERE id_sketch=%s LIMIT 1;",
@@ -400,6 +410,7 @@ def upload_photograms():
                         it["checksum"],
                         ref_photo_from,
                         ref_photo_to,
+                        author,
                     ),
                 )
 
@@ -612,7 +623,7 @@ def api_detail(id_photogram: str):
             if not row:
                 return jsonify({"error": "not found"}), 404
 
-            cur.execute(select_photogram_links_sql(), (pid,))
+            cur.execute(select_photogram_links_sql(), (pid, pid, pid))
             links = cur.fetchone()
 
             cur.execute(select_photogram_geopts_ranges_sql(), (pid,))
@@ -626,6 +637,7 @@ def api_detail(id_photogram: str):
         "notes": row[4],
         "ref_photo_from": row[5],
         "ref_photo_to": row[6],
+        "author": row[7],
         "links": {
             "sj_ids": links[0] or [],
             "polygon_names": links[1] or [],
@@ -646,6 +658,7 @@ def edit_photogram(id_photogram: str):
     pid = (id_photogram or "").strip()
 
     typ = (request.form.get("photogram_typ") or "").strip()
+    author = (request.form.get("author") or "").strip() or None
     notes = (request.form.get("notes") or "").strip() or None
 
     try:
@@ -685,6 +698,11 @@ def edit_photogram(id_photogram: str):
                 if not cur.fetchone():
                     flash("Photogram not found.", "danger")
                     return redirect(url_for("photograms.photograms"))
+
+                if author:
+                    cur.execute(personalia_exists_sql(), (author,))
+                    if not cur.fetchone():
+                        raise ValueError(f"Author not found: {author}")
 
                 new_mime = None
                 new_size = None
@@ -743,6 +761,7 @@ def edit_photogram(id_photogram: str):
                         new_checksum,
                         ref_photo_from,
                         ref_photo_to,
+                        author,
                         pid,
                     ),
                 )
@@ -917,6 +936,12 @@ def _api_search(selected_db: str, sql: str, q: str):
         "results": [{"id": r[0], "text": r[1]} for r in rows],
         "pagination": {"more": len(rows) == limit},
     })
+
+
+@photograms_bp.get("/photograms/api/search/authors")
+@require_selected_db
+def api_search_authors():
+    return _api_search(session["selected_db"], search_authors_sql(), request.args.get("q", ""))
 
 
 @photograms_bp.get("/photograms/api/search/sj")

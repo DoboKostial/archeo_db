@@ -76,6 +76,7 @@
                      data-mode="single"
                      data-endpoint="{{ url_for('photos.api_search_authors') }}"
                      data-hidden-name="author"
+                     data-initial-value="{{ user_email }}"
                      data-placeholder="Type to search author...">
                 </div>
               </div>
@@ -622,5 +623,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/photos.js') }}"></script>
+<script src="{{ url_for('static', filename='js/photos.js', v='author-default-1') }}"></script>
 {% endblock %}

@@ -2176,14 +2176,18 @@ def stats_by_type_sql():
 # SQLs for photograms handling
 # -------------------------
 
+def personalia_exists_sql():
+    return "SELECT 1 FROM gloss_personalia WHERE mail=%s LIMIT 1;"
+
+
 def insert_photogram_sql():
     return """
         INSERT INTO tab_photograms (
             id_photogram, photogram_typ, datum, ref_sketch, notes,
             mime_type, file_size, checksum_sha256,
-            ref_photo_from, ref_photo_to
+            ref_photo_from, ref_photo_to, author
         )
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s);
     """
 
 def update_photogram_sql():
@@ -2197,7 +2201,8 @@ def update_photogram_sql():
             file_size=%s,
             checksum_sha256=%s,
             ref_photo_from=%s,
-            ref_photo_to=%s
+            ref_photo_to=%s,
+            author=%s
         WHERE id_photogram=%s;
     """
 
@@ -2377,7 +2382,8 @@ def select_photograms_page_sql(
                WHERE g.ref_photogram=p.id_photogram),
               '[]'::json
             )
-        ) AS link_counts
+        ) AS link_counts,
+        p.author
       FROM tab_photograms p
       WHERE {where_sql}
       ORDER BY p.id_photogram DESC
@@ -2387,7 +2393,7 @@ def select_photograms_page_sql(
 
 def select_photogram_detail_sql():
     return """
-      SELECT id_photogram, photogram_typ, datum, ref_sketch, notes, ref_photo_from, ref_photo_to
+      SELECT id_photogram, photogram_typ, datum, ref_sketch, notes, ref_photo_from, ref_photo_to, author
       FROM tab_photograms
       WHERE id_photogram=%s;
     """

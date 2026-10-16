@@ -480,6 +480,7 @@ CREATE INDEX tab_drawings_checksum_idx   ON tab_drawings (checksum_sha256);
 CREATE TABLE tab_photograms (
 	id_photogram TEXT NOT NULL,
 	photogram_typ TEXT NOT NULL,
+	author VARCHAR(100) NULL REFERENCES gloss_personalia(mail),
 	datum DATE NOT NULL,
 	ref_sketch VARCHAR(120) NULL,
 	notes TEXT NULL,
@@ -498,6 +499,7 @@ CREATE TABLE tab_photograms (
 );
 CREATE INDEX tab_photograms_checksum_idx ON tab_photograms USING btree (checksum_sha256);
 CREATE INDEX tab_photograms_datum_idx ON tab_photograms USING btree (datum);
+CREATE INDEX tab_photograms_author_idx ON tab_photograms (author);
 CREATE INDEX tab_photograms_ref_sketch_idx ON tab_photograms USING btree (ref_sketch);
 
 

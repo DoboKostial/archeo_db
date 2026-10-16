@@ -193,7 +193,7 @@
               <select class="form-select" id="author" name="author" required>
                 <option value="">-- choose --</option>
                 {% for a in authors %}
-                  <option value="{{ a }}">{{ a }}</option>
+                  <option value="{{ a }}" {% if a == (form_data.get('author', user_email) if form_data else user_email) %}selected{% endif %}>{{ a }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -800,7 +800,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Author (email)</label>
-            <input type="email" name="author" class="form-control" required>
+            <input type="email" name="author" class="form-control" value="{{ user_email }}" required>
           </div>
           <div class="col-12">
             <label class="form-label">Notes</label>
@@ -842,7 +842,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label">Author (email)</label>
-            <input type="email" name="author" class="form-control" required>
+            <input type="email" name="author" class="form-control" value="{{ user_email }}" required>
           </div>
           <div class="col-md-4">
             <label class="form-label">Date (optional)</label>
@@ -884,7 +884,7 @@
         <div class="row g-2">
           <div class="col-md-6">
             <label class="form-label">Author (email)</label>
-            <input type="email" name="author" class="form-control" required>
+            <input type="email" name="author" class="form-control" value="{{ user_email }}" required>
           </div>
           <div class="col-md-6">
             <label class="form-label">Date</label>

@@ -660,6 +660,7 @@ def upload_polygon_media(media_type):
         datum = (request.form.get("datum") or "").strip() or None
     else:  # photograms
         photogram_typ = (request.form.get("photogram_typ") or "").strip()
+        author = (request.form.get("author") or "").strip() or None
         datum = (request.form.get("datum") or "").strip()
         if not datum:
             flash("Photogram date is required.", "warning")
@@ -765,6 +766,7 @@ def upload_polygon_media(media_type):
                             checksum,
                             ref_photo_from,      # ref_photo_from
                             ref_photo_to,        # ref_photo_to
+                            author,
                         )
                     )
                     cur2.execute(link_polygon_photogram_sql(), (polygon_name, pk_name))

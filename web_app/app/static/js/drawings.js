@@ -58,7 +58,8 @@
       `);
       chip.querySelector(".chip-text").textContent = text;
 
-      const hidden = el(`<input type="hidden" name="${hiddenName}" value="${id}">`);
+      const hidden = el(`<input type="hidden" name="${hiddenName}">`);
+      hidden.value = id;
 
       chip.querySelector("button").addEventListener("click", () => {
         hidden.remove();
@@ -118,6 +119,10 @@
         [...container.querySelectorAll(`input[type="hidden"][name="${hiddenName}"]`)].forEach(n => n.remove());
       }
     };
+
+    if (mode === "single" && container.dataset.initialValue) {
+      container._searchSelect.setSingle(container.dataset.initialValue, container.dataset.initialValue);
+    }
   }
 
   function initAllSearchSelect(root = document) {

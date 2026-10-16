@@ -63,7 +63,8 @@
     };
 
     const addHidden = (val) => {
-      const hidden = el(`<input type="hidden" name="${hiddenName}" value="${String(val)}">`);
+      const hidden = el(`<input type="hidden" name="${hiddenName}">`);
+      hidden.value = String(val);
       container.appendChild(hidden);
       return hidden;
     };
@@ -164,6 +165,8 @@
     // render prefilled values (filters etc.)
     if (prefilled.length) {
       container._searchSelect.setFromHiddenExisting();
+    } else if (mode === "single" && container.dataset.initialValue) {
+      container._searchSelect.setSingle(container.dataset.initialValue, container.dataset.initialValue);
     }
   }
 
@@ -241,6 +244,7 @@
       });
     };
 
+    setSingle("author", data.author || "");
     setSingle("ref_sketch", data.ref_sketch || "");
     setSingle("ref_photo_from", data.ref_photo_from || "");
     setSingle("ref_photo_to", data.ref_photo_to || "");

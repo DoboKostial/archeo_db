@@ -64,6 +64,7 @@
                    data-mode="single"
                    data-endpoint="{{ url_for('sketches.api_search_authors') }}"
                    data-hidden-name="author"
+                   data-initial-value="{{ user_email }}"
                    data-placeholder="Type to search author email..."></div>
             </div>
 
@@ -523,5 +524,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/sketches.js') }}"></script>
+<script src="{{ url_for('static', filename='js/sketches.js', v='author-default-1') }}"></script>
 {% endblock %}

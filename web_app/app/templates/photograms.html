@@ -47,6 +47,16 @@
             <div class="fw-semibold mb-2">Metadata</div>
 
             <div class="mb-2">
+              <label class="form-label">Author (email) <span class="required-marker text-danger">*</span></label>
+              <div class="search-select"
+                   data-mode="single"
+                   data-endpoint="{{ url_for('photograms.api_search_authors') }}"
+                   data-hidden-name="author"
+                   data-initial-value="{{ user_email }}"
+                   data-placeholder="Type to search author..."></div>
+            </div>
+
+            <div class="mb-2">
               <label class="form-label">Photogram type <span class="text-danger">*</span></label>
               <select class="form-select" name="photogram_typ" required>
                 <option value="" selected disabled>-- select --</option>
@@ -209,6 +219,7 @@
             <div class="small text-muted mb-1">{{ g.id_photogram }}</div>
             <div>Has geometry: {{ geometry_status('photogram', g.id_photogram) }}</div>
             <div class="small mb-2"><span class="text-muted">Date:</span> {{ g.datum }}</div>
+            <div class="small mb-2"><span class="text-muted">Author:</span> {{ g.author or '—' }}</div>
 
             <div class="d-flex flex-wrap gap-1 mb-2">
               <span class="badge text-bg-secondary">{{ g.photogram_typ }}</span>
@@ -430,6 +441,15 @@
               <div class="fw-semibold mb-2">Metadata</div>
 
               <div class="mb-2">
+                <label class="form-label">Author (email)</label>
+                <div class="search-select"
+                     data-mode="single"
+                     data-endpoint="{{ url_for('photograms.api_search_authors') }}"
+                     data-hidden-name="author"
+                     data-placeholder="Type to search author..."></div>
+              </div>
+
+              <div class="mb-2">
                 <label class="form-label">Photogram type <span class="text-danger">*</span></label>
                 <select class="form-select" name="photogram_typ" id="editTyp" required>
                   {% for t in photogram_typ_choices %}
@@ -584,5 +604,5 @@
     deleteActionTmpl: "{{ url_for('photograms.delete_photogram', id_photogram='__ID__') }}"
   };
 </script>
-<script src="{{ url_for('static', filename='js/photograms.js') }}"></script>
+<script src="{{ url_for('static', filename='js/photograms.js', v='author-default-1') }}"></script>
 {% endblock %}

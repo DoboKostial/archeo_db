@@ -328,7 +328,9 @@ BEGIN
 END $$;
 
 CREATE OR REPLACE FUNCTION public.refresh_geometry_views() RETURNS void
-LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+-- Views must retain the schema owner's identity even when an application or
+-- administrator calls set_project_srid(), so later upgrades can replace them.
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
 DECLARE kind text; dims integer; view_name text; srid integer;
 BEGIN
     srid:=Find_SRID('public','tab_geopts','pts_geom');
