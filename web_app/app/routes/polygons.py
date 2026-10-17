@@ -180,8 +180,6 @@ def new_polygon_manual():
         bottom_ranges = _prep_ranges(
             request.form.getlist('bottom_range_from[]'), request.form.getlist('bottom_range_to[]')
         )
-        if not top_ranges and not bottom_ranges:
-            raise ValueError("Provide at least one TOP or BOTTOM range of points.")
         replace_geometry = request.form.get('replace_geometry') == 'yes'
 
         conn = get_terrain_connection(selected_db)
@@ -207,8 +205,9 @@ def new_polygon_manual():
                     cur.execute(spatial_build_sql(), (geometry_id, replace_geometry))
 
             conn.commit()
-            flash(f'Polygon “{polygon_name}” saved and geometry rebuilt.', 'success')
-            logger.info(f'[{selected_db}] polygon "{polygon_name}" saved with point ranges and geometry.')
+            result = 'saved and geometry rebuilt' if top_ranges or bottom_ranges else 'saved'
+            flash(f'Polygon “{polygon_name}” {result}.', 'success')
+            logger.info(f'[{selected_db}] polygon "{polygon_name}" {result}.')
         except Exception as e:
             conn.rollback()
             logger.error(f'[{selected_db}] manual polygon create error: {e}')
