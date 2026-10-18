@@ -56,6 +56,11 @@ def test_polygons_list_links_sus_and_exposes_all_documentation_to_filters(client
     for side in ('top', 'bottom'):
         assert f'name="{side}_range_from[]"' in html
         assert f'name="{side}_range_to[]"' in html
+    assert 'TOP (upper polygon) point ranges (FROM–TO)' in html
+    assert 'BOTTOM (lower polygon) point ranges (FROM–TO)' in html
+    assert 'Point ranges are optional.' in html
+    assert 'Enter at least one TOP or BOTTOM range' not in html
+    assert 'at least one side is required' not in html
     assert 'id="replaceManualGeometry"' in html
     assert "SRID / EPSG" not in html
     assert 'data-column="sus"' in html

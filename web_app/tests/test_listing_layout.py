@@ -1,7 +1,12 @@
 from html.parser import HTMLParser
+import os
+import shutil
+import subprocess
+import threading
 
 import pytest
-from flask import render_template, url_for
+from flask import Flask, g, render_template, url_for
+from werkzeug.serving import make_server
 
 from app.routes.su import _su_row_to_dict
 
@@ -113,3 +118,141 @@ def test_shared_assets_use_updated_cache_version(app):
             html = render_template(f"{template}.html", **_context(1))
             assert "css/custom.css?v=list-layout-2" in html
             assert "js/list_table.js?v=list-layout-2" in html
+
+
+UPLOAD_AUTHOR_MODALS = [
+    ("add_su", ["modalPhotos", "modalSketches", "modalDrawings"]),
+    ("polygons", ["modalPolyPhotos", "modalPolySketches"]),
+    ("sections", ["modalSecPhotos", "modalSecSketches", "modalSecDrawings"]),
+    ("finds_samples", ["modalFindPhotos", "modalFindSketches", "modalSamplePhotos", "modalSampleSketches"]),
+]
+
+
+class _ModalAuthors(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.depth = 0
+        self.modal = None
+        self.modal_depth = None
+        self.inputs = {}
+        self.feed(html)
+
+    def handle_starttag(self, tag, attributes):
+        attrs = dict(attributes)
+        if tag == "div":
+            self.depth += 1
+            if "modal" in attrs.get("class", "").split():
+                self.modal = attrs.get("id")
+                self.modal_depth = self.depth
+        if tag == "input" and attrs.get("name") == "author" and self.modal:
+            self.inputs.setdefault(self.modal, []).append(attrs)
+
+    def handle_endtag(self, tag):
+        if tag == "div":
+            if self.depth == self.modal_depth:
+                self.modal = self.modal_depth = None
+            self.depth -= 1
+
+
+@pytest.mark.parametrize("email", ["logged-in@example.invalid", "", 'quoted"author@example.invalid'])
+@pytest.mark.parametrize("template, modals", UPLOAD_AUTHOR_MODALS)
+def test_upload_modal_authors_default_to_logged_in_user_and_remain_editable(app, template, modals, email):
+    with app.test_request_context():
+        g.user_email = email
+        html = render_template(f"{template}.html", **_context())
+    parsed = _ModalAuthors(html)
+    assert set(parsed.inputs) == set(modals)
+    for inputs in parsed.inputs.values():
+        assert len(inputs) == 1
+        author = inputs[0]
+        assert author["value"] == email
+        assert "data-default-author" in author
+        assert author["type"] == "email"
+        assert "readonly" not in author and "disabled" not in author
+
+
+@pytest.mark.skipif(os.environ.get("ARCHEODB_TEST_BROWSER") != "1" or not shutil.which("chromium"),
+                    reason="Set ARCHEODB_TEST_BROWSER=1 and install Chromium")
+@pytest.mark.parametrize("template, modals", UPLOAD_AUTHOR_MODALS)
+def test_opening_upload_modals_restores_empty_authors_but_preserves_manual_choices(app, tmp_path, template, modals):
+    context = _context(1)
+    if template == "add_su":
+        context["polygons"] = ["Trench 1"]
+    with app.test_request_context():
+        g.user_email = "logged-in@example.invalid"
+        html = render_template(f"{template}.html", **context)
+    setup = """<script>
+      window.modalPreviewErrors = [];
+      window.addEventListener('error', event => modalPreviewErrors.push(event.message));
+      window.addEventListener('unhandledrejection', event => modalPreviewErrors.push(String(event.reason)));
+      window.fetch = async () => ({ok:true,json:async () => ({ok:true,rows:[],total:0})});
+      </script>"""
+    html = html.replace("</head>", setup + "</head>")
+    checks = """<pre id="uploadAuthorResult">RUNNING</pre><script>
+      document.addEventListener('DOMContentLoaded', async () => {
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+        const check = (value, message) => {if (!value) throw Error(message);};
+        try {
+          for (const [id,value] of [['suMediaInput','1'],['polyDocSelect','Trench 1'],['secDocSelect','1']]) {
+            const selector = document.getElementById(id);
+            if (selector) {selector.value = value;selector.dispatchEvent(new Event('change'));}
+          }
+          const fields = [...document.querySelectorAll('.modal input[data-default-author]')];
+          check(fields.length === EXPECTED_COUNT, 'Missing modal author defaults');
+          for (const input of fields) {
+            const modal = input.closest('.modal');
+            const instance = bootstrap.Modal.getOrCreateInstance(modal);
+            check(input.value === 'logged-in@example.invalid', 'Initial logged-in author missing');
+            input.value = '';
+            instance.show(); await sleep(500);
+            check(modal.classList.contains('show'), 'Upload modal did not open');
+            check(input.value === 'logged-in@example.invalid', 'Empty author not restored on open');
+            check(new FormData(input.form).get('author') === 'logged-in@example.invalid', 'Default author not submitted');
+            input.value = 'other@example.invalid';
+            instance.hide(); await sleep(500);
+            instance.show(); await sleep(500);
+            check(input.value === 'other@example.invalid', 'Manual author overwritten on reopen');
+            check(new FormData(input.form).get('author') === 'other@example.invalid', 'Manual author not submitted');
+            input.form.reset();
+            check(input.value === 'logged-in@example.invalid', 'Reset did not restore default author');
+            input.value = '   ';
+            instance.hide(); await sleep(500);
+            instance.show(); await sleep(500);
+            check(input.value === 'logged-in@example.invalid', 'Whitespace author not restored');
+            instance.hide(); await sleep(500);
+          }
+          const edit = document.getElementById('editSuModal');
+          const author = document.getElementById('edit_author');
+          author.add(new Option('original@example.invalid','original@example.invalid'));
+          author.value = 'original@example.invalid';
+          edit.dispatchEvent(new Event('show.bs.modal',{bubbles:true}));
+          check(author.value === 'original@example.invalid', 'Stored edit author was replaced');
+          author.value = '';
+          edit.dispatchEvent(new Event('show.bs.modal',{bubbles:true}));
+          check(author.value === '', 'Unknown edit author was defaulted');
+          check(!modalPreviewErrors.length, modalPreviewErrors.join('; '));
+          document.getElementById('uploadAuthorResult').dataset.status = 'passed';
+          document.getElementById('uploadAuthorResult').textContent = 'PASS';
+        } catch(error) {
+          document.getElementById('uploadAuthorResult').textContent = 'FAIL: ' + error.message;
+        }
+      });
+      </script>""".replace("EXPECTED_COUNT", str(len(modals)))
+    html = html.replace("</body>", checks + "</body>")
+    preview = Flask("modal-author-preview", static_folder=app.static_folder)
+    preview.add_url_rule("/", view_func=lambda: html)
+    server = make_server("127.0.0.1", 0, preview, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        result = subprocess.run([
+            "chromium", "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+            "--no-first-run", "--no-default-browser-check", f"--user-data-dir={tmp_path / 'profile'}",
+            "--virtual-time-budget=20000", "--dump-dom", f"http://127.0.0.1:{server.server_port}/",
+        ], capture_output=True, text=True, timeout=40)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert '<pre id="uploadAuthorResult" data-status="passed">PASS</pre>' in result.stdout, result.stdout[-6000:]

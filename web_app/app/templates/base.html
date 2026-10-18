@@ -95,6 +95,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  document.addEventListener("show.bs.modal", (event) => {
+    if (!event.target.matches(".modal")) return;
+    event.target.querySelectorAll("input[data-default-author]").forEach((input) => {
+      if (!input.value.trim()) input.value = input.defaultValue;
+    });
+  });
+
   function findRequiredLabel(control) {
     if (control.labels && control.labels.length > 0) {
       return control.labels[0];

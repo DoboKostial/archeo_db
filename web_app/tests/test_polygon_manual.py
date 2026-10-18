@@ -1,4 +1,4 @@
-"""Opt-in round trip of the manual polygon form against disposable PostGIS."""
+"""Manual polygon validation and opt-in round trip against disposable PostGIS."""
 import os
 from pathlib import Path
 import runpy
@@ -7,6 +7,104 @@ import psycopg2
 import pytest
 
 from app.routes import polygons as polygon_routes
+
+
+class _ManualConnection:
+    def __init__(self):
+        self.calls = []
+        self.committed = self.closed = False
+
+    def cursor(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, query, params):
+        self.calls.append((query, params))
+
+    def fetchone(self):
+        return (11,)
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        pytest.fail('Valid polygon must not roll back')
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.mark.parametrize('range_fields', [
+    {},
+    {'top_range_from[]': '', 'top_range_to[]': '', 'bottom_range_from[]': '', 'bottom_range_to[]': ''},
+    {'top_range_from[]': [' ', ''], 'top_range_to[]': ['', ' '], 'replace_geometry': 'yes'},
+])
+def test_manual_polygon_without_ranges_saves_only_metadata(client, monkeypatch, range_fields):
+    connection = _ManualConnection()
+    monkeypatch.setattr(polygon_routes, 'get_terrain_connection', lambda _name: connection)
+    with client.session_transaction() as state:
+        state['selected_db'] = '01_ManualTest'
+    response = client.post('/polygons/new-manual', data={
+        'polygon_name': ' Metadata only ', 'parent_name': ' Parent ',
+        'allocation_reason': 'other', 'notes': ' Details ', **range_fields,
+    })
+    assert response.status_code == 302
+    assert connection.committed and connection.closed
+    assert connection.calls == [(polygon_routes.insert_polygon_manual_sql(),
+                                 ('Metadata only', 'Parent', 'other', 'Details'))]
+    with client.session_transaction() as state:
+        category, message = state['_flashes'][-1]
+    assert category == 'success'
+    assert 'saved.' in message and 'rebuilt' not in message
+
+
+@pytest.mark.parametrize('sides', [('top',), ('bottom',), ('top', 'bottom')])
+def test_manual_polygon_rebuilds_only_supplied_sides(client, monkeypatch, sides):
+    connection = _ManualConnection()
+    monkeypatch.setattr(polygon_routes, 'get_terrain_connection', lambda _name: connection)
+    with client.session_transaction() as state:
+        state['selected_db'] = '01_ManualTest'
+    data = {'polygon_name': 'Measured', 'allocation_reason': 'other'}
+    for side in sides:
+        data[f'{side}_range_from[]'] = '1'
+        data[f'{side}_range_to[]'] = '4'
+    assert client.post('/polygons/new-manual', data=data).status_code == 302
+    assert connection.committed and connection.closed
+    imports = [(query, params) for query, params in connection.calls
+               if query in [polygon_routes.spatial_polygon_import_sql(side) for side in ('top', 'bottom')]]
+    assert [params[1] for _query, params in imports] == list(sides)
+    builds = [params for query, params in connection.calls if query == polygon_routes.spatial_build_sql()]
+    assert builds == [(11, False)] * len(sides)
+
+
+@pytest.mark.parametrize('fields', [
+    {'top_range_from[]': '1', 'top_range_to[]': ''},
+    {'bottom_range_from[]': '', 'bottom_range_to[]': '4'},
+    {'top_range_from[]': '4', 'top_range_to[]': '1'},
+    {'top_range_from[]': 'not-a-number', 'top_range_to[]': '4'},
+    {'polygon_name': ''},
+    {'allocation_reason': ''},
+    {'allocation_reason': 'invalid'},
+    {'parent_name': 'Measured'},
+])
+def test_manual_polygon_still_rejects_invalid_metadata_and_partial_ranges(client, monkeypatch, fields):
+    def unexpected(_name):
+        pytest.fail('Invalid form must be rejected before accessing the database')
+
+    monkeypatch.setattr(polygon_routes, 'get_terrain_connection', unexpected)
+    with client.session_transaction() as state:
+        state['selected_db'] = '01_ManualTest'
+    response = client.post('/polygons/new-manual', data={
+        'polygon_name': 'Measured', 'allocation_reason': 'other', **fields,
+    })
+    assert response.status_code == 302
+    with client.session_transaction() as state:
+        assert state['_flashes'][-1][0] == 'warning'
 
 
 @pytest.fixture(scope='module')
@@ -37,6 +135,11 @@ def test_manual_form_builds_both_sides_and_protects_existing_gis_edits(client, m
         assert response.status_code == 302
         with client.session_transaction() as state:
             return state.pop('_flashes', [])
+
+    flashes = submit()
+    assert flashes[-1][0] == 'success', flashes
+    assert cluster.psql("SELECT geom_top IS NULL,geom_bottom IS NULL FROM tab_polygons WHERE polygon_name='manual';") == 't|t'
+    assert cluster.psql("SELECT count(*) FROM tab_entity_geometries WHERE ref_polygon='manual';") == '0'
 
     flashes = submit(**{
         'top_range_from[]': ['1', '3'], 'top_range_to[]': ['2', '4'],
@@ -70,3 +173,14 @@ def test_manual_form_builds_both_sides_and_protects_existing_gis_edits(client, m
     flashes = submit(**{'top_range_from[]':'4', 'top_range_to[]':'1'})
     assert flashes[-1][0] == 'warning', flashes
     assert cluster.psql("SELECT pts_from,pts_to FROM tab_polygon_geopts_binding_top WHERE ref_polygon='manual';") == '1|4'
+
+    before = cluster.psql("SELECT ST_AsEWKT(geom_top),ST_AsEWKT(geom_bottom) FROM tab_polygons WHERE polygon_name='manual';")
+    flashes = submit(notes='Metadata only', **{
+        'top_range_from[]': '', 'top_range_to[]': '',
+        'bottom_range_from[]': '', 'bottom_range_to[]': '',
+    })
+    assert flashes[-1][0] == 'success', flashes
+    assert cluster.psql("SELECT notes FROM tab_polygons WHERE polygon_name='manual';") == 'Metadata only'
+    assert cluster.psql("SELECT ST_AsEWKT(geom_top),ST_AsEWKT(geom_bottom) FROM tab_polygons WHERE polygon_name='manual';") == before
+    assert cluster.psql("SELECT pts_from,pts_to FROM tab_polygon_geopts_binding_top WHERE ref_polygon='manual';") == '1|4'
+    assert cluster.psql("SELECT pts_from,pts_to FROM tab_polygon_geopts_binding_bottom WHERE ref_polygon='manual';") == '5|8'
