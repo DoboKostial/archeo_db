@@ -78,6 +78,13 @@ def test_sections_page_renders_edit_controls_and_prefill_payload(client, monkeyp
     assert 'data-geometry-kind="section"' in html
     assert 'id="editSectionSjs"' in html
     assert 'id="sectionSjs"' in html
+    assert html.count('name="point_from"') == 1
+    assert html.count('name="point_to"') == 1
+    assert 'id="sectionPointFrom"' in html
+    assert 'id="sectionPointTo"' in html
+    assert 'id="replaceSectionGeometry"' in html
+    assert 'Section line points (optional)' in html
+    assert 'Point ranges are mandatory' not in html
     assert html.count("data-su-search-button\n") == 2
     assert html.count("data-su-search-status") == 3
     assert 'data-column="srid"' not in html

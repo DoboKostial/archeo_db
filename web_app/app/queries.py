@@ -1368,7 +1368,9 @@ def get_sections_list_sql():
         WITH r AS (
             SELECT
                 b.ref_section::int4 AS id_section,
-                STRING_AGG((b.pts_from::text || '-' || b.pts_to::text), ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt,
+                STRING_AGG(CASE WHEN b.pts_from = b.pts_to THEN b.pts_from::text
+                    ELSE b.pts_from::text || '-' || b.pts_to::text END,
+                    ', ' ORDER BY b.pts_from, b.pts_to) AS ranges_txt,
                 ARRAY_AGG(b.pts_from::int4 ORDER BY b.pts_from, b.pts_to) AS ranges_from,
                 ARRAY_AGG(b.pts_to::int4 ORDER BY b.pts_from, b.pts_to) AS ranges_to
             FROM tab_section_geopts_binding b
@@ -1483,6 +1485,17 @@ def insert_section_geopts_binding_sql():
         VALUES (%s, %s, %s)
         ON CONFLICT (ref_section, pts_from, pts_to) DO NOTHING;
     """
+
+
+def spatial_section_import_sql():
+    """Replace the line recipe, preserving geometry until a confirmed build succeeds."""
+    return """INSERT INTO tab_entity_geometries
+        (ref_section,geometry_role,is_proxy,build_method,build_geometry_type)
+        VALUES (%s,'section_trace',false,'ordered_line','LineString')
+        ON CONFLICT (ref_section) WHERE ref_section IS NOT NULL
+        DO UPDATE SET build_method=EXCLUDED.build_method,
+            build_geometry_type=EXCLUDED.build_geometry_type,legacy_point_ranges=NULL
+        RETURNING id_geometry"""
 
 
 def delete_section_sj_links_sql():

@@ -81,7 +81,8 @@
 <div class="container mt-3">
 
   <!-- Row 1: Manual create (two-column form) -->
-<form method="POST" action="{{ url_for('sections.new_section_manual') }}">
+<form method="POST" action="{{ url_for('sections.new_section_manual') }}"
+      onsubmit="return confirmManualSectionRebuild(this)">
   <div class="row g-3">
 
     <!-- Left: Section metadata + ranges -->
@@ -123,7 +124,21 @@
           </div>
         </div>
 
-        <p class="small text-muted mt-3">Save the entity, then use Define geometry to select the two section endpoints.</p>
+        <h6 class="mt-3 mb-2">Section line points (optional)</h6>
+        <div class="row g-2">
+          <div class="col-sm-6">
+            <label for="sectionPointFrom" class="form-label">FROM (point ID)</label>
+            <input type="number" class="form-control" id="sectionPointFrom" name="point_from" step="1">
+          </div>
+          <div class="col-sm-6">
+            <label for="sectionPointTo" class="form-label">TO (point ID)</label>
+            <input type="number" class="form-control" id="sectionPointTo" name="point_to" step="1">
+          </div>
+        </div>
+        <div class="form-check mt-3">
+          <input class="form-check-input" type="checkbox" name="replace_geometry" value="yes" id="replaceSectionGeometry">
+          <label class="form-check-label" for="replaceSectionGeometry">Allow replacing existing geometry edits and changing their source method to measured points.</label>
+        </div>
         <div class="mt-3">
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
@@ -140,6 +155,15 @@
 
   </div>
 </form>
+
+<script>
+  function confirmManualSectionRebuild(form) {
+    return !form.elements.point_from.value.trim() || !form.elements.point_to.value.trim() ||
+      !form.elements.replace_geometry.checked || window.confirm(
+        'Rebuild the section line from measured points? Existing GIS edits will be overwritten and their source method will change to measured points.'
+      );
+  }
+</script>
 
 
 

@@ -30,6 +30,12 @@ from app.queries import (
     upsert_section_manual_sql,
     delete_section_sj_links_sql,
     insert_section_sj_link_sql,
+    delete_section_geopts_bindings_sql,
+    insert_section_geopts_binding_sql,
+    spatial_section_import_sql,
+    spatial_delete_points_sql,
+    spatial_insert_point_sql,
+    spatial_build_sql,
     find_geopts_srid_sql,
     srtext_by_srid_sql,
     sections_lines_geojson_sql,
@@ -234,6 +240,20 @@ def new_section_manual():
 
         sj_ids = _parse_int_list(sj_list_raw)
 
+        point_from = (request.form.get("point_from") or "").strip()
+        point_to = (request.form.get("point_to") or "").strip()
+        endpoints = None
+        if point_from or point_to:
+            if not point_from or not point_to:
+                raise ValueError("Provide both section endpoint IDs, or leave both empty.")
+            try:
+                endpoints = (int(point_from), int(point_to))
+            except ValueError:
+                raise ValueError("Section endpoint IDs must be integers.") from None
+            if endpoints[0] == endpoints[1]:
+                raise ValueError("Section endpoints must be two different points.")
+        replace_geometry = request.form.get("replace_geometry") == "yes"
+
         conn = get_terrain_connection(selected_db)
         conn.autocommit = False
         try:
@@ -241,16 +261,30 @@ def new_section_manual():
                 # 1) upsert section
                 cur.execute(upsert_section_manual_sql(), (id_section, section_type, description))
 
-                # Replace SU links without changing geometry.
+                if endpoints:
+                    cur.execute(spatial_section_import_sql(), (id_section,))
+                    geometry_id = cur.fetchone()[0]
+                    cur.execute(spatial_delete_points_sql(), (geometry_id,))
+                    for order, point_id in enumerate(endpoints, start=1):
+                        cur.execute(spatial_insert_point_sql(), (geometry_id, 1, 0, order, point_id))
+                    cur.execute(spatial_build_sql(), (geometry_id, replace_geometry))
+
+                    # Singleton bindings keep legacy readers from including intermediate IDs.
+                    cur.execute(delete_section_geopts_bindings_sql(), (id_section,))
+                    for point_id in endpoints:
+                        cur.execute(insert_section_geopts_binding_sql(), (id_section, point_id, point_id))
+
+                # Omitted endpoints preserve the geometry and its source-point bindings.
                 cur.execute(delete_section_sj_links_sql(), (id_section,))
                 for sj in sj_ids:
                     cur.execute(insert_section_sj_link_sql(), (sj, id_section))
 
             conn.commit()
-            flash(f'Section "{id_section}" saved.', "success")
+            result = "saved and geometry rebuilt" if endpoints else "saved"
+            flash(f'Section "{id_section}" {result}.', "success")
             logger.info(
                 f'[{selected_db}] section "{id_section}" saved: '
-                f"type={section_type}, sj_links={len(sj_ids)}"
+                f"type={section_type}, sj_links={len(sj_ids)}, geometry_rebuilt={bool(endpoints)}"
             )
 
         except Exception as e:
