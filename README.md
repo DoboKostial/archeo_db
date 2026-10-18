@@ -11,14 +11,13 @@ It is not a specialized database, but of general use (universal archaeological t
 PostgreSQL environment - hence relation standard.
 
 <h2>Features</h2>
+
 * Online database cluster of primary field facts from archaeological research, web access or mobile application
 * Comprehensive user administration (RBAC), database management (possibility to choose from multiple projects/databases), backup
-* 
 * Integrated map projection system and map portal, GIS/CAD integration (access to DB using your GIS/CAD environment)
 * Recording of research polygons, stratigraphic units, Harris matrix, sections, geodesy; complete management of image data (photos, photograms, sketches, drawings)
 * Analytical module checking data consistency
 * Reporting module enabling export of facts to PDF, SQL, MS Excel
-* 
 * BSD 3-Clause License
 
 
