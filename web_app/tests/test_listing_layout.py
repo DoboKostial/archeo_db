@@ -128,9 +128,10 @@ UPLOAD_AUTHOR_MODALS = [
 ]
 
 
-class _ModalAuthors(HTMLParser):
-    def __init__(self, html):
+class _ModalInputs(HTMLParser):
+    def __init__(self, html, input_name):
         super().__init__()
+        self.input_name = input_name
         self.depth = 0
         self.modal = None
         self.modal_depth = None
@@ -144,7 +145,7 @@ class _ModalAuthors(HTMLParser):
             if "modal" in attrs.get("class", "").split():
                 self.modal = attrs.get("id")
                 self.modal_depth = self.depth
-        if tag == "input" and attrs.get("name") == "author" and self.modal:
+        if tag == "input" and attrs.get("name") == self.input_name and self.modal:
             self.inputs.setdefault(self.modal, []).append(attrs)
 
     def handle_endtag(self, tag):
@@ -160,7 +161,7 @@ def test_upload_modal_authors_default_to_logged_in_user_and_remain_editable(app,
     with app.test_request_context():
         g.user_email = email
         html = render_template(f"{template}.html", **_context())
-    parsed = _ModalAuthors(html)
+    parsed = _ModalInputs(html, "author")
     assert set(parsed.inputs) == set(modals)
     for inputs in parsed.inputs.values():
         assert len(inputs) == 1
@@ -169,6 +170,20 @@ def test_upload_modal_authors_default_to_logged_in_user_and_remain_editable(app,
         assert "data-default-author" in author
         assert author["type"] == "email"
         assert "readonly" not in author and "disabled" not in author
+
+
+@pytest.mark.parametrize('template, modal', [
+    ('sections', 'modalSecPhotograms'), ('add_su', 'modalPhotograms'),
+])
+def test_photogram_attachment_modal_has_required_editable_date(app, template, modal):
+    with app.test_request_context():
+        html = render_template(f'{template}.html', **_context())
+    fields = _ModalInputs(html, 'datum').inputs[modal]
+    assert len(fields) == 1
+    assert fields[0]['type'] == 'date'
+    assert fields[0]['value'] == _context()['today_iso']
+    assert 'required' in fields[0]
+    assert 'readonly' not in fields[0] and 'disabled' not in fields[0]
 
 
 @pytest.mark.skipif(os.environ.get("ARCHEODB_TEST_BROWSER") != "1" or not shutil.which("chromium"),
@@ -219,6 +234,22 @@ def test_opening_upload_modals_restores_empty_authors_but_preserves_manual_choic
             instance.hide(); await sleep(500);
             instance.show(); await sleep(500);
             check(input.value === 'logged-in@example.invalid', 'Whitespace author not restored');
+            instance.hide(); await sleep(500);
+          }
+          const photogramModal = document.getElementById('modalSecPhotograms') ||
+            document.getElementById('modalPhotograms') || document.getElementById('modalPolyPhotograms');
+          if (photogramModal) {
+            const date = photogramModal.querySelector('input[name="datum"]');
+            check(date && date.required, 'Photogram attachment date missing or optional');
+            check(date.value === '2026-10-05', 'Photogram date was not prefilled');
+            const instance = bootstrap.Modal.getOrCreateInstance(photogramModal);
+            instance.show(); await sleep(500);
+            photogramModal.querySelector('input[name="photogram_typ"]').value = 'other';
+            date.value = '';
+            check(!date.form.checkValidity(), 'Empty photogram date accepted by the form');
+            date.value = '2024-07-19';
+            check(date.form.checkValidity(), 'Valid photogram date rejected');
+            check(new FormData(date.form).get('datum') === '2024-07-19', 'Selected photogram date not submitted');
             instance.hide(); await sleep(500);
           }
           const edit = document.getElementById('editSuModal');

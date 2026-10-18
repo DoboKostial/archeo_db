@@ -2,7 +2,7 @@
 import os
 import re
 import json
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import parse_qsl, urlencode
 from psycopg2.extras import Json
 
@@ -286,6 +286,7 @@ def add_su():
     su_for_media = []
     sus = []
     form_data = {}
+    today_iso = date.today().isoformat()
 
     try:
         # Suggested next SU id
@@ -353,6 +354,7 @@ def add_su():
                         sj_count_negativ=sj_count_negativ,
                         sj_count_structure=sj_count_structure,
                         form_data=form_data,
+                        today_iso=today_iso,
                         open_edit_su_id=open_edit_su_id,
                     )
 
@@ -503,6 +505,7 @@ def add_su():
             sj_count_negativ=sj_count_negativ,
             sj_count_structure=sj_count_structure,
             form_data=form_data,
+            today_iso=today_iso,
             open_edit_su_id=open_edit_su_id,
         )
 
@@ -720,6 +723,13 @@ def upload_su_media(sj_id, media_type):
     if not files:
         flash("No files provided.", "warning")
         return redirect(request.referrer or url_for("su.add_su"))
+
+    if media_type == "photograms":
+        try:
+            date.fromisoformat((request.form.get("datum") or "").strip())
+        except ValueError:
+            flash("Photogram date is required and must be a valid date in YYYY-MM-DD format.", "warning")
+            return redirect(request.referrer or url_for("su.add_su"))
 
     # verify SU exists (clear error, avoids FS garbage)
     conn_chk = get_terrain_connection(selected_db)

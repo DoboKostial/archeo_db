@@ -2,6 +2,7 @@
 # logic for archeological sections (profiles)
 
 import os
+from datetime import date
 from psycopg2.extras import Json
 from io import BytesIO
 import json
@@ -92,12 +93,18 @@ def _require_fields(media_type: str, form) -> None:
         "photos": ["photo_typ", "datum", "author"],
         "sketches": ["sketch_typ", "author"],
         "drawings": ["author", "datum"],
-        "photograms": ["photogram_typ"],
+        "photograms": ["photogram_typ", "datum"],
     }.get(media_type, [])
 
     missing = [k for k in required if not (form.get(k) or "").strip()]
     if missing:
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
+
+    if media_type == "photograms":
+        try:
+            date.fromisoformat(form.get("datum").strip())
+        except ValueError:
+            raise ValueError("Photogram date must be a valid date in YYYY-MM-DD format.") from None
 
 
 def _build_insert_sql_and_vals(media_type: str, pk_name: str, mime: str, file_size: int, checksum: str, form, final_path: str):
@@ -212,6 +219,7 @@ def sections():
         authors=authors,
         sj_ids=sj_ids,
         open_edit_section_id=open_edit_section_id,
+        today_iso=date.today().isoformat(),
     )
 
 

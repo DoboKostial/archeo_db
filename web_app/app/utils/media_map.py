@@ -20,7 +20,7 @@ MEDIA_TABLES = {
     "photograms": {
         "table": "tab_photograms",
         "id_col": "id_photogram",
-        "extra_cols": ["photogram_typ", "ref_sketch", "notes"],
+        "extra_cols": ["photogram_typ", "datum", "ref_sketch", "notes"],
     },
 }
 
