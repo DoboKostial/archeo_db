@@ -27,7 +27,7 @@ from app.queries import (
     report_polygon_cards_media_ids_sql,
 )
 
-from config import Config
+from app.reports.media import find_thumbnail as _try_find_thumb
 
 
 # -------------------------
@@ -114,27 +114,6 @@ def _footer(canv, doc, left_text: str, right_text: str) -> None:
     canv.drawString(doc.leftMargin, 8 * mm, left_text)
     canv.drawRightString(A4[0] - doc.rightMargin, 8 * mm, right_text)
     canv.restoreState()
-
-
-def _media_base_dir(ctx: ReportContext, kind: str) -> str:
-    sub = (Config.MEDIA_DIRS or {}).get(kind, "")
-    if not sub:
-        return ""
-    return os.path.join(Config.DATA_DIR, ctx.selected_db, sub)
-
-
-def _try_find_thumb(ctx: ReportContext, kind: str, media_id: str) -> str:
-    base_dir = _media_base_dir(ctx, kind)
-    if not base_dir:
-        return ""
-    base = os.path.join(base_dir, "thumbs", str(media_id))
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        p = base + ext
-        if os.path.exists(p):
-            return p
-    if os.path.exists(base):
-        return base
-    return ""
 
 
 def _safe_image(path: str, max_w: float, max_h: float) -> Optional[Image]:

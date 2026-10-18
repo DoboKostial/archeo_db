@@ -1,17 +1,120 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from importlib import import_module
 from io import BytesIO
+from pathlib import Path
 
+import pytest
 from openpyxl import load_workbook
+from PIL import Image
 
 from app.queries import insert_photogram_sql, report_photograms_table_list_all_sql, update_photogram_sql
 from app.reports.context import ReportContext
+from app.reports.media import find_thumbnail
 from app.reports.exporters import geopts_table, photograms_table, photos_table
 from app.reports.exporters.registry import EXPORTERS
 from app.reports.exporters.utils_sql import sql_quote
 from app.reports.registry import REPORT_GENERATORS, REPORT_SPECS, ReportSpec
 from app.reports.service import init_report_generators
 from app.routes import reports as report_routes
+from app.utils.images import make_thumbnail
+from app.utils.storage import final_paths
+from config import Config
+
+
+_THUMB_REPORTS = (
+    "sj_cards_report", "polygon_cards_report", "sections_cards_report",
+    "objects_cards_report", "photos_table_report", "photograms_table_report",
+    "drawings_table_report", "sketches_table_report", "finds_table_report",
+    "samples_table_report",
+)
+
+
+@pytest.mark.parametrize("report_name", _THUMB_REPORTS)
+@pytest.mark.parametrize("kind", ("photos", "photograms", "drawings", "sketches"))
+def test_pdf_reports_find_gallery_thumbnail_for_png(tmp_path, monkeypatch, report_name, kind):
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(Config, "MEDIA_DIRS", {kind: "media"})
+    original, thumb = final_paths(str(tmp_path), _ctx().selected_db, "media", "02_photo.png")
+    Path(original).parent.mkdir(parents=True)
+    Image.new("RGB", (120, 80), "red").save(original)
+    assert make_thumbnail(original, thumb, 60)
+
+    report = import_module(f"app.reports.{report_name}")
+    assert report._try_find_thumb(_ctx(), kind, "02_photo.png") == thumb
+
+
+@pytest.mark.parametrize("media_id", (
+    "02_photo.jpg", "02_photo.jpeg", "02_photo.png", "02_photo.PNG",
+    "02_photo.tif", "02_photo.tiff", "02_photo.pdf", "02_photo.svg",
+    "02_photo.detail.png", "02_photo",
+))
+def test_report_thumbnail_matches_storage_naming(tmp_path, monkeypatch, media_id):
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(Config, "MEDIA_DIRS", {"photos": "custom_photos"})
+    _, thumb = final_paths(str(tmp_path), _ctx().selected_db, "custom_photos", media_id)
+    Path(thumb).parent.mkdir(parents=True)
+    Image.new("RGB", (60, 40), "green").save(thumb)
+
+    assert find_thumbnail(_ctx(), "photos", media_id) == thumb
+
+
+@pytest.mark.parametrize("thumb_name", (
+    "02_photo.png.jpg", "02_photo.png.jpeg", "02_photo.png.png",
+    "02_photo.png.webp", "02_photo.png.tiff", "02_photo.png",
+))
+def test_report_thumbnail_keeps_legacy_fallbacks(tmp_path, monkeypatch, thumb_name):
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(Config, "MEDIA_DIRS", {"photos": "photos"})
+    thumb_dir = tmp_path / _ctx().selected_db / "photos" / "thumbs"
+    thumb_dir.mkdir(parents=True)
+    legacy = thumb_dir / thumb_name
+    legacy.touch()
+
+    assert find_thumbnail(_ctx(), "photos", "02_photo.png") == str(legacy)
+
+    canonical = thumb_dir / "02_photo.jpg"
+    canonical.touch()
+    assert find_thumbnail(_ctx(), "photos", "02_photo.png") == str(canonical)
+
+
+@pytest.mark.parametrize("media_id", (None, "", "   ", "missing.png", "../outside.png"))
+def test_report_thumbnail_missing_or_invalid_id(tmp_path, monkeypatch, media_id):
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(Config, "MEDIA_DIRS", {"photos": "photos"})
+    media_dir = tmp_path / _ctx().selected_db / "photos"
+    media_dir.mkdir(parents=True)
+    Image.new("RGB", (60, 40), "green").save(media_dir / "missing.png")
+    Image.new("RGB", (60, 40), "green").save(media_dir / "outside.jpg")
+
+    assert find_thumbnail(_ctx(), "photos", media_id) == ""
+    assert find_thumbnail(_ctx(), "unconfigured", "missing.png") == ""
+
+
+@pytest.mark.parametrize("kind", ("photos", "photograms", "drawings", "sketches"))
+@pytest.mark.parametrize("has_thumbnail", (True, False))
+def test_su_card_pdf_embeds_png_thumbnail(tmp_path, monkeypatch, kind, has_thumbnail):
+    from app.reports import sj_cards_report
+
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(Config, "MEDIA_DIRS", {kind: "media"})
+    thumb_dir = tmp_path / _ctx().selected_db / "media" / "thumbs"
+    thumb_dir.mkdir(parents=True)
+    if has_thumbnail:
+        Image.new("RGB", (60, 40), "green").save(thumb_dir / "02_photo.jpg")
+    monkeypatch.setattr(
+        sj_cards_report, "get_terrain_connection", lambda _db: _Connection(["id_sj"], [(7,)]),
+    )
+    monkeypatch.setattr(sj_cards_report, "_fetch_sj_detail", lambda *_args: {"id_sj": 7})
+    monkeypatch.setattr(
+        sj_cards_report, "_fetch_media_ids",
+        lambda _conn, _su, media_kind: ["02_photo.png"] if media_kind == kind else [],
+    )
+
+    content = sj_cards_report.generate_sj_cards_pdf(_ctx(), {})
+
+    assert content.startswith(b"%PDF-")
+    assert content.count(b"/Subtype /Image") == int(has_thumbnail)
 
 
 class _Cursor:

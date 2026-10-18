@@ -16,7 +16,7 @@ from app.logger import logger
 from app.reports.context import ReportContext
 from app.database import get_terrain_connection
 from app.queries import report_photograms_table_list_all_sql
-from config import Config
+from app.reports.media import find_thumbnail as _try_find_thumb
 
 
 def _register_unicode_fonts() -> Tuple[str, str]:
@@ -55,30 +55,6 @@ def _v(x: Any) -> str:
 def _truncate(text: str, max_chars: int) -> str:
     t = (text or "").strip()
     return t if len(t) <= max_chars else t[: max_chars - 1].rstrip() + "…"
-
-
-def _media_base_dir(ctx: ReportContext, kind: str) -> str:
-    sub = (Config.MEDIA_DIRS or {}).get(kind, "")
-    if not sub:
-        return ""
-    return os.path.join(Config.DATA_DIR, ctx.selected_db, sub)
-
-
-def _try_find_thumb(ctx: ReportContext, kind: str, media_id: str) -> str:
-    base_dir = _media_base_dir(ctx, kind)
-    if not base_dir:
-        return ""
-    mid = str(media_id).strip()
-    if not mid:
-        return ""
-    base = os.path.join(base_dir, "thumbs", mid)
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        p = base + ext
-        if os.path.exists(p):
-            return p
-    if os.path.exists(base):
-        return base
-    return ""
 
 
 def _safe_image(path: str, max_w: float, max_h: float) -> Optional[Image]:
