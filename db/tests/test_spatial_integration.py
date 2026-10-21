@@ -47,7 +47,8 @@ class SpatialIntegrationTests(unittest.TestCase):
         """,database='auth_db')
         # Provision the old terrain model and exercise all retained upgrades.
         legacy = cls.directory/'legacy.sql'
-        legacy_sql = (ROOT/'db/create_db_template.sql').read_text().replace('\\ir spatial_model.sql','-- Legacy fixture')
+        legacy_sql = re.sub(r'-- BEGIN SPATIAL MODEL\n.*?-- END SPATIAL MODEL\n',
+                            '-- Legacy fixture\n', (ROOT/'db/create_db_template.sql').read_text(), flags=re.DOTALL)
         legacy_sql = re.sub(r'^GRANT .* TO gis_(?:ro|rw).*\n','',legacy_sql,flags=re.MULTILINE)
         legacy_sql = re.sub(r"^\s*'(FI|PR)',.*\n",'',legacy_sql,flags=re.MULTILINE)
         legacy.write_text(legacy_sql)
@@ -286,8 +287,7 @@ class SpatialIntegrationTests(unittest.TestCase):
         checkout=parent/'checkout'
         checkout.mkdir(parents=True)
         shutil.copytree(ROOT/'db/migrations',checkout/'db/migrations')
-        for name in ('apply_gis_access.sh','spatial_model.sql'):
-            shutil.copy2(ROOT/'db'/name,checkout/'db'/name)
+        shutil.copy2(ROOT/'db/apply_gis_access.sh',checkout/'db/apply_gis_access.sh')
         program="""
 import os
 import subprocess
@@ -295,8 +295,8 @@ import sys
 os.chdir(sys.argv[1])
 os.chmod(sys.argv[2],0o600)
 try:
-    assert not os.access(os.path.join(sys.argv[1],'db','spatial_model.sql'),os.R_OK)
-    assert os.access('db/spatial_model.sql',os.R_OK)
+    assert not os.access(os.path.join(sys.argv[1],'db','migrations','20261009_spatial_representations.sql'),os.R_OK)
+    assert os.access('db/migrations/20261009_spatial_representations.sql',os.R_OK)
     for flags in (['--terrain-only','--check'], ['--terrain-only']):
         result=subprocess.run(['bash','db/apply_gis_access.sh',*flags],capture_output=True,text=True)
         assert result.returncode==0, result.stdout+'\\n'+result.stderr
@@ -304,6 +304,29 @@ finally:
     os.chmod(sys.argv[2],0o700)
 """
         self.run_command([sys.executable,'-c',program,str(checkout),str(parent)],user='app_terrain_db')
+
+    def test_06_template_creates_the_spatial_model_from_one_file(self):
+        standalone=self.directory/'standalone'
+        standalone.mkdir()
+        template=standalone/'create_db_template.sql'
+        template.write_text((ROOT/'db/create_db_template.sql').read_text().replace(
+            'terrain_db_template','terrain_db_standalone'))
+        self.psql(file=template,database='postgres')
+        database='terrain_db_standalone'
+        self.assertEqual(self.psql("""
+            SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+            AND table_name IN ('tab_entity_geometries','tab_geometry_geopts',
+                'tab_spatial_files','tabaid_sj_spatial_files','tabaid_geometry_files');
+        """,database=database),'5')
+        self.assertEqual(self.psql("SELECT count(*) FROM geometry_columns WHERE f_table_name LIKE 'v_gis_%';",
+                                  database=database),'12')
+        self.psql("""SELECT set_project_srid(32633);
+            INSERT INTO tab_sj(id_sj,sj_typ) VALUES (1,'deposit');
+            INSERT INTO v_gis_point_z(ref_sj,geom)
+            VALUES (1,ST_GeomFromText('POINT Z (500000 5500000 123)',32633));""",
+            database=database,user='app_terrain_db')
+        self.assertEqual(self.psql('SELECT ST_SRID(geom),ST_Z(geom) FROM tab_entity_geometries;',
+                                  database=database),'32633|123')
 
 
 if __name__=='__main__':

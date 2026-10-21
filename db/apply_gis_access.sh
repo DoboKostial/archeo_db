@@ -33,14 +33,14 @@ GIS_TERRAIN_FILES+=(migrations/20261004_gis_access.sql
 [[ "$GIS_TERRAIN_ONLY" == 0 ]] || GIS_AUTH_FILES=()
 
 # Verify the entire file set before touching any database.
-GIS_FILES=(spatial_model.sql "${GIS_AUTH_FILES[@]}" "${GIS_TERRAIN_FILES[@]}")
+GIS_FILES=("${GIS_AUTH_FILES[@]}" "${GIS_TERRAIN_FILES[@]}")
 for gis_file in "${GIS_FILES[@]}"; do
     [[ -f "$GIS_SCRIPT_DIR/$gis_file" ]] || gis_fail "Missing migration file: $GIS_SCRIPT_DIR/$gis_file"
     [[ -r "$GIS_SCRIPT_DIR/$gis_file" ]] || gis_fail "Migration is not readable: $GIS_SCRIPT_DIR/$gis_file"
 done
 
-# Preserve relative psql includes and handle sudo inheriting a cwd beneath a
-# private home directory that Debian's psql wrapper cannot reopen by pathname.
+# Stage migrations together, keeping auth and terrain filenames separate.
+# Handle sudo inheriting a cwd below a private home that psql cannot reopen.
 GIS_TMP_DIR="$(mktemp -d /tmp/archeodb-gis.XXXXXX)"
 trap 'rm -rf -- "$GIS_TMP_DIR"' EXIT
 for gis_file in "${GIS_FILES[@]}"; do
