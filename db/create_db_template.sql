@@ -1940,6 +1940,129 @@ BEGIN
     RETURN NEW;
 END $$;
 
+-- Dedicated SU layers expose the minimum attributes needed to create a unit.
+-- create_su is an INSERT command flag, never a persistent SU attribute.
+-- GIS clients edit both flags as integers (0/1), without custom form widgets.
+CREATE OR REPLACE FUNCTION public.write_su_geometry_view() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+DECLARE su_type text; saved public.tab_entity_geometries%ROWTYPE;
+BEGIN
+    IF TG_OP='DELETE' THEN
+        -- Removing a map feature removes only this representation, not its SU.
+        DELETE FROM public.tab_entity_geometries
+        WHERE id_geometry=OLD.id_geometry AND ref_sj=OLD.id_sj;
+        RETURN OLD;
+    END IF;
+    IF NEW.id_sj IS NULL THEN RAISE EXCEPTION 'Enter an SU number (id_sj)'; END IF;
+    IF NEW.geom IS NULL THEN RAISE EXCEPTION 'An SU representation requires a geometry'; END IF;
+    IF NEW.create_su IS NOT NULL AND NEW.create_su NOT IN (0,1) THEN
+        RAISE EXCEPTION 'create_su must be 0 (existing SU) or 1 (new SU)';
+    END IF;
+    IF NEW.is_proxy IS NOT NULL AND NEW.is_proxy NOT IN (0,1) THEN
+        RAISE EXCEPTION 'is_proxy must be 0 (actual representation) or 1 (approximate extent)';
+    END IF;
+    IF TG_OP='INSERT' THEN
+        IF COALESCE(NEW.create_su,0)=1 THEN
+            IF NEW.sj_typ IS NULL OR NEW.sj_typ NOT IN ('deposit','negativ','structure') THEN
+                RAISE EXCEPTION 'Choose an SU type: deposit, negativ or structure';
+            END IF;
+            BEGIN
+                INSERT INTO public.tab_sj(id_sj,sj_typ) VALUES (NEW.id_sj,NEW.sj_typ);
+            EXCEPTION WHEN unique_violation THEN
+                RAISE EXCEPTION 'SU % already exists. To add a representation, set create_su=0',NEW.id_sj;
+            END;
+            CASE NEW.sj_typ
+                WHEN 'deposit' THEN INSERT INTO public.tab_sj_deposit(id_deposit) VALUES (NEW.id_sj);
+                WHEN 'negativ' THEN INSERT INTO public.tab_sj_negativ(id_negativ) VALUES (NEW.id_sj);
+                WHEN 'structure' THEN INSERT INTO public.tab_sj_structure(id_structure) VALUES (NEW.id_sj);
+            END CASE;
+        END IF;
+    ELSE
+        IF NEW.id_geometry IS DISTINCT FROM OLD.id_geometry OR NEW.id_sj IS DISTINCT FROM OLD.id_sj THEN
+            RAISE EXCEPTION 'Representation ID and SU number cannot be changed';
+        END IF;
+        IF COALESCE(NEW.create_su,0)=1 THEN
+            RAISE EXCEPTION 'create_su is available only when adding a new feature';
+        END IF;
+    END IF;
+    SELECT sj_typ INTO su_type FROM public.tab_sj WHERE id_sj=NEW.id_sj FOR SHARE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'SU % does not exist. To create it, set create_su=1 and choose sj_typ',NEW.id_sj; END IF;
+    IF NEW.sj_typ IS NOT NULL AND NEW.sj_typ IS DISTINCT FROM su_type THEN
+        RAISE EXCEPTION 'SU % has type %. Change SU metadata in ArcheoDB',NEW.id_sj,su_type;
+    END IF;
+    IF TG_OP='INSERT' THEN
+        -- Reuse the sequence value exposed by the view's default to GIS forms.
+        -- Explicit NULL inserts still receive an ID from the same sequence.
+        INSERT INTO public.tab_entity_geometries(id_geometry,ref_sj,geom,geometry_role,source_method,
+            source_software,source_software_version,is_proxy,notes)
+        VALUES (COALESCE(NEW.id_geometry,nextval('public.tab_entity_geometries_id_geometry_seq'::regclass)),
+            NEW.id_sj,NEW.geom,COALESCE(NEW.geometry_role,'outline'),COALESCE(NEW.source_method,'digitized'),
+            NEW.source_software,NEW.source_software_version,COALESCE(NEW.is_proxy,1)=1,NEW.notes)
+        RETURNING * INTO saved;
+    ELSE
+        UPDATE public.tab_entity_geometries SET geom=NEW.geom,geometry_role=NEW.geometry_role,
+            source_method=NEW.source_method,source_software=NEW.source_software,
+            source_software_version=NEW.source_software_version,is_proxy=COALESCE(NEW.is_proxy,1)=1,notes=NEW.notes
+        WHERE id_geometry=OLD.id_geometry AND ref_sj=OLD.id_sj RETURNING * INTO saved;
+        IF NOT FOUND THEN RAISE EXCEPTION 'This representation was removed. Reload the layer'; END IF;
+    END IF;
+    NEW.id_geometry:=saved.id_geometry;
+    NEW.sj_typ:=su_type;
+    NEW.create_su:=0;
+    NEW.geometry_role:=saved.geometry_role;
+    NEW.source_method:=saved.source_method;
+    NEW.source_software:=saved.source_software;
+    NEW.source_software_version:=saved.source_software_version;
+    NEW.is_proxy:=saved.is_proxy::integer;
+    NEW.created_at:=saved.created_at;
+    NEW.updated_at:=saved.updated_at;
+    RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.refresh_su_geometry_views() RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,public AS $$
+DECLARE kind text; dims integer; view_name text; srid integer;
+BEGIN
+    srid:=Find_SRID('public','tab_geopts','pts_geom');
+    FOREACH kind IN ARRAY ARRAY['Point','MultiPoint','LineString','MultiLineString','Polygon','MultiPolygon'] LOOP
+        FOREACH dims IN ARRAY ARRAY[2,3] LOOP
+            view_name:='v_gis_su_'||lower(kind)||CASE WHEN dims=3 THEN '_z' ELSE '_xy' END;
+            -- PostgreSQL cannot replace a view column's type in place.
+            -- Upgrade only the earlier boolean views; stored data is untouched.
+            IF EXISTS (SELECT 1 FROM pg_attribute
+                WHERE attrelid=to_regclass(format('public.%I',view_name))
+                AND attname IN ('create_su','is_proxy') AND atttypid='boolean'::regtype
+                AND NOT attisdropped) THEN
+                EXECUTE format('DROP VIEW public.%I',view_name);
+            END IF;
+            EXECUTE format('CREATE OR REPLACE VIEW public.%I AS
+                SELECT g.id_geometry,g.ref_sj AS id_sj,s.sj_typ,0::integer AS create_su,
+                g.geometry_role,g.source_method,g.source_software,g.source_software_version,g.is_proxy::integer AS is_proxy,g.notes,
+                g.created_at,g.updated_at,g.geom::geometry(%s,%s) AS geom
+                FROM public.tab_entity_geometries g JOIN public.tab_sj s ON s.id_sj=g.ref_sj
+                WHERE GeometryType(g.geom)=%L AND ST_CoordDim(g.geom)=%s',view_name,
+                kind||CASE WHEN dims=3 THEN 'Z' ELSE '' END,srid,upper(kind),dims);
+            EXECUTE format('ALTER VIEW public.%I ALTER COLUMN id_geometry SET DEFAULT
+                nextval(''public.tab_entity_geometries_id_geometry_seq''::regclass)',view_name);
+            EXECUTE format('ALTER VIEW public.%I ALTER COLUMN create_su SET DEFAULT 0',view_name);
+            EXECUTE format('ALTER VIEW public.%I ALTER COLUMN geometry_role SET DEFAULT ''outline''',view_name);
+            EXECUTE format('ALTER VIEW public.%I ALTER COLUMN source_method SET DEFAULT ''digitized''',view_name);
+            EXECUTE format('ALTER VIEW public.%I ALTER COLUMN is_proxy SET DEFAULT 1',view_name);
+            EXECUTE format('DROP TRIGGER IF EXISTS write_su_geometry_view ON public.%I',view_name);
+            EXECUTE format('CREATE TRIGGER write_su_geometry_view INSTEAD OF INSERT OR UPDATE OR DELETE ON public.%I
+                FOR EACH ROW EXECUTE FUNCTION public.write_su_geometry_view()',view_name);
+            EXECUTE format('GRANT SELECT ON public.%I TO gis_ro,gis_rw',view_name);
+            EXECUTE format('GRANT INSERT,UPDATE,DELETE ON public.%I TO gis_rw',view_name);
+            EXECUTE format('COMMENT ON VIEW public.%I IS %L',view_name,
+                'SU representations: key=id_geometry. New SU: create_su=1, id_sj and sj_typ (deposit/negativ/structure). '
+                'Existing SU: create_su=0 and id_sj. is_proxy: 0=actual representation, 1=approximate extent. '
+                'DELETE removes only the representation.');
+        END LOOP;
+    END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION public.refresh_su_geometry_views() FROM PUBLIC;
+GRANT SELECT,INSERT ON public.tab_sj_deposit,public.tab_sj_negativ,public.tab_sj_structure TO gis_rw;
+
 CREATE OR REPLACE FUNCTION public.refresh_geometry_views() RETURNS void
 -- Views must retain the schema owner's identity even when an application or
 -- administrator calls set_project_srid(), so later upgrades can replace them.
@@ -1962,6 +2085,7 @@ BEGIN
             EXECUTE format('GRANT INSERT,UPDATE,DELETE ON public.%I TO gis_rw',view_name);
         END LOOP;
     END LOOP;
+    PERFORM public.refresh_su_geometry_views();
 END $$;
 
 -- Preserve mixed XY/XYZ in the common table when assigning a project SRID.

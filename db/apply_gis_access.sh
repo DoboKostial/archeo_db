@@ -29,7 +29,8 @@ fi
 GIS_AUTH_FILES+=(migrations/auth/20261004_gis_access.sql)
 GIS_TERRAIN_FILES+=(migrations/20261004_gis_access.sql
     migrations/20261009_gis_write_access.sql
-    migrations/20261009_spatial_representations.sql)
+    migrations/20261009_spatial_representations.sql
+    migrations/20261023_su_gis_editing.sql)
 [[ "$GIS_TERRAIN_ONLY" == 0 ]] || GIS_AUTH_FILES=()
 
 # Verify the entire file set before touching any database.
@@ -95,7 +96,8 @@ BEGIN READ ONLY;
 DO $$ DECLARE missing text; blocked text; expected_srid integer; BEGIN
     SELECT string_agg(name, ', ' ORDER BY name) INTO missing FROM (VALUES
         ('public.tab_geopts'),('public.tab_polygons'),('public.tab_section'),
-        ('public.tab_sj'),('public.tab_sj_negativ'),('public.tab_photos'),
+        ('public.tab_sj'),('public.tab_sj_deposit'),('public.tab_sj_negativ'),
+        ('public.tab_sj_structure'),('public.tab_photos'),
         ('public.tab_finds'),('public.tab_samples'),('public.tab_photograms'),
         ('public.tab_drawings'),('public.gloss_find_type'),('public.gloss_sample_type'),
         ('public.tab_polygon_geopts_binding_top'),('public.tab_polygon_geopts_binding_bottom'),
