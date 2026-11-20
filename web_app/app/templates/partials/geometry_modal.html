@@ -15,9 +15,9 @@
           <label for="geometryMethod" class="form-label mt-2">Construction</label><select id="geometryMethod" class="form-select"></select>
           <div class="form-check my-2"><input id="geometryProxy" type="checkbox" class="form-check-input" checked><label for="geometryProxy" class="form-check-label">Approximate extent / position (proxy)</label></div>
           <label for="geometryNotes" class="form-label">Notes</label><textarea id="geometryNotes" class="form-control" rows="2"></textarea>
-          <label for="geometryPoints" class="form-label mt-2">Source points in vertex order</label>
+          <label for="geometryPoints" class="form-label mt-2">Source points in order</label>
           <textarea id="geometryPoints" class="form-control font-monospace" rows="4" placeholder="101, 102, 105"></textarea>
-          <div class="form-text">One part/ring per line: <code>1,0: 101,102,105</code>. Part starts at 1; ring 0 is the exterior, rings 1+ are holes. Point order determines line and polygon shape.</div>
+          <div class="form-text">Enter point IDs separated by commas, spaces or line breaks, e.g. <code>101, 102, 105</code>. Points are connected in this order. Polygons close automatically.</div>
           <div id="geometryLegacy" class="small text-warning mt-1"></div>
           <div class="d-flex gap-2 mt-3"><input id="geometryPointSearch" class="form-control" aria-label="Search measured points" placeholder="Point ID or notes"><select id="geometryPointCode" class="form-select w-auto" aria-label="Point code"><option value="">All codes</option>{% for code in ['SU','FX','EP','FO','NI','PF','FI','PR','SP'] %}<option>{{ code }}</option>{% endfor %}</select></div>
           <div id="geometryPointResults" class="list-group mt-2" style="max-height:180px;overflow:auto"></div>
@@ -47,7 +47,7 @@
     </div>
     <div class="modal-footer">
       <button id="geometryRemove" type="button" class="btn btn-outline-danger me-auto" data-spatial-write>Remove representation</button>
-      <button id="geometryRebuild" type="button" class="btn btn-outline-warning" data-spatial-write>Rebuild saved recipe</button>
+      <button id="geometryRebuild" type="button" class="btn btn-outline-warning" data-spatial-write title="Recalculate using the saved points and their current coordinates. Unsaved form changes are not used.">Recalculate</button>
       <button id="geometrySave" type="button" class="btn btn-primary" data-spatial-write>Save &amp; build geometry</button>
     </div>
   </div></div>

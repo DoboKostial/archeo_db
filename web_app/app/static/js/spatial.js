@@ -42,9 +42,17 @@
     const methods = type.includes('Point')?['point']:type.includes('Line')?['ordered_line']:['ordered_polygon','convex_hull'];
     setOptions(el('geometryMethod'),methods,el('geometryMethod').value);
   }
+  function hasMultipleBoundaries(row) {
+    const points=row?.points || [];
+    const multiPoint=row?.build_geometry_type==='MultiPoint' || row?.geometry_type==='MULTIPOINT';
+    return points.some(p=>p.ring_no!==0) || (!multiPoint && new Set(points.map(p=>p.part_no)).size>1);
+  }
   function setButtons() {
     const row=chosen();
+    const multipleBoundaries=hasMultipleBoundaries(row);
     el('geometryRemove').disabled=!row;
+    el('geometrySave').disabled=multipleBoundaries;
+    document.querySelectorAll('#geometryPointResults button').forEach(b=>b.disabled=!config.canWrite || multipleBoundaries);
     el('geometryRebuild').disabled=!row || !row.build_method;
     const allowSource=!!row || kind==='su';
     el('geometryUpload').disabled=!allowSource;
@@ -79,10 +87,12 @@
     el('geometryProxy').checked=row?row.is_proxy:kind!=='polygon';
     el('geometryNotes').value=row?.notes || '';
     el('geometryProvenance').textContent=row?('Source: '+row.source_method+' · '+(row.source_software || 'software unspecified')+' '+(row.source_software_version || '')):'New representation from measured points';
-    const groups=new Map();
-    (row?.points || []).forEach(p=>{const name=p.part_no+','+p.ring_no;if (!groups.has(name)) groups.set(name,[]);groups.get(name).push(p.ref_geopt);});
-    el('geometryPoints').value=Array.from(groups,([name,ids])=>name+': '+ids.join(', ')).join('\n');
-    el('geometryLegacy').textContent=row?.legacy_point_ranges?'Historical recipe: '+row.legacy_point_ranges.map(r=>r.from+'–'+r.to).join(', ')+'. Use Rebuild saved recipe, or select explicit ordered points to replace it.':'';
+    const multipleBoundaries=hasMultipleBoundaries(row);
+    el('geometryPoints').value=multipleBoundaries?'':(row?.points || []).map(p=>p.ref_geopt).join(', ');
+    el('geometryPoints').disabled=multipleBoundaries;
+    el('geometryLegacy').textContent=multipleBoundaries?
+      'This saved geometry has multiple boundaries. Use Recalculate to keep them, or edit the geometry in GIS.':
+      row?.legacy_point_ranges?'Saved point ranges: '+row.legacy_point_ranges.map(r=>r.from+'–'+r.to).join(', ')+'. Use Recalculate, or select individual points to replace these ranges.':'';
     el('geometryFiles').replaceChildren();
     (row?.files || []).forEach(f=>fileLink(f,el('geometryFiles'),'geometry'));
     if (kind==='su') {
@@ -118,19 +128,12 @@
     render();
   }
   function parsePoints() {
-    const points=[];
-    el('geometryPoints').value.split('\n').filter(line=>line.trim()).forEach(line=>{
-      const bits=line.split(':');
-      if (bits.length>2) throw new Error('Use part,ring: point IDs.');
-      const header=bits.length===2?bits[0].split(','):['1','0'];
-      const part=Number(header[0]),ring=Number(header[1]);
-      if (header.length!==2 || !Number.isInteger(part) || part<1 || !Number.isInteger(ring) || ring<0) throw new Error('Invalid part or ring number.');
-      bits[bits.length-1].trim().split(/[\s,;]+/).forEach(value=>{
-        const id=Number(value);if(!Number.isInteger(id) || !value) throw new Error('Enter numeric point IDs in vertex order.');
-        points.push({part_no:part,ring_no:ring,ref_geopt:id});
-      });
+    const values=el('geometryPoints').value.trim().split(/[\s,;]+/).filter(Boolean);
+    return values.map((value,index)=>{
+      const id=Number(value);
+      if(!/^-?\d+$/.test(value) || !Number.isSafeInteger(id)) throw new Error('Enter numeric point IDs separated by commas, spaces or line breaks.');
+      return {part_no:el('geometryType').value==='MultiPoint'?index+1:1,ring_no:0,ref_geopt:id};
     });
-    return points;
   }
   let searchTimer,searchVersion=0;
   async function searchPoints() {
@@ -142,7 +145,7 @@
       result.rows.forEach(p=>{
         const button=document.createElement('button');button.type='button';button.className='list-group-item list-group-item-action py-1 small';
         button.textContent=p.id_pts+' · '+(p.code||'')+' · '+(p.notes||'')+' · Z '+(p.h ?? 'unknown');
-        button.disabled=!config.canWrite;
+        button.disabled=!config.canWrite || hasMultipleBoundaries(chosen());
         button.addEventListener('click',()=>{const textarea=el('geometryPoints');textarea.value+=(textarea.value.trim()?', ':'')+p.id_pts;});
         target.append(button);
       });
@@ -183,9 +186,9 @@
       try {
         const url=root+'/rebuild/'+bulk.dataset.spatialRebuild;
         const scope=await api(url);
-        if (!confirm('Rebuild '+scope.buildable+' of '+scope.total+' representations for ALL '+bulk.dataset.spatialRebuild+' entities in this database (all pages and filters)?\n'+scope.manual+' existing representations may contain GIS edits. These edits will be replaced; source method will become survey_points. Geometries without a point recipe will be skipped.')) return;
+        if (!confirm('Recalculate '+scope.buildable+' of '+scope.total+' representations for ALL '+bulk.dataset.spatialRebuild+' entities in this database (all pages and filters)?\n'+scope.manual+' existing representations may contain GIS edits. These edits will be replaced; source method will become survey_points. Geometries without saved source points will be skipped.')) return;
         const result=await api(url,'POST',{confirmed:true});
-        alert('Built: '+result.built+'; no recipe: '+result.skipped+'; failed: '+result.errors.length+(result.errors.length?'\n'+result.errors.map(e=>'#'+e.id+' '+e.entity_id+': '+e.error).join('\n'):''));
+        alert('Recalculated: '+result.built+'; without saved source points: '+result.skipped+'; failed: '+result.errors.length+(result.errors.length?'\n'+result.errors.map(e=>'#'+e.id+' '+e.entity_id+': '+e.error).join('\n'):''));
         await refreshSummaries();
       } catch(error) {alert(error.message);}
       finally {bulk.disabled=false;}
@@ -200,6 +203,7 @@
     el('geometryPointCode').addEventListener('change',searchPoints);
     el('geometrySave').addEventListener('click',()=>action(async()=>{
       const row=chosen();
+      if(hasMultipleBoundaries(row)) throw new Error('Use Recalculate to preserve this geometry, or edit it in GIS.');
       if(row?.geometry_type && !confirm('Replace the saved geometry using these points and change its source method to survey_points? Any GIS edits will be overwritten.')) return;
       const result=await api(entityUrl(),'POST',{id_geometry:row?.id_geometry,geometry_type:el('geometryType').value,
         geometry_role:el('geometryRole').value,build_method:el('geometryMethod').value,is_proxy:el('geometryProxy').checked,
@@ -207,7 +211,7 @@
       await load(String(result.id_geometry));await refreshSummaries();
     }));
     el('geometryRebuild').addEventListener('click',()=>action(async()=>{
-      const row=chosen();if(!row || !confirm('Rebuild the saved point recipe? Geometry edits will be replaced and source method will become survey_points.')) return;
+      const row=chosen();if(!row || !confirm('Recalculate geometry from the saved points and their current coordinates? Unsaved form changes will not be used. Geometry edits will be replaced and source method will become survey_points.')) return;
       await api(geometryUrl(row)+'/rebuild','POST',{replace_manual:true});await load(String(row.id_geometry));await refreshSummaries();
     }));
     el('geometryRemove').addEventListener('click',()=>action(async()=>{
