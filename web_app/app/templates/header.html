@@ -1,9 +1,14 @@
 <!-- app/templates/header.html -->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<nav class="navbar navbar-expand-xl navbar-dark bg-dark mb-4 app-navbar" aria-label="Main navigation">
   <div class="container-fluid">
     <a class="navbar-brand" href="{{ url_for('main.index') }}">ArcheoDB</a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+            data-bs-target="#mainNavigation" aria-controls="mainNavigation"
+            aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon" aria-hidden="true"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="mainNavigation">
+      <ul class="navbar-nav me-auto mb-2 mb-xl-0">
         <!-- General navigation -->
         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Home</a></li>
         <li class="nav-item"><a class="nav-link" href="{{ url_for('auth.profile') }}">My profile</a></li>

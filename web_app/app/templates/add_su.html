@@ -243,9 +243,9 @@
                 </div>
               </div>
               <div class="mb-2">
-                <label class="form-label">Color</label>
-                <input type="hidden" id="deposit_color" name="color" value="{{ form_data.color if form_data else '' }}">
+                <label class="form-label" for="deposit_color">Color</label>
                 <div class="deposit-color-picker" data-choice-group data-choice-target="deposit_color">
+                  <input type="text" class="form-control" id="deposit_color" name="color" value="{{ form_data.color if form_data else '' }}">
                   <button type="button"
                           class="deposit-color-toggle"
                           data-color-toggle
@@ -982,5 +982,5 @@
   window.ArcheoDBOpenEditSuId = {{ open_edit_su_id|tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
-<script src="{{ url_for('static', filename='js/su.js', v='shared-su-editor-1') }}"></script>
+<script src="{{ url_for('static', filename='js/su.js', v='deposit-color-text-1') }}"></script>
 {% endblock %}

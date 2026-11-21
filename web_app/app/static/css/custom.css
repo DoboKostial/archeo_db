@@ -1,5 +1,20 @@
 /* app/static/css/custom.css*/
 
+.app-navbar .navbar-collapse {
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  min-width: 0;
+}
+
+.app-navbar .navbar-nav {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.app-navbar .navbar-text {
+  overflow-wrap: anywhere;
+}
+
 /* Reports: language selector (flags) */
 .lang-flag {
   width: 56px;
@@ -837,10 +852,17 @@ th.text-center .polygon-column-tools {
 
 .deposit-color-picker {
   position: relative;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.deposit-color-picker .form-control {
+  min-width: 0;
 }
 
 .deposit-color-toggle {
+  flex: 0 0 auto;
   width: 2.5rem;
   height: 2.35rem;
   padding: 0;

@@ -87,7 +87,7 @@
         const active = selectedButton();
         const swatch = active?.style.getPropertyValue("--swatch") || "#efe9dc";
         current.style.setProperty("--selected-swatch", swatch);
-        toggle.title = active ? `Color: ${active.getAttribute("data-choice-value")}` : "Choose color";
+        toggle.title = input.value.trim() ? `Color: ${input.value.trim()}` : "Choose color";
       }
 
       toggle.addEventListener("click", (event) => {
@@ -103,6 +103,13 @@
       });
 
       input.addEventListener("change", syncCurrentSwatch);
+      input.addEventListener("input", () => {
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      input.form?.addEventListener("reset", () => {
+        setOpen(false);
+        setTimeout(() => input.dispatchEvent(new Event("change", { bubbles: true })), 0);
+      });
 
       document.addEventListener("click", (event) => {
         if (!picker.contains(event.target)) setOpen(false);

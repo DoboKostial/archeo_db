@@ -1,5 +1,7 @@
 from html.parser import HTMLParser
+import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import threading
@@ -16,10 +18,12 @@ class _Markup(HTMLParser):
         super().__init__()
         self.ids = []
         self.tables = []
+        self.elements = []
         self.feed(html)
 
     def handle_starttag(self, tag, attributes):
         attrs = dict(attributes)
+        self.elements.append((tag, attrs))
         if "id" in attrs:
             self.ids.append(attrs["id"])
         if tag == "table":
@@ -66,6 +70,136 @@ def _context(count=0):
         "terrain_dbs": [], "total_pages": 1,
         "overview": {"point_count": 0, "last_point_id": None}, "target_srid": 5514, "codes": [],
     }
+
+
+def test_navigation_has_viewport_and_accessible_collapse_toggle(app):
+    with app.test_request_context():
+        html = render_template("base.html", user_email="user@example.invalid", user_role="archeolog")
+    elements = _Markup(html).elements
+    viewport = next(attrs for tag, attrs in elements if tag == "meta" and attrs.get("name") == "viewport")
+    assert viewport["content"] == "width=device-width, initial-scale=1"
+    toggle = next(attrs for tag, attrs in elements if tag == "button" and "navbar-toggler" in attrs.get("class", ""))
+    assert toggle["data-bs-toggle"] == "collapse"
+    assert toggle["data-bs-target"] == "#mainNavigation"
+    assert toggle["aria-controls"] == "mainNavigation"
+    assert toggle["aria-expanded"] == "false"
+    assert toggle["aria-label"]
+    assert _Markup(html).ids.count("mainNavigation") == 1
+    for endpoint in ("su.add_su", "polygons.polygons", "sections.sections", "reports.reports"):
+        with app.test_request_context():
+            assert f'href="{url_for(endpoint)}"' in html
+
+
+@pytest.mark.parametrize("color", ["", "brown", "10YR 4/3", 'grey with <white> & "black" flecks'])
+def test_deposit_color_can_be_typed_or_selected_and_preserves_form_data(app, color):
+    context = _context()
+    context["form_data"] = {"color": color}
+    with app.test_request_context("/add-sj"):
+        html = render_template("add_su.html", **context)
+    elements = _Markup(html).elements
+    color_input = next(attrs for tag, attrs in elements if tag == "input" and attrs.get("id") == "deposit_color")
+    assert color_input["type"] == "text"
+    assert color_input["name"] == "color"
+    assert color_input["value"] == color
+    assert "readonly" not in color_input and "disabled" not in color_input
+    assert any(tag == "label" and attrs.get("for") == "deposit_color" for tag, attrs in elements)
+    assert any(tag == "button" and attrs.get("data-choice-value") == "brown" for tag, attrs in elements)
+    edit_input = next(attrs for tag, attrs in elements if tag == "input" and attrs.get("id") == "edit_color")
+    assert edit_input["type"] == "text" and edit_input["name"] == "color"
+
+
+@pytest.mark.skipif(os.environ.get("ARCHEODB_TEST_BROWSER") != "1" or not shutil.which("firefox"),
+                    reason="Set ARCHEODB_TEST_BROWSER=1 and install Firefox")
+def test_tablet_navigation_and_deposit_color_in_browser(app, tmp_path):
+    from test_spatial_browser import _firefox_result
+
+    context = _context()
+    context.update(user_email="user@example.invalid", user_name="Test User", user_role="archeolog")
+    assets = {}
+    static = Path(app.static_folder)
+    with app.test_request_context("/add-sj"):
+        html = render_template("add_su.html", **context)
+        for name in ("bootstrap.bundle.min.js", "su_edit.js", "su.js", "list_table.js", "spatial.js"):
+            # Match cache-busted URLs as rendered, while keeping all browser traffic local.
+            for tag, attrs in _Markup(html).elements:
+                src = attrs.get("src", "")
+                if tag == "script" and src.split("?")[0] == url_for("static", filename="js/" + name):
+                    uri = (static / "js" / name).as_uri()
+                    html = html.replace(src, uri)
+                    assets[name] = uri
+    html = "\n".join(line for line in html.splitlines() if "<link " not in line and "unpkg.com" not in line)
+    styles = (static / "css/bootstrap.min.css").read_text() + (static / "css/custom.css").read_text()
+    setup = """<script>
+      window.previewErrors=[];
+      addEventListener('error', event => previewErrors.push(event.message));
+      addEventListener('unhandledrejection', event => previewErrors.push(String(event.reason)));
+      window.fetch=async () => ({ok:true,json:async () => ({rows:[],total:0})});
+    </script>"""
+    html = html.replace("</head>", "<style>" + styles + "</style>" + setup + "</head>")
+    # Each same-origin iframe has a real layout viewport of the requested width.
+    outer = '''<!doctype html><pre id="result">RUNNING</pre><script>
+      const page = PAGE;
+      const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const check = (value, message) => {if (!value) throw Error(message);};
+      (async () => {
+        try {
+          for (const width of [375,768,820,1024,1280,1920]) {
+            const frame=document.createElement('iframe');
+            frame.style.cssText=`width:${width}px;height:1100px;border:0`;
+            const loaded=new Promise(resolve => frame.onload=resolve);
+            frame.srcdoc=page; document.body.append(frame); await loaded;
+            const win=frame.contentWindow, doc=frame.contentDocument;
+            const nav=doc.querySelector('.app-navbar');
+            const menu=doc.getElementById('mainNavigation');
+            const toggle=doc.querySelector('.navbar-toggler');
+            const narrow=width<1200;
+            check((win.getComputedStyle(toggle).display!=='none')===narrow, 'Wrong navigation breakpoint '+width);
+            if(narrow) {
+              check(win.getComputedStyle(menu).display==='none', 'Menu should initially collapse '+width);
+              toggle.click(); await sleep(400);
+              check(toggle.getAttribute('aria-expanded')==='true', 'Toggle failed '+width);
+            }
+            for (const link of menu.querySelectorAll('.navbar-nav > li > a')) {
+              const bounds=link.getBoundingClientRect();
+              check(bounds.width>0 && bounds.height>0 && bounds.left>=0 && bounds.right<=width+1,
+                'Navigation link hidden or clipped '+width+' '+link.textContent);
+            }
+            check(nav.scrollWidth<=width+1, 'Navbar overflows '+width);
+            doc.getElementById('navMediaDropdown').click(); await sleep(50);
+            for(const link of menu.querySelectorAll('.dropdown-item')) {
+              const bounds=link.getBoundingClientRect();
+              check(bounds.width>0 && bounds.left>=0 && bounds.right<=width+1, 'Media link clipped '+width);
+            }
+            doc.getElementById('navMediaDropdown').click();
+            const type=doc.getElementById('sj_typ'); type.value='deposit';
+            type.dispatchEvent(new win.Event('change'));
+            const input=doc.getElementById('deposit_color');
+            const picker=input.closest('.deposit-color-picker');
+            const choose=picker.querySelector('[data-color-toggle]');
+            check(input.getBoundingClientRect().width>60, 'Color input not usable '+width);
+            choose.click(); picker.querySelector('[data-choice-value="brown"]').click();
+            check(input.value==='brown', 'Swatch did not set text '+width);
+            check(new win.FormData(input.form).get('color')==='brown', 'Swatch not submitted '+width);
+            input.value='10YR 4/3'; input.dispatchEvent(new win.Event('input'));
+            check(!picker.querySelector('.active'), 'Stale swatch after typing '+width);
+            check(new win.FormData(input.form).get('color')==='10YR 4/3', 'Manual color not submitted '+width);
+            input.value=''; input.dispatchEvent(new win.Event('input'));
+            choose.click(); picker.querySelector('[data-choice-value="ochre"]').click();
+            check(input.value==='ochre', 'Palette failed after clearing '+width);
+            input.form.reset(); await sleep(20);
+            check(input.value==='' && !picker.querySelector('.active'), 'Reset did not clear color '+width);
+            if(narrow) {
+              toggle.click(); await sleep(400);
+              check(toggle.getAttribute('aria-expanded')==='false', 'Menu did not close '+width);
+            }
+            check(!win.previewErrors.length, win.previewErrors.join('; '));
+            frame.remove();
+          }
+          document.getElementById('result').textContent='PASS';
+        } catch(error) {document.getElementById('result').textContent='FAIL: '+error.message;}
+      })();
+    </script>'''.replace("PAGE", json.dumps(html).replace("<", "\\u003c"))
+    assert _firefox_result(outer, assets, tmp_path) == "PASS"
 
 
 @pytest.mark.parametrize("count", [0, 25])
@@ -116,7 +250,7 @@ def test_shared_assets_use_updated_cache_version(app):
     with app.test_request_context():
         for template in ("polygons", "add_su", "objects", "sections"):
             html = render_template(f"{template}.html", **_context(1))
-            assert "css/custom.css?v=list-layout-2" in html
+            assert "css/custom.css?v=tablet-nav-color-1" in html
             assert "js/list_table.js?v=list-layout-2" in html
 
 
