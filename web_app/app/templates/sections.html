@@ -49,18 +49,18 @@
 
 {% macro cut_su_picker(select_id, size, heading_class="") -%}
   <div data-cut-su-picker>
-    <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
-      <label for="{{ select_id }}" class="form-label mb-0 {{ heading_class }}">Select cut stratigraphic units</label>
-      <button type="button" class="polygon-column-button" data-su-search-button
-              title="Filter stratigraphic units" aria-label="Filter stratigraphic units"
-              aria-controls="{{ select_id }}Filter" aria-expanded="false" {% if not sj_ids %}disabled{% endif %}>
-        <span class="polygon-list-icon polygon-icon-search" aria-hidden="true"></span>
-      </button>
-    </div>
-    <div id="{{ select_id }}Filter" class="mb-2" data-su-search-panel hidden>
-      <input id="{{ select_id }}Search" type="search" class="form-control form-control-sm" data-su-search
-             placeholder="SU ID" aria-label="Filter stratigraphic units by ID" aria-controls="{{ select_id }}"
-             autocomplete="off">
+    <label for="{{ select_id }}" class="form-label {{ heading_class }}" data-su-picker-label>Select cut stratigraphic units</label>
+    <div data-su-enhanced hidden>
+      <div class="position-relative">
+        <input id="{{ select_id }}Search" type="search" class="form-control" data-su-search
+               placeholder="SU ID" role="combobox" aria-autocomplete="list" aria-expanded="false"
+               aria-controls="{{ select_id }}Suggestions" aria-describedby="{{ select_id }}Status"
+               autocomplete="off" {% if not sj_ids %}disabled{% endif %}>
+        <div id="{{ select_id }}Suggestions" class="list-group position-absolute w-100 shadow-sm overflow-auto"
+             style="z-index:1060; max-height:14rem;" data-su-suggestions role="listbox" aria-label="Matching SUs" hidden></div>
+      </div>
+      <div class="form-text" data-su-matches role="status"></div>
+      <ul class="list-unstyled d-flex flex-wrap gap-2 mt-2 mb-0" data-su-selected aria-label="Selected SUs"></ul>
     </div>
     <select class="form-select" name="ref_sj[]" id="{{ select_id }}" multiple size="{{ size }}"
             aria-describedby="{{ select_id }}Status">
@@ -69,7 +69,6 @@
       {% endfor %}
     </select>
     <div id="{{ select_id }}Status" class="form-text" data-su-search-status role="status"></div>
-    <small class="text-muted">Hold Shift/Ctrl/⌘ to select multiple.</small>
   </div>
 {%- endmacro %}
 
@@ -976,77 +975,9 @@
 
 
 <script src="{{ url_for('static', filename='js/list_table.js', v='list-layout-2') }}"></script>
+<script src="{{ url_for('static', filename='js/section_su_picker.js', v='section-su-picker-1') }}"></script>
 <script>
-  function initCutSuPickers() {
-    document.querySelectorAll('[data-cut-su-picker]').forEach(picker => {
-      const select = picker.querySelector('select');
-      const options = Array.from(select.options);
-      const button = picker.querySelector('[data-su-search-button]');
-      const panel = picker.querySelector('[data-su-search-panel]');
-      const input = picker.querySelector('[data-su-search]');
-      const status = picker.querySelector('[data-su-search-status]');
-      let selected = new Set(Array.from(select.selectedOptions, option => option.value));
-
-      function render() {
-        const query = input.value.trim().toLocaleLowerCase();
-        let visible = 0;
-        options.forEach(option => {
-          option.hidden = !option.textContent.toLocaleLowerCase().includes(query);
-          if (!option.hidden) visible += 1;
-        });
-        button.classList.toggle('is-active', Boolean(query));
-        status.textContent = options.length
-          ? `${visible ? `Showing ${visible} of ${options.length}` : 'No SUs match the filter.'} | Selected: ${selected.size}`
-          : 'No SUs available.';
-      }
-
-      function closeSearch() {
-        input.value = '';
-        panel.hidden = true;
-        button.setAttribute('aria-expanded', 'false');
-        render();
-      }
-
-      button.addEventListener('click', () => {
-        if (panel.hidden) {
-          panel.hidden = false;
-          button.setAttribute('aria-expanded', 'true');
-          input.focus();
-        } else {
-          closeSearch();
-        }
-      });
-      input.addEventListener('input', render);
-      input.addEventListener('keydown', event => {
-        if (event.key === 'Enter') event.preventDefault();
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeSearch();
-          button.focus();
-        }
-      });
-      select.addEventListener('change', () => {
-        // Native multi-select clicks may clear hidden selections; only update visible options.
-        options.forEach(option => {
-          if (option.hidden) return;
-          if (option.selected) selected.add(option.value);
-          else selected.delete(option.value);
-        });
-        options.forEach(option => option.selected = selected.has(option.value));
-        render();
-      });
-      const reset = () => {
-        selected = new Set(Array.from(select.selectedOptions, option => option.value));
-        closeSearch();
-      };
-      select.addEventListener('cut-su-reset', reset);
-      select.form.addEventListener('reset', () => setTimeout(reset, 0));
-      render();
-    });
-  }
-
   document.addEventListener('DOMContentLoaded', () => {
-    initCutSuPickers();
     ArcheoDBInitListTable('sections');
     ArcheoDBInitListItemsModal('sectionsItemsModal');
   });
