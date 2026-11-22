@@ -2,7 +2,7 @@ import logging
 import os
 from urllib.parse import quote
 
-from flask import Blueprint, g, jsonify, request, send_file
+from flask import Blueprint, g, jsonify, request
 
 from app.database import terrain_connection, terrain_transaction
 from app.auth_tokens import require_mobile_token
@@ -13,6 +13,7 @@ from app.media import (
     _media_file_path,
     _remove_stored_media,
     _store_media_upload,
+    send_stored_media,
 )
 from app.responses import _json_error
 from app.validators import _validate_terrain_db
@@ -684,7 +685,7 @@ def get_feature_media_content(terrain_db: str, feature_id: str, kind: str, media
         path = _media_file_path(terrain_db, kind, media_id)
         if not os.path.exists(path):
             return _json_error("Media file not found.", 404)
-        return send_file(path, conditional=True)
+        return send_stored_media(path)
     except ValueError as e:
         return _json_error(str(e), 400)
     except Exception as e:

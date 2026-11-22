@@ -3,7 +3,7 @@
 
 class Config:
     APP_NAME = "ArcheoDB Mobile API"
-    APP_VERSION = "0.1.0"
+    APP_VERSION = "0.2.0"
 
     HOST = "127.0.0.1"
     PORT = 5050
@@ -72,14 +72,13 @@ class Config:
     THUMB_MAX_SIDE = 256
 
     # Allowed extensions for graphic docu (lowercase):
-    ALLOWED_EXTENSIONS = {"jpeg", "jpg", "png", "tiff", "svg", "pdf"}
+    ALLOWED_EXTENSIONS = {"jpeg", "jpg", "png", "tiff", "pdf"}
 
     # Allowed MIME – validating according content, not extension!
     ALLOWED_MIME = {
         "image/jpeg",
         "image/png",
         "image/tiff",
-        "image/svg+xml",
         "application/pdf",
     }
 

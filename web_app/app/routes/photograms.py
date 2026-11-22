@@ -20,7 +20,7 @@ from app.utils import (
     save_to_uploads, cleanup_upload, move_into_place, delete_media_files_checked,
     make_pk, validate_pk, final_paths,
     detect_mime, make_thumbnail,
-    sha256_file, validate_extension, validate_mime
+    sha256_file, validate_extension, validate_mime, send_stored_media
 )
 
 from app.utils.decorators import require_selected_db
@@ -895,7 +895,7 @@ def serve_photogram_file(id_photogram: str):
 
     if not os.path.exists(final_path):
         abort(404)
-    return send_file(final_path, as_attachment=False)
+    return send_stored_media(final_path)
 
 
 @photograms_bp.get("/photograms/thumb/<string:id_photogram>")

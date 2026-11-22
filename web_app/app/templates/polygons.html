@@ -296,7 +296,7 @@
         </button>
       </div>
 
-      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .svg .pdf</small>
+      <small class="text-muted d-block mt-2">Allowed: .jpeg .jpg .png .tiff .pdf</small>
     </fieldset>
   </div>
 </div>
@@ -481,7 +481,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="filesPolyPhotos" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesPolyPhotos')">+ add files input</button>
@@ -535,7 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="filesPolySketches" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesPolySketches')">+ add files input</button>
@@ -588,7 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div id="filesPolyPhotograms" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesPolyPhotograms')">+ add files input</button>
@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inp.name = 'files';
     inp.className = 'form-control mb-2';
     inp.multiple = true;
-    inp.accept = '.jpeg,.jpg,.png,.tiff,.svg,.pdf';
+    inp.accept = '.jpeg,.jpg,.png,.tiff,.pdf';
 
     container.appendChild(inp);
   }
@@ -1058,11 +1058,21 @@ async function loadAllPolygonsToMap() {
   const topStyle = { color: '#1f77b4', weight: 3, fillOpacity: 0.05 };
   const bottomStyle = { color: '#d62728', weight: 3, fillOpacity: 0.05 };
 
+  function polygonPopup(name, side) {
+    const content = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = name;
+    const label = document.createElement('small');
+    label.textContent = side;
+    content.append(title, document.createElement('br'), label);
+    return content;
+  }
+
   _allPolyLayers.top = L.geoJSON({ type: 'FeatureCollection', features: topFeatures }, {
     style: topStyle,
     onEachFeature: (feature, layer) => {
       const n = feature?.properties?.name || '';
-      layer.bindPopup(`<strong>${n}</strong><br><small>TOP</small>`);
+      layer.bindPopup(polygonPopup(n, 'TOP'));
     }
   }).addTo(map);
 
@@ -1070,7 +1080,7 @@ async function loadAllPolygonsToMap() {
     style: bottomStyle,
     onEachFeature: (feature, layer) => {
       const n = feature?.properties?.name || '';
-      layer.bindPopup(`<strong>${n}</strong><br><small>BOTTOM</small>`);
+      layer.bindPopup(polygonPopup(n, 'BOTTOM'));
     }
   }).addTo(map);
 

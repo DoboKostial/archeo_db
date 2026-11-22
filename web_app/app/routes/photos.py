@@ -645,7 +645,7 @@ def serve_photo_file(id_photo: str):
     if not os.path.exists(final_path):
         flash("File not found on FS.", "danger")
         return redirect(url_for("photos.photos"))
-    return send_file(final_path, as_attachment=False)
+    return storage.send_stored_media(final_path)
 
 
 @photos_bp.get("/photos/thumb/<string:id_photo>")

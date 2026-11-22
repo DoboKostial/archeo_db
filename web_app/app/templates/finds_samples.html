@@ -573,7 +573,7 @@
         <div id="filesFindPhotos" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesFindPhotos')">+ add files input</button>
@@ -623,7 +623,7 @@
         <div id="filesFindSketches" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesFindSketches')">+ add files input</button>
@@ -673,7 +673,7 @@
         <div id="filesSamplePhotos" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesSamplePhotos')">+ add files input</button>
@@ -723,7 +723,7 @@
         <div id="filesSampleSketches" class="mb-3">
           <label class="form-label">Files</label>
           <input type="file" name="files" class="form-control mb-2"
-                 accept=".jpeg,.jpg,.png,.tiff,.svg,.pdf" multiple>
+                 accept=".jpeg,.jpg,.png,.tiff,.pdf" multiple>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                 onclick="addFileInput('filesSampleSketches')">+ add files input</button>
@@ -809,28 +809,56 @@
     input.name = "files";
     input.multiple = true;
     input.className = "form-control mb-2";
-    input.accept = ".jpeg,.jpg,.png,.tiff,.svg,.pdf";
+    input.accept = ".jpeg,.jpg,.png,.tiff,.pdf";
     div.appendChild(input);
-  }
-
-  function btnsFind(r) {
-    return `
-      <button class="btn btn-sm btn-outline-secondary" onclick="openEditFind(${r.id_find})">Edit</button>
-      <button class="btn btn-sm btn-outline-danger" onclick="openDelete('find', ${r.id_find})">Delete</button>
-      <button class="btn btn-sm btn-outline-dark" onclick="window.open(EP.printFind(${r.id_find}), '_blank')">Print label</button>
-    `;
-  }
-
-  function btnsSample(r) {
-    return `
-      <button class="btn btn-sm btn-outline-secondary" onclick="openEditSample(${r.id_sample})">Edit</button>
-      <button class="btn btn-sm btn-outline-danger" onclick="openDelete('sample', ${r.id_sample})">Delete</button>
-      <button class="btn btn-sm btn-outline-dark" onclick="window.open(EP.printSample(${r.id_sample}), '_blank')">Print label</button>
-    `;
   }
 
   function displayValue(value) {
     return (value === null || value === undefined || value === "") ? "—" : value;
+  }
+
+  function addTextCell(row, value) {
+    const cell = document.createElement("td");
+    cell.textContent = value == null ? "" : String(value);
+    row.appendChild(cell);
+    return cell;
+  }
+
+  function addRecordActions(row, kind, rawId) {
+    const id = Number(rawId);
+    const statusCell = addTextCell(row, "");
+    const status = document.createElement("span");
+    status.dataset.geometryStatus = kind;
+    status.dataset.geometryKey = String(rawId);
+    status.textContent = "…";
+    statusCell.appendChild(status);
+
+    const actionsCell = addTextCell(row, "");
+    if (!Number.isSafeInteger(id) || id < 1) return;
+
+    function addButton(label, style, onClick) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `btn btn-sm ${style}`;
+      button.textContent = label;
+      if (onClick) button.addEventListener("click", onClick);
+      actionsCell.appendChild(button);
+      actionsCell.append(" ");
+      return button;
+    }
+
+    const geometry = addButton("Define geometry", "btn-outline-secondary");
+    geometry.dataset.geometryKind = kind;
+    geometry.dataset.geometryKey = String(id);
+    addButton("Edit", "btn-outline-secondary", () => {
+      if (kind === "find") openEditFind(id);
+      else openEditSample(id);
+    });
+    addButton("Delete", "btn-outline-danger", () => openDelete(kind, id));
+    addButton("Print label", "btn-outline-dark", () => {
+      const url = kind === "find" ? EP.printFind(id) : EP.printSample(id);
+      window.open(url, "_blank", "noopener");
+    });
   }
 
   function appendPagerButton(pager, label, page, disabled, active, onPage) {
@@ -933,16 +961,13 @@
     rows.forEach(r => {
       cacheFinds.set(r.id_find, r);
       const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${r.id_find}</td>
-        <td>${r.ref_find_type}</td>
-        <td>${r.ref_sj}</td>
-        <td>${displayValue(r.count)}</td>
-        <td>${displayValue(r.box)}</td>
-        <td>${r.ref_polygon || ""}</td>
-        <td><span data-geometry-status="find" data-geometry-key="${r.id_find}">…</span></td>
-        <td><button type="button" class="btn btn-sm btn-outline-secondary" data-geometry-kind="find" data-geometry-key="${r.id_find}">Define geometry</button> ${btnsFind(r)}</td>
-      `;
+      addTextCell(tr, r.id_find);
+      addTextCell(tr, r.ref_find_type);
+      addTextCell(tr, r.ref_sj);
+      addTextCell(tr, displayValue(r.count));
+      addTextCell(tr, displayValue(r.box));
+      addTextCell(tr, r.ref_polygon);
+      addRecordActions(tr, "find", r.id_find);
       tb.appendChild(tr);
     });
 
@@ -988,14 +1013,11 @@
     rows.forEach(r => {
       cacheSamples.set(r.id_sample, r);
       const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${r.id_sample}</td>
-        <td>${r.ref_sample_type}</td>
-        <td>${r.ref_sj}</td>
-        <td>${r.ref_polygon || ""}</td>
-        <td><span data-geometry-status="sample" data-geometry-key="${r.id_sample}">…</span></td>
-        <td><button type="button" class="btn btn-sm btn-outline-secondary" data-geometry-kind="sample" data-geometry-key="${r.id_sample}">Define geometry</button> ${btnsSample(r)}</td>
-      `;
+      addTextCell(tr, r.id_sample);
+      addTextCell(tr, r.ref_sample_type);
+      addTextCell(tr, r.ref_sj);
+      addTextCell(tr, r.ref_polygon);
+      addRecordActions(tr, "sample", r.id_sample);
       tb.appendChild(tr);
     });
 

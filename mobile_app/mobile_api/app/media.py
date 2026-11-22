@@ -7,6 +7,7 @@ from datetime import date
 from uuid import uuid4
 
 from PIL import Image, ImageOps
+from flask import send_file
 
 from config import Config
 
@@ -19,6 +20,14 @@ SKETCH_TYP_CHOICES = {"sketch", "photosketch", "general", "other"}
 PHOTOGRAM_TYP_CHOICES = {"stereo", "resection", "synthetic", "other"}
 
 _THUMBNAIL_MIME_TYPES = {"image/jpeg", "image/png", "image/tiff"}
+_MEDIA_MIME_BY_EXTENSION = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+    "pdf": "application/pdf",
+}
 
 PK_REGEX = re.compile(r"^[0-9]+_[A-Za-z0-9._-]+\.[a-z0-9]+$")
 
@@ -115,11 +124,10 @@ def _make_unique_media_pk(cur, terrain_db: str, kind: str, original_name: str) -
     return candidate
 
 
-def _detect_mime(path: str, original_name: str) -> str:
+def _detect_mime(path: str) -> str:
     with open(path, "rb") as handle:
         header = handle.read(512)
 
-    lower_name = (original_name or "").lower()
     if header.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
     if header.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -128,9 +136,26 @@ def _detect_mime(path: str, original_name: str) -> str:
         return "image/tiff"
     if header.startswith(b"%PDF"):
         return "application/pdf"
-    if lower_name.endswith(".svg") or b"<svg" in header.lower():
-        return "image/svg+xml"
     raise ValueError("Unsupported media type.")
+
+
+def send_stored_media(path: str):
+    """Keep legacy SVG and other active formats out of the application origin."""
+    extension = os.path.splitext(path)[1].lower().lstrip(".")
+    mime_type = _MEDIA_MIME_BY_EXTENSION.get(extension)
+    raster = mime_type in _THUMBNAIL_MIME_TYPES
+    response = send_file(
+        path,
+        mimetype=mime_type if raster else "application/octet-stream",
+        as_attachment=not raster,
+        download_name=os.path.basename(path),
+        conditional=True,
+        etag=True,
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if not raster:
+        response.headers["Content-Security-Policy"] = "sandbox"
+    return response
 
 
 def _sha256_file(path: str) -> str:
@@ -265,24 +290,47 @@ def _store_media_file(terrain_db: str, kind: str, media_id: str, file_storage):
     final_path = _media_file_path(terrain_db, kind, media_id)
     target_dir = os.path.dirname(final_path)
     temp_path = None
+    installed = False
     try:
+        extension = os.path.splitext(media_id)[1].lower().lstrip(".")
+        expected_mime = _MEDIA_MIME_BY_EXTENSION.get(extension)
+        configured_extensions = getattr(Config, "ALLOWED_EXTENSIONS", set(_MEDIA_MIME_BY_EXTENSION))
+        configured_mimes = getattr(Config, "ALLOWED_MIME", set(_MEDIA_MIME_BY_EXTENSION.values()))
+        if not expected_mime or extension not in configured_extensions or expected_mime not in configured_mimes:
+            raise ValueError("Unsupported media extension.")
         os.makedirs(target_dir, exist_ok=True)
 
-        # The temporary file must be on the target filesystem so os.replace
-        # remains atomic when DATA_DIR is a separate mount.
+        # The temporary file must be on the target filesystem so the exclusive
+        # hard link remains atomic when DATA_DIR is a separate mount.
         with tempfile.NamedTemporaryFile(
             dir=target_dir,
             prefix=".upload-",
             delete=False,
         ) as handle:
             temp_path = handle.name
-            file_storage.save(handle)
+            max_bytes = int(getattr(Config, "MAX_UPLOAD_FILE_BYTES", 64 * 1024 * 1024))
+            total_bytes = 0
+            for chunk in iter(lambda: file_storage.stream.read(64 * 1024), b""):
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise ValueError("Media file is too large.")
+                handle.write(chunk)
 
-        mime_type = _detect_mime(temp_path, file_storage.filename)
-        file_size = os.path.getsize(temp_path)
+        mime_type = _detect_mime(temp_path)
+        if mime_type != expected_mime:
+            raise ValueError("Media extension does not match file content.")
+        if mime_type in _THUMBNAIL_MIME_TYPES:
+            try:
+                with Image.open(temp_path) as image:
+                    image.verify()
+            except (OSError, ValueError) as error:
+                raise ValueError("Invalid image file.") from error
+        file_size = total_bytes
         checksum_sha256 = _sha256_file(temp_path)
 
-        os.replace(temp_path, final_path)
+        os.link(temp_path, final_path)
+        installed = True
+        os.unlink(temp_path)
         temp_path = None
 
         if mime_type in _THUMBNAIL_MIME_TYPES:
@@ -307,7 +355,8 @@ def _store_media_file(terrain_db: str, kind: str, media_id: str, file_storage):
                 os.remove(temp_path)
             except OSError:
                 pass
-        _remove_stored_media(final_path)
+        if installed:
+            _remove_stored_media(final_path)
         raise
 
 

@@ -2,6 +2,7 @@
 import jwt
 from flask import Flask, request, redirect, url_for, jsonify, g, make_response
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import Config
 from app.database import get_auth_connection
@@ -20,6 +21,8 @@ def create_app():
     app = Flask(__name__, static_folder="static", template_folder="templates")
     app.config.from_object(Config)
     app.secret_key = Config.SECRET_KEY
+    # Gunicorn binds to loopback and receives one X-Forwarded-For hop from Nginx.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
 
     # init CSRF protection
     csrf.init_app(app)
@@ -50,6 +53,25 @@ def create_app():
 
 
     PUBLIC_ENDPOINTS = {"auth.login", "auth.forgot_password"}
+    READ_ONLY_POST_ENDPOINTS = {
+        "main.select_db",
+        "auth.profile",
+        "auth.change_gis_password",
+        "analyze.analyze_run",
+        "su.harrismatrix",
+        "su.generate_harrismatrix",
+        "archeo_objects.generate_objects_pdf",
+        "reports.generate_report",
+        "reports.export_excel",
+        "reports.export_sql",
+    }
+    BULK_DOWNLOAD_ENDPOINTS = {
+        "photos.bulk_photos",
+        "photograms.bulk_photograms",
+        "sketches.bulk_sketches",
+        "drawings.bulk_drawings",
+    }
+    TERRAIN_WRITERS = {"archeolog", "documentator"}
 
     def _wants_json_response() -> bool:
         if request.is_json:
@@ -132,6 +154,17 @@ def create_app():
         if request.endpoint.startswith("admin.") and g.user_role != "archeolog":
             logger.warning(f"Forbidden admin access for {g.user_email} role={g.user_role} -> {request.path}")
             return _forbidden()
+
+        if (request.method not in {"GET", "HEAD", "OPTIONS"}
+                and request.endpoint not in READ_ONLY_POST_ENDPOINTS
+                and not (request.endpoint in BULK_DOWNLOAD_ENDPOINTS
+                         and request.method == "POST"
+                         and request.form.get("action") == "download")
+                and g.user_role not in TERRAIN_WRITERS):
+            logger.warning(f"Forbidden write for {g.user_email} role={g.user_role} -> {request.path}")
+            if _wants_json_response():
+                return jsonify({"error": "Forbidden"}), 403
+            return "Forbidden", 403
 
         if request.endpoint != "auth.logout":
             refreshed_token, refreshed_payload = refresh_session_token(payload)

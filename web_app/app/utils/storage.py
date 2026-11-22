@@ -3,6 +3,7 @@
 
 import os, re, shutil, tempfile
 from typing import Tuple
+from flask import send_file
 from werkzeug.datastructures import FileStorage
 
 from config import Config
@@ -61,6 +62,29 @@ def final_paths(data_dir: str, dbname: str, media_dir: str, pk_name: str) -> Tup
     thumb_dir = safe_join(base, "thumbs")
     thumb_path = safe_join(thumb_dir, f"{pk_name.rsplit('.', 1)[0]}.jpg")
     return file_path, thumb_path
+
+
+def send_stored_media(path: str):
+    """Serve raster images inline and legacy active formats as sandboxed downloads."""
+    extension = os.path.splitext(path)[1].lower().lstrip(".")
+    raster_mimes = {
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "tif": "image/tiff",
+        "tiff": "image/tiff",
+    }
+    mime_type = raster_mimes.get(extension)
+    response = send_file(
+        path,
+        mimetype=mime_type or "application/octet-stream",
+        as_attachment=mime_type is None,
+        download_name=os.path.basename(path),
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if mime_type is None:
+        response.headers["Content-Security-Policy"] = "sandbox"
+    return response
 
 # --- Uploads temp area ---
 def save_to_uploads(upload_folder: str, file_storage: FileStorage) -> Tuple[str, int]:

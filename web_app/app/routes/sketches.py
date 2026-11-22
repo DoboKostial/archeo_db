@@ -20,7 +20,7 @@ from app.utils import (
     save_to_uploads, cleanup_upload, move_into_place, delete_media_files_checked,
     make_pk, validate_pk, final_paths,
     detect_mime, make_thumbnail,
-    sha256_file, validate_extension, validate_mime
+    sha256_file, validate_extension, validate_mime, send_stored_media
 )
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
 from app.utils.media_bulk import build_media_zip
@@ -863,7 +863,7 @@ def serve_sketch_file(id_sketch: str):
 
     if not os.path.exists(final_path):
         abort(404)
-    return send_file(final_path, as_attachment=False)
+    return send_stored_media(final_path)
 
 
 @sketches_bp.get("/sketches/thumb/<string:id_sketch>")

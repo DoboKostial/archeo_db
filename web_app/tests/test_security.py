@@ -7,6 +7,7 @@ import pytest
 from werkzeug.datastructures import FileStorage
 
 import app as app_package
+from config import Config
 from app.routes import auth as auth_routes
 from app.routes import finds_samples as finds_samples_routes
 from app.routes import main as main_routes
@@ -48,6 +49,25 @@ def _select_database(client, dbname="01_SecurityTest"):
         session["selected_db"] = dbname
 
 
+def test_login_rate_limit_uses_client_ip_from_nginx(client, monkeypatch):
+    identities = []
+
+    def capture_rate_limit(scope, identity, limit, window_seconds):
+        identities.append((scope, identity))
+        return True
+
+    monkeypatch.setattr(auth_routes, "_rate_limited", capture_rate_limit)
+    response = client.post(
+        "/login",
+        data={"email": "USER@example.invalid", "password": "test-password"},
+        environ_base={"REMOTE_ADDR": "127.0.0.1"},
+        headers={"X-Forwarded-For": "192.0.2.44, 198.51.100.18"},
+    )
+
+    assert response.status_code == 302
+    assert identities == [("login", "198.51.100.18:user@example.invalid")]
+
+
 def test_safe_join_rejects_paths_outside_storage_root(tmp_path):
     root = tmp_path / "data"
     root.mkdir()
@@ -80,6 +100,29 @@ def test_photo_route_rejects_traversal(client):
 
     assert response.status_code == 404
     assert b"root:" not in response.data
+
+
+def test_legacy_svg_photo_is_downloaded_with_sandbox(client, monkeypatch, tmp_path):
+    _select_database(client)
+    monkeypatch.setattr(Config, "DATA_DIR", str(tmp_path))
+    media_dir = tmp_path / "01_SecurityTest" / "photos"
+    media_dir.mkdir(parents=True)
+    (media_dir / "01_legacy.svg").write_text("<svg></svg>", encoding="utf-8")
+    (media_dir / "01_photo.jpg").write_bytes(b"\xff\xd8\xff")
+
+    response = client.get("/photos/file/01_legacy.svg")
+
+    assert response.status_code == 200
+    assert "attachment" in response.headers["Content-Disposition"]
+    assert response.headers["Content-Security-Policy"] == "sandbox"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    response.close()
+
+    raster = client.get("/photos/file/01_photo.jpg")
+    assert raster.status_code == 200
+    assert raster.mimetype == "image/jpeg"
+    assert "attachment" not in raster.headers.get("Content-Disposition", "")
+    raster.close()
 
 
 def test_selected_database_guard_discards_invalid_session_value(client):
@@ -228,6 +271,44 @@ def test_disabled_user_is_rejected_on_each_request(client, monkeypatch):
     assert response.status_code == 302
     assert response.headers["Location"].startswith("/login")
     assert "token=;" in response.headers.get("Set-Cookie", "")
+
+
+def test_analyst_cannot_write_but_can_submit_read_only_actions(client, monkeypatch):
+    monkeypatch.setattr(
+        app_package,
+        "get_user_access_state",
+        lambda _conn, _email: ("Analyst", "analyst", True),
+    )
+    entered = []
+
+    def accepted(*_args, **_kwargs):
+        entered.append(True)
+        return "accepted"
+
+    monkeypatch.setitem(client.application.view_functions, "photos.upload_photos", accepted)
+    monkeypatch.setitem(client.application.view_functions, "photos.bulk_photos", accepted)
+    monkeypatch.setitem(client.application.view_functions, "reports.export_excel", accepted)
+
+    assert client.post("/photos/upload").status_code == 403
+    assert client.post("/photos/bulk", data={"action": "delete"}).status_code == 403
+    assert entered == []
+    assert client.post("/photos/bulk", data={"action": "download"}).data == b"accepted"
+    assert client.post("/reports/export/excel/finds_table").data == b"accepted"
+    assert len(entered) == 2
+
+
+def test_write_role_uses_current_database_state(client, monkeypatch):
+    role = ["documentator"]
+    monkeypatch.setattr(
+        app_package,
+        "get_user_access_state",
+        lambda _conn, _email: ("User", role[0], True),
+    )
+    monkeypatch.setitem(client.application.view_functions, "photos.upload_photos", lambda: "written")
+
+    assert client.post("/photos/upload").data == b"written"
+    role[0] = "analyst"
+    assert client.post("/photos/upload").status_code == 403
 
 
 def test_password_reset_token_is_bound_to_current_password_hash():

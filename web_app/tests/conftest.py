@@ -23,13 +23,13 @@ def client(app, monkeypatch):
     monkeypatch.setattr(
         app_package,
         "get_user_access_state",
-        lambda _conn, _email: ("Security Test", "tester", True),
+        lambda _conn, _email: ("Security Test", "documentator", True),
     )
     client = app.test_client()
     token = create_session_token(
         "security-test@example.invalid",
         "Security Test",
-        "tester",
+        "documentator",
         lifetime_minutes=5,
     )
     client.set_cookie("token", token)

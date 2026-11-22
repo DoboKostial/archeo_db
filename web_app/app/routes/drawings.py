@@ -36,6 +36,7 @@ from app.utils import (
     validate_extension,
     validate_mime,
     validate_pk,
+    send_stored_media,
 )
 from app.utils.pagination import gallery_page_args, page_url, search_page_args
 from app.utils.media_bulk import build_media_zip
@@ -148,8 +149,7 @@ def serve_drawing(id_drawing: str):
     if not os.path.exists(final_path):
         abort(404)
 
-    mt = mimetypes.guess_type(final_path)[0] or "application/octet-stream"
-    return send_file(final_path, mimetype=mt, as_attachment=False)
+    return send_stored_media(final_path)
 
 
 @drawings_bp.get("/drawings/thumb/<string:id_drawing>")
