@@ -61,3 +61,20 @@ authenticated web dashboard for the same mobile JWT returned by password login.
 The mobile API is intentionally narrower than the web application. Password
 changes remain part of the existing web flow; mobile only links into the web
 forgot-password process.
+
+## Negative fills
+
+Requires terrain migration `db/migrations/20261122_add_su_fills.sql` before deployment.
+SU list/detail/create/update responses include integer arrays `fill_ids` and
+`negative_ids`. A negative may have zero or more deposit/structure fills; a fill
+may belong to multiple different negatives. These links are independent of
+objects and stratigraphic relations.
+
+For `POST`/`PUT /api/mobile/terrain/<db>/su/<kind>[/<id>]`, send `fill_ids` for
+`negatives`, or `negative_ids` for `deposits`/`structures`. The array replaces that
+SU's links; `[]` clears them. Omitting the field preserves existing links, so older
+Android clients can continue editing metadata safely. IDs must be positive JSON
+integers of existing SUs with the appropriate type; duplicate IDs are collapsed.
+Do not send a nonempty array for the opposite direction. Invalid requests roll
+back the SU edit and link changes together. No Android UI change is included in
+this API extension.

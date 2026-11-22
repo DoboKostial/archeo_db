@@ -48,6 +48,11 @@
     if (dep) dep.style.display = (typ === "deposit") ? "block" : "none";
     if (neg) neg.style.display = (typ === "negativ") ? "block" : "none";
     if (str) str.style.display = (typ === "structure") ? "block" : "none";
+    document.querySelectorAll("[data-edit-su-fills]").forEach(group => {
+      const visible = group.dataset.editSuFills === (typ === "negativ" ? "negative" : "fill");
+      group.hidden = !visible;
+      group.querySelector("input").disabled = !visible;
+    });
   }
 
   function initEditModal() {
@@ -143,6 +148,8 @@
       setMultiSelect("edit_polygon_names", su.polygon_names);
       setValue("edit_below_ids", joinIds(su.below_ids));
       setValue("edit_equal_ids", joinIds(su.equal_ids));
+      setValue("edit_fill_ids", joinIds(su.fill_ids));
+      setValue("edit_negative_ids", joinIds(su.negative_ids));
       setValue("edit_above_ids", joinIds(su.above_ids));
 
       toggleEditTypeFields();

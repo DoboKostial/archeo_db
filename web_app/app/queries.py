@@ -518,13 +518,35 @@ def list_su_table_sql():
                   ),
                   '[]'::jsonb
                 )
-            ) AS documented_by
+            ) AS documented_by,
+            ARRAY(SELECT ref_fill FROM tabaid_sj_fill WHERE ref_negative=s.id_sj ORDER BY ref_fill) AS fill_ids,
+            ARRAY(SELECT ref_negative FROM tabaid_sj_fill WHERE ref_fill=s.id_sj ORDER BY ref_negative) AS negative_ids
         FROM tab_sj s
         LEFT JOIN tab_sj_deposit d ON d.id_deposit = s.id_sj
         LEFT JOIN tab_sj_negativ n ON n.id_negativ = s.id_sj
         LEFT JOIN tab_sj_structure st ON st.id_structure = s.id_sj
         ORDER BY s.id_sj DESC;
     """
+
+
+def su_fill_candidates_sql():
+    return "SELECT id_sj, sj_typ FROM tab_sj WHERE id_sj = ANY(%s) ORDER BY id_sj FOR KEY SHARE;"
+
+
+def delete_su_fills_sql(is_negative):
+    column = "ref_negative" if is_negative else "ref_fill"
+    return f"DELETE FROM tabaid_sj_fill WHERE {column}=%s;"
+
+
+def insert_su_fill_sql():
+    return """INSERT INTO tabaid_sj_fill (ref_negative, ref_fill, fill_type)
+              VALUES (%s, %s, %s) ON CONFLICT DO NOTHING;"""
+
+
+def rule_negatives_without_fills_sql():
+    return """SELECT s.id_sj FROM tab_sj s WHERE s.sj_typ='negativ'
+              AND NOT EXISTS (SELECT 1 FROM tabaid_sj_fill f WHERE f.ref_negative=s.id_sj)
+              ORDER BY s.id_sj;"""
 
 
 def insert_sj_polygon_link_sql():
@@ -732,7 +754,10 @@ def harris_su_detail_sql():
                 ) q
               ),
               ARRAY[]::int[]
-            ) AS equal_ids
+            ) AS equal_ids,
+            '{}'::jsonb AS documented_by,
+            ARRAY(SELECT ref_fill FROM tabaid_sj_fill WHERE ref_negative=s.id_sj ORDER BY ref_fill) AS fill_ids,
+            ARRAY(SELECT ref_negative FROM tabaid_sj_fill WHERE ref_fill=s.id_sj ORDER BY ref_negative) AS negative_ids
         FROM tab_sj s
         LEFT JOIN tab_sj_deposit d ON d.id_deposit = s.id_sj
         LEFT JOIN tab_sj_negativ n ON n.id_negativ = s.id_sj

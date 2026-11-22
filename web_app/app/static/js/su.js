@@ -36,6 +36,11 @@
     if (dep) dep.style.display = (typ === "deposit") ? "block" : "none";
     if (neg) neg.style.display = (typ === "negativ") ? "block" : "none";
     if (str) str.style.display = (typ === "structure") ? "block" : "none";
+    document.querySelectorAll("[data-new-su-fills]").forEach(group => {
+      const visible = group.dataset.newSuFills === (typ === "negativ" ? "negative" : "fill") && Boolean(typ);
+      group.hidden = !visible;
+      group.querySelector("input").disabled = !visible;
+    });
   }
 
   function initSuTypeShortcuts() {

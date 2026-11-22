@@ -389,6 +389,25 @@ CREATE UNIQUE INDEX tab_sj_structure_id_structure_idx ON tab_sj_structure USING 
 
 
 --========================================
+-- A fill may belong to several negatives; negatives may have no fills.
+CREATE UNIQUE INDEX IF NOT EXISTS tab_sj_id_type_uidx ON public.tab_sj (id_sj, sj_typ);
+
+CREATE TABLE IF NOT EXISTS public.tabaid_sj_fill (
+    ref_negative int4 NOT NULL,
+    ref_fill int4 NOT NULL,
+    negative_type varchar(20) NOT NULL DEFAULT 'negativ' CHECK (negative_type = 'negativ'),
+    fill_type varchar(20) NOT NULL CHECK (fill_type IN ('deposit', 'structure')),
+    PRIMARY KEY (ref_negative, ref_fill),
+    CHECK (ref_negative <> ref_fill),
+    FOREIGN KEY (ref_negative, negative_type) REFERENCES public.tab_sj (id_sj, sj_typ)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (ref_fill, fill_type) REFERENCES public.tab_sj (id_sj, sj_typ)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS tabaid_sj_fill_reverse_idx ON public.tabaid_sj_fill (ref_fill, ref_negative);
+GRANT SELECT ON public.tabaid_sj_fill TO gis_ro;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tabaid_sj_fill TO gis_rw;
+
 -- ### HERE MAIN TABLES - DOCU ENTITIES
 --========================================
 

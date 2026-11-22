@@ -90,8 +90,8 @@
           <h5 class="mb-0">Checks results</h5>
           {% if total_issues is not none %}
             <div class="text-muted small">
-              BAD checks: <b>{{ bad_checks_count }}</b> / {{ total_checks }};
-              bad entities: <b>{{ total_issues }}</b>
+              Flagged checks: <b>{{ bad_checks_count }}</b> / {{ total_checks }};
+              flagged entities: <b>{{ total_issues }}</b>
             </div>
           {% else %}
             <div class="text-muted small">Press “Run checks” to generate results.</div>
@@ -112,14 +112,15 @@
                 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                   <h5 class="mb-0">{{ group.name }}</h5>
                   <span class="badge text-bg-{% if group.bad_checks > 0 %}danger{% else %}success{% endif %}">
-                    {{ group.bad_checks }} BAD
+                    {{ group.bad_checks }} flagged
                   </span>
                 </div>
 
                 <div class="d-flex flex-column gap-2">
                   {% for r in group.checks %}
                     {% set is_bad = r.error or r.count > 0 %}
-                    <div class="analyze-check-row border rounded-3 p-2 {% if is_bad %}analyze-check-bad{% else %}analyze-check-ok{% endif %}">
+                    {% set is_warning = r.severity == 'warning' and not r.error and r.count > 0 %}
+                    <div class="analyze-check-row border rounded-3 p-2 {% if is_warning %}bg-warning-subtle{% elif is_bad %}analyze-check-bad{% else %}analyze-check-ok{% endif %}">
                       <div class="d-flex align-items-start justify-content-between gap-2">
                         <div>
                           <div class="fw-semibold">
@@ -130,8 +131,8 @@
                             <a class="small" href="{{ r.module_link.url }}">{{ r.module_link.label }}</a>
                           {% endif %}
                         </div>
-                        <span class="badge text-bg-{% if is_bad %}danger{% else %}success{% endif %}">
-                          {% if r.error %}ERROR{% elif r.count > 0 %}BAD {{ r.count }}{% else %}OK{% endif %}
+                        <span class="badge text-bg-{% if is_warning %}warning{% elif is_bad %}danger{% else %}success{% endif %}">
+                          {% if r.error %}ERROR{% elif is_warning %}CHECK {{ r.count }}{% elif r.count > 0 %}BAD {{ r.count }}{% else %}OK{% endif %}
                         </span>
                       </div>
 
@@ -143,7 +144,7 @@
                             <thead>
                               <tr>
                                 <th style="width:1%">#</th>
-                                <th>Bad entity</th>
+                                <th>Entity to check</th>
                                 <th style="width:1%" class="text-nowrap">Edit</th>
                               </tr>
                             </thead>
@@ -163,7 +164,7 @@
                                     {% if issue.links %}
                                       <div class="d-inline-flex gap-1 flex-wrap justify-content-end">
                                         {% for link in issue.links %}
-                                          <a href="{{ link.url }}" class="btn btn-sm btn-outline-primary">
+                                          <a href="{{ link.url }}" class="btn btn-sm btn-outline-primary" {% if link.kind == 'su' %}data-su-id="{{ link.id }}"{% endif %}>
                                             {{ link.label }}
                                           </a>
                                         {% endfor %}

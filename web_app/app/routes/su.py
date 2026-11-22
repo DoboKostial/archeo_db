@@ -66,6 +66,9 @@ from app.queries import (
     delete_sj_polygon_links_sql,
     delete_sj_stratigraphy_links_sql,
     insert_sj_stratigraphy_sql,
+    su_fill_candidates_sql,
+    delete_su_fills_sql,
+    insert_su_fill_sql,
 )
 
 from app.utils import (
@@ -200,7 +203,29 @@ def _su_row_to_dict(row):
         "below_ids": [int(v) for v in (row[29] or [])],
         "equal_ids": [int(v) for v in (row[30] or [])],
         "documented_by": _documented_by_to_dict(row[31] if len(row) > 31 else {}),
+        "fill_ids": list(row[32] or []) if len(row) > 32 else [],
+        "negative_ids": list(row[33] or []) if len(row) > 33 else [],
     }
+
+
+def _save_su_fills(cur, sj_id, sj_typ, form):
+    field = "fill_ids" if sj_typ == "negativ" else "negative_ids"
+    other = "negative_ids" if sj_typ == "negativ" else "fill_ids"
+    if _su_id_list(form.get(other), sj_id):
+        raise ValueError("Fills must link a negative to a deposit or structure.")
+    # Older clients/forms omit the field; omission must never erase stored links.
+    if field not in form:
+        return
+    ids = _su_id_list(form.get(field), sj_id)
+    cur.execute(su_fill_candidates_sql(), (ids,))
+    kinds = dict(cur.fetchall())
+    allowed = {"deposit", "structure"} if sj_typ == "negativ" else {"negativ"}
+    if any(kinds.get(value) not in allowed for value in ids):
+        raise ValueError("Unknown SU or invalid SU type in negative/fill links.")
+    cur.execute(delete_su_fills_sql(sj_typ == "negativ"), (sj_id,))
+    for value in ids:
+        negative, fill = (sj_id, value) if sj_typ == "negativ" else (value, sj_id)
+        cur.execute(insert_su_fill_sql(), (negative, fill, kinds[value] if sj_typ == "negativ" else sj_typ))
 
 
 def _su_polygon_memberships(direct_names, parents):
@@ -480,6 +505,7 @@ def add_su():
                         (id_sj, rel, related_sj),
                     )
 
+                _save_su_fills(cur, id_sj, sj_typ, request.form)
                 conn.commit()
                 flash(f"SU #{id_sj} has been saved.", "success")
                 logger.info(f"[{selected_db}] SU saved id={id_sj} type={sj_typ}")
@@ -592,10 +618,12 @@ def edit_su():
     return_endpoint = request.form.get("return_to")
     if return_endpoint == "harrismatrix":
         return_endpoint = "su.harrismatrix"
+    if return_endpoint == "analyze.analyze_run":
+        return_endpoint = "analyze.analyze"
     if return_endpoint not in {
         "su.add_su", "su.harrismatrix", "polygons.polygons", "archeo_objects.objects",
         "sections.sections", "photos.photos", "sketches.sketches",
-        "drawings.drawings", "photograms.photograms",
+        "drawings.drawings", "photograms.photograms", "analyze.analyze",
     }:
         return_endpoint = "su.add_su"
     return_url = url_for(return_endpoint)
@@ -665,6 +693,7 @@ def edit_su():
             )
 
             _save_su_subtype(cur, sj_id, sj_typ, request.form)
+            _save_su_fills(cur, sj_id, sj_typ, request.form)
 
             cur.execute(delete_sj_polygon_links_sql(), (sj_id,))
             if polygon_names:

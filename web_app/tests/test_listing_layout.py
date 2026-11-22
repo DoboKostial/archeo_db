@@ -188,6 +188,35 @@ def test_tablet_navigation_and_deposit_color_in_browser(app, tmp_path):
             check(input.value==='ochre', 'Palette failed after clearing '+width);
             input.form.reset(); await sleep(20);
             check(input.value==='' && !picker.querySelector('.active'), 'Reset did not clear color '+width);
+            const fillIds=doc.getElementById('new_fill_ids');
+            const negativeIds=doc.getElementById('new_negative_ids');
+            for(const typ of ['deposit','structure','negativ']) {
+              type.value=typ; type.dispatchEvent(new win.Event('change'));
+              const isNegative=typ==='negativ';
+              check(fillIds.disabled===!isNegative && negativeIds.disabled===isNegative, 'Wrong fill direction '+typ);
+              const field=isNegative?fillIds:negativeIds;
+              field.value='100, 200';
+              const formData=new win.FormData(field.form);
+              check(formData.get(field.name)==='100, 200' && !formData.has(isNegative?'negative_ids':'fill_ids'),
+                'Hidden fill fields submitted '+typ);
+              check(field.getBoundingClientRect().width>60, 'Fill field not visible '+width);
+            }
+            if(width===768) {
+              const modal=doc.getElementById('editSuModal');
+              const instance=win.bootstrap.Modal.getOrCreateInstance(modal);
+              for(const typ of ['negativ','deposit','structure']) {
+                const button=doc.createElement('button');
+                button.dataset.su=JSON.stringify({id:10,typ,fill_ids:typ==='negativ'?[201,202]:[],negative_ids:typ==='negativ'?[]:[100,200]});
+                const shown=new Promise(resolve => modal.addEventListener('shown.bs.modal',resolve,{once:true}));
+                instance.show(button); await shown;
+                const field=doc.getElementById(typ==='negativ'?'edit_fill_ids':'edit_negative_ids');
+                const data=new win.FormData(field.form);
+                check(field.value===(typ==='negativ'?'201, 202':'100, 200'), 'Edit fills not prefilled '+typ);
+                check(data.get(field.name)===field.value && !data.has(typ==='negativ'?'negative_ids':'fill_ids'), 'Edit direction wrong '+typ);
+                const hidden=new Promise(resolve => modal.addEventListener('hidden.bs.modal',resolve,{once:true}));
+                instance.hide(); await hidden;
+              }
+            }
             if(narrow) {
               toggle.click(); await sleep(400);
               check(toggle.getAttribute('aria-expanded')==='false', 'Menu did not close '+width);

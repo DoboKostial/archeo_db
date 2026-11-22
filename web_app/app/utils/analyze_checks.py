@@ -22,6 +22,7 @@ from app.queries import (
     rule_sections_without_any_documentation_sql,
     rule_sections_without_su_sql,
     rule_su_unknown_excav_extent_sql,
+    rule_negatives_without_fills_sql,
     rule_su_without_any_documentation_sql,
     rule_su_without_plan_or_vertical_sql,
     rule_su_without_polygon_sql,
@@ -129,6 +130,16 @@ RULES: list[Rule] = [
         "code": "SU_NO_DOC",
         "title": "SUs without any graphic documentation",
         "sql": rule_su_without_any_documentation_sql,
+        "columns": [("id_sj", "SU")],
+        "links": [("su", "id_sj", "Edit SU")],
+        "module": "su.add_su",
+    },
+    {
+        "category": "Stratigraphic Units",
+        "code": "NEG_NO_FILLS",
+        "title": "Negative SUs without recorded fills - please check",
+        "severity": "warning",
+        "sql": rule_negatives_without_fills_sql,
         "columns": [("id_sj", "SU")],
         "links": [("su", "id_sj", "Edit SU")],
         "module": "su.add_su",
@@ -264,7 +275,7 @@ def _build_issue(rule: Rule, row: tuple[Any, ...]) -> dict[str, Any]:
         value = row_map.get(column)
         url = _link(kind, value)
         if url:
-            links.append({"label": f"{label} {_format_value(value)}", "url": url})
+            links.append({"label": f"{label} {_format_value(value)}", "url": url, "kind": kind, "id": value})
 
     summary = ", ".join(field["display"] for field in fields if field["display"] != "—")
     return {"summary": summary, "fields": fields, "links": links}
@@ -288,6 +299,7 @@ def run_analyze_checks(selected_db: str) -> dict[str, Any]:
                     "category": rule["category"],
                     "code": rule["code"],
                     "title": rule["title"],
+                    "severity": rule.get("severity", "error"),
                     "count": 0,
                     "issues": [],
                     "module_link": None,

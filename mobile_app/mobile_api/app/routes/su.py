@@ -125,7 +125,9 @@ def _load_su_detail(cur, su_id: int):
             st.basic_material,
             st.length_m,
             st.width_m,
-            st.height_m
+            st.height_m,
+            ARRAY(SELECT ref_fill FROM tabaid_sj_fill WHERE ref_negative=sj.id_sj ORDER BY ref_fill),
+            ARRAY(SELECT ref_negative FROM tabaid_sj_fill WHERE ref_fill=sj.id_sj ORDER BY ref_negative)
         FROM tab_sj sj
         LEFT JOIN tab_sj_deposit dep
           ON dep.id_deposit = sj.id_sj
@@ -170,6 +172,8 @@ def _load_su_detail(cur, su_id: int):
         "length_m": row[24],
         "width_m": row[25],
         "height_m": row[26],
+        "fill_ids": list(row[27] or []),
+        "negative_ids": list(row[28] or []),
     }
 
 
@@ -267,6 +271,32 @@ def _link_media_to_su(cur, kind: str, su_id: int, media_id: str):
         """,
         (su_id, media_id),
     )
+
+
+def _save_su_fills(cur, su_id, sj_typ, payload):
+    field = "fill_ids" if sj_typ == "negativ" else "negative_ids"
+    other = "negative_ids" if sj_typ == "negativ" else "fill_ids"
+    if payload.get(other):
+        raise ValueError("Fills must link a negative to a deposit or structure.")
+    # Omitted fields preserve links when an older mobile client edits a record.
+    if field not in payload:
+        return
+    raw = payload[field]
+    if not isinstance(raw, list) or any(type(value) is not int or value <= 0 or value == su_id for value in raw):
+        raise ValueError(f"{field} must be an array of other positive integer SU IDs.")
+    ids = list(dict.fromkeys(raw))
+    cur.execute("SELECT id_sj, sj_typ FROM tab_sj WHERE id_sj=ANY(%s) ORDER BY id_sj FOR KEY SHARE", (ids,))
+    kinds = dict(cur.fetchall())
+    allowed = {"deposit", "structure"} if sj_typ == "negativ" else {"negativ"}
+    if any(kinds.get(value) not in allowed for value in ids):
+        raise ValueError("Unknown SU or invalid SU type in negative/fill links.")
+    column = "ref_negative" if sj_typ == "negativ" else "ref_fill"
+    cur.execute(f"DELETE FROM tabaid_sj_fill WHERE {column}=%s", (su_id,))
+    for value in ids:
+        negative, fill = (su_id, value) if sj_typ == "negativ" else (value, su_id)
+        cur.execute("""INSERT INTO tabaid_sj_fill (ref_negative, ref_fill, fill_type)
+                       VALUES (%s,%s,%s) ON CONFLICT DO NOTHING""",
+                    (negative, fill, kinds[value] if sj_typ == "negativ" else sj_typ))
 
 
 def _save_su(cur, feature_id: str, payload: dict, author_email: str, existing_id: int | None = None):
@@ -380,6 +410,7 @@ def _save_su(cur, feature_id: str, payload: dict, author_email: str, existing_id
             ),
         )
 
+    _save_su_fills(cur, su_id, sj_typ, payload)
     return su_id
 
 
@@ -400,7 +431,9 @@ def list_sus(terrain_db: str, feature_id: str):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id_sj, description, interpretation, docu_plan, docu_vertical
+                    SELECT id_sj, description, interpretation, docu_plan, docu_vertical,
+                        ARRAY(SELECT ref_fill FROM tabaid_sj_fill WHERE ref_negative=tab_sj.id_sj ORDER BY ref_fill),
+                        ARRAY(SELECT ref_negative FROM tabaid_sj_fill WHERE ref_fill=tab_sj.id_sj ORDER BY ref_negative)
                     FROM tab_sj
                     WHERE sj_typ = %s
                     ORDER BY id_sj
@@ -420,6 +453,8 @@ def list_sus(terrain_db: str, feature_id: str):
                         "interpretation": row[2],
                         "docu_plan": bool(row[3]),
                         "docu_vertical": bool(row[4]),
+                        "fill_ids": list(row[5] or []),
+                        "negative_ids": list(row[6] or []),
                         "media_preview": preview_map.get(row[0], []),
                     }
                     for row in rows

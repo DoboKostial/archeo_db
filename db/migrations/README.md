@@ -11,6 +11,33 @@ project. Updating the template only affects projects created afterwards.
 The project list used by web_app consists of databases whose names start with
 a digit; connection labels in QGIS may have different names.
 
+## Negative SU fills (2026-11-22)
+
+Before deploying the corresponding web_app and mobile_api versions, apply
+`20261122_add_su_fills.sql` to the template and **each existing terrain database**:
+
+```bash
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -d terrain_db_template \
+  < db/migrations/20261122_add_su_fills.sql
+sudo -u postgres psql -X -v ON_ERROR_STOP=1 -d '01_Project' \
+  < db/migrations/20261122_add_su_fills.sql
+```
+
+Repeat the second command with every actual project name. Run from the repository
+root. The migration is transactional and repeatable; it creates no inferred fill
+links and preserves existing SUs and already recorded links. No auth_db change is
+needed. Existing application roles must be provisioned first, including GIS roles.
+
+`tabaid_sj_fill` records optional M:N links from negative SUs to deposits or
+structures. Composite foreign keys enforce the types even for direct SQL/GIS
+writes. Both IDs cascade on deletion/renumbering. A deposit-to-structure change
+preserves its links. Changing a linked negative into a fill (or vice versa) is
+rejected: remove its fill links first, save, then change its type. Application
+read/write roles and GIS roles receive the corresponding table privileges.
+
+Deploy DB first, then web_app/mobile_api. Older mobile clients preserve links by
+omitting the new fields; they do not need to be upgraded simultaneously.
+
 ## GIS changes on feature/gis
 
 | Order | Target | Migration | Changes |

@@ -242,6 +242,17 @@
               </select>
             </fieldset>
 
+            <fieldset class="border p-3 rounded-3 bg-light mb-3">
+              <legend class="float-none w-auto px-2">Negative fills</legend>
+              <div data-edit-su-fills="negative" hidden>
+                <label class="form-label" for="edit_fill_ids">Is filled by (deposit / structure SU IDs)</label>
+                <input class="form-control" id="edit_fill_ids" name="fill_ids" placeholder="101, 102" disabled>
+              </div>
+              <div data-edit-su-fills="fill" hidden>
+                <label class="form-label" for="edit_negative_ids">Fills negatives (SU IDs)</label>
+                <input class="form-control" id="edit_negative_ids" name="negative_ids" placeholder="100, 200" disabled>
+              </div>
+            </fieldset>
             <fieldset class="border p-3 rounded-3 bg-light">
               <legend class="float-none w-auto px-2">Stratigraphic relations</legend>
               <div class="mb-2">
