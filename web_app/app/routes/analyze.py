@@ -16,6 +16,7 @@ from app.queries import (
     stats_su_by_documentation_sql,
     stats_su_by_excav_extent_sql,
     stats_su_by_excav_completeness_sql,
+    stats_negatives_by_fill_count_sql,
     stats_objects_by_type_sql,
     stats_objects_by_su_count_bucket_sql,
     stats_sections_by_type_sql,
@@ -119,6 +120,9 @@ def analyze_stats_json():
                     "SU excavation completeness",
                 )
             )
+
+            cur.execute(stats_negatives_by_fill_count_sql())
+            _rows_to_pie(cur.fetchall(), "Number of fills in negatives")
 
             # 3) Objects by type
             cur.execute(stats_objects_by_type_sql())

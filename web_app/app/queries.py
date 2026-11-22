@@ -3280,6 +3280,23 @@ def stats_su_by_excav_completeness_sql():
     """
 
 
+def stats_negatives_by_fill_count_sql():
+    """Distribution of negative SUs by their exact number of fills, including zero."""
+    return """
+        WITH fill_counts AS (
+            SELECT n.id_sj, COUNT(f.ref_fill) AS fill_count
+            FROM tab_sj n
+            LEFT JOIN tabaid_sj_fill f ON f.ref_negative = n.id_sj
+            WHERE n.sj_typ = 'negativ'
+            GROUP BY n.id_sj
+        )
+        SELECT CAST(fill_count AS text) AS label, COUNT(*) AS negative_count
+        FROM fill_counts
+        GROUP BY fill_count
+        ORDER BY fill_count;
+    """
+
+
 def stats_objects_by_type_sql():
     return """
         SELECT COALESCE(NULLIF(object_typ,''), 'unknown') AS object_typ, COUNT(*)::int
