@@ -1,3 +1,10 @@
+import os
+from pathlib import Path
+import shutil
+
+import pytest
+from flask import render_template, url_for
+
 import app as app_package
 from app.routes import admin as admin_routes
 from app.queries import list_app_users_sql
@@ -232,3 +239,37 @@ def test_admin_page_renders_before_gis_migration(client, monkeypatch):
     assert b"Legacy User" in response.data
     assert b"GIS access is unavailable" in response.data
     assert b"Grant GIS access" not in response.data
+    for field in ("name", "mail", "group_role"):
+        assert f'for="{field}" class="form-label">' in response.get_data(as_text=True)
+    assert response.get_data(as_text=True).count('class="required-marker" aria-hidden="true">*</span>') == 5
+
+
+@pytest.mark.skipif(os.environ.get("ARCHEODB_TEST_BROWSER") != "1" or not shutil.which("firefox"),
+                    reason="Set ARCHEODB_TEST_BROWSER=1 and install Firefox")
+def test_admin_required_labels_have_one_asterisk_after_javascript(app, tmp_path):
+    from test_spatial_browser import _firefox_result
+
+    with app.test_request_context("/admin"):
+        html = render_template("admin.html", users=[("Test", "test@example.invalid", "archeolog", True, None, False)],
+                               user_roles=["archeolog", "documentator", "analyst"], terrain_dbs=[],
+                               page=1, total_pages=1, gis_available=True)
+        bootstrap_url = url_for("static", filename="js/bootstrap.bundle.min.js")
+    bootstrap = (Path(app.static_folder) / "js/bootstrap.bundle.min.js").as_uri()
+    html = html.replace(bootstrap_url, bootstrap)
+    html = "\n".join(line for line in html.splitlines() if "<link " not in line and "unpkg.com" not in line)
+    checks = '''<pre id="result">RUNNING</pre><script>
+      addEventListener('DOMContentLoaded',()=>{
+        try {
+          for(const id of ['name','mail','group_role','edit-user-name-1','edit-user-role-1']) {
+            const control=document.getElementById(id);
+            const label=control.labels[0];
+            if(!control.required) throw Error('Required validation missing: '+id);
+            if((label.textContent.match(/\\*/g)||[]).length!==1 || label.querySelectorAll('.required-marker').length!==1)
+              throw Error('Duplicate or missing asterisk: '+id);
+          }
+          document.getElementById('result').textContent='PASS';
+        } catch(error) {document.getElementById('result').textContent='FAIL: '+error.message;}
+      });
+      </script>'''
+    html = html.replace("</body>", checks + "</body>")
+    assert _firefox_result(html, {"bootstrap.js": bootstrap}, tmp_path) == "PASS"

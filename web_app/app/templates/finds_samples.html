@@ -54,7 +54,7 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">SJ</label>
+                  <label class="form-label">SU</label>
                   <input name="ref_sj" type="number" class="form-control" required>
                 </div>
 
@@ -107,7 +107,7 @@
               <table class="table table-sm table-striped table-bordered table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>ID</th><th>Type</th><th>SJ</th><th>Count</th><th>Box</th><th>Polygon</th><th>Has geometry</th>
+                    <th>ID</th><th>Type</th><th>SU</th><th>Count</th><th>Box</th><th>Polygon</th><th>Has geometry</th>
                     <th style="width:240px;">Actions</th>
                   </tr>
                 </thead>
@@ -134,7 +134,7 @@
                 <select id="findDocSelect" class="form-select">
                   <option value="" selected>-- select find --</option>
                   {% for r in last_finds %}
-                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
+                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SU {{ r[2] }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -209,7 +209,7 @@
                 </div>
 
                 <div class="col-md-4">
-                  <label class="form-label">SJ</label>
+                  <label class="form-label">SU</label>
                   <input name="ref_sj" type="number" class="form-control" required>
                 </div>
 
@@ -252,7 +252,7 @@
               <table class="table table-sm table-striped table-bordered table-hover align-middle mb-0">
                 <thead class="table-light">
                   <tr>
-                    <th>ID</th><th>Type</th><th>SJ</th><th>Polygon</th><th>Has geometry</th>
+                    <th>ID</th><th>Type</th><th>SU</th><th>Polygon</th><th>Has geometry</th>
                     <th style="width:240px;">Actions</th>
                   </tr>
                 </thead>
@@ -279,7 +279,7 @@
                 <select id="sampleDocSelect" class="form-select">
                   <option value="" selected>-- select sample --</option>
                   {% for r in last_samples %}
-                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SJ {{ r[2] }}</option>
+                    <option value="{{ r[0] }}">{{ r[0] }} | {{ r[1] }} | SU {{ r[2] }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -442,7 +442,7 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">SJ</label>
+            <label class="form-label">SU</label>
             <input id="editFindSj" type="number" class="form-control" required>
           </div>
 
@@ -519,7 +519,7 @@
           </div>
 
           <div class="col-md-4">
-            <label class="form-label">SJ</label>
+            <label class="form-label">SU</label>
             <input id="editSampleSj" type="number" class="form-control" required>
           </div>
 

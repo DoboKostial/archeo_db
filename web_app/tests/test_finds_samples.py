@@ -122,6 +122,10 @@ def test_finds_samples_page_uses_neutral_work_surface(client, monkeypatch):
     assert "table-bordered table-hover" in html
     assert "Existing finds" in html
     assert "Existing samples" in html
+    assert html.count('class="form-label">SU</label>') == 4
+    assert "<th>SJ</th>" not in html
+    assert " | SJ " not in html
+    assert 'name="ref_sj"' in html
     assert "findsPaginationWrap" in html
     assert "samplesPaginationWrap" in html
     assert "findsPagination" in html
